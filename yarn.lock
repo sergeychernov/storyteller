@@ -2426,6 +2426,7 @@ __metadata:
     fastify: "npm:5.11.3"
     fastify-type-provider-zod: "npm:7.0.0"
     openapi-types: "npm:12.1.3"
+    tsx: "npm:4.23.12"
     zod: "npm:4.4.3"
   languageName: unknown
   linkType: soft
@@ -6605,7 +6606,6 @@ __metadata:
   resolution: "storyteller@workspace:."
   dependencies:
     "@types/node": "npm:22.20.1"
-    tsx: "npm:4.23.12"
     typescript: "npm:5.9.3"
   languageName: unknown
   linkType: soft
