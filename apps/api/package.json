@@ -5,7 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "scripts": { "dev": "node --experimental-strip-types --watch src/index.ts" },
+  "scripts": {
+    "dev": "node --experimental-strip-types --watch src/index.ts"
+  },
   "dependencies": {
     "@fastify/cors": "11.3.0",
     "@fastify/swagger": "9.8.1",

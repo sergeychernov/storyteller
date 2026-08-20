@@ -4,7 +4,10 @@
   "private": true,
   "description": "A TypeScript-first story production pipeline",
   "packageManager": "yarn@4.18.0",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "build": "node ./node_modules/typescript/bin/tsc -b",
     "clean": "node ./node_modules/typescript/bin/tsc -b --clean",
@@ -17,7 +20,9 @@
     "dev:worker": "yarn workspace @storyteller/worker dev",
     "dev:mcp": "yarn workspace @storyteller/mcp dev",
     "dev:web": "yarn workspace @storyteller/web dev",
-    "dev:mobile": "yarn workspace @storyteller/mobile dev"
+    "dev:mobile": "yarn workspace @storyteller/mobile dev",
+    "format": "node scripts/format-manifests.mjs",
+    "format:check": "node scripts/format-manifests.mjs --check"
   },
   "engines": {
     "node": ">=22"
