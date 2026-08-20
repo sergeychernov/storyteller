@@ -1,37 +1,47 @@
 import { StatusBar } from "expo-status-bar";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
-
-const stories = [
-  { title: "Beijing in spring", meta: "6 scenes · Draft", color: "#dce9b9" },
-  { title: "Weekend by the sea", meta: "12 scenes · Ready", color: "#cbdce7" },
-];
+import { localeOptions, useLocalization } from "./localization";
 
 export default function HomeScreen() {
+  const { locale, setLocale, t } = useLocalization();
+  const stories = [
+    { title: t("mobile.story.beijing"), sceneCount: 6, status: t("common.status.draft"), color: "#dce9b9" },
+    { title: t("mobile.story.sea"), sceneCount: 12, status: t("common.status.ready"), color: "#cbdce7" },
+  ];
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.page}>
         <View style={styles.header}>
-          <View><Text style={styles.brand}>Storyteller</Text><Text style={styles.kicker}>MOBILE COMPANION</Text></View>
+          <View><Text style={styles.brand}>Storyteller</Text><Text style={styles.kicker}>{t("mobile.companion")}</Text></View>
           <View style={styles.avatar}><Text style={styles.avatarText}>SC</Text></View>
         </View>
 
-        <View style={styles.hero}>
-          <Text style={styles.heroLabel}>YOUR STORIES</Text>
-          <Text style={styles.heroTitle}>Carry the studio{`\n`}with you.</Text>
-          <Text style={styles.heroCopy}>Review stories, track production and capture new material while the full editor stays on the web.</Text>
+        <View accessibilityLabel={t("language.label")} style={styles.languageRow}>
+          {localeOptions.map((option) => (
+            <Pressable key={option.locale} onPress={() => setLocale(option.locale)} style={[styles.languageButton, locale === option.locale && styles.languageButtonActive]}>
+              <Text style={[styles.languageText, locale === option.locale && styles.languageTextActive]}>{option.shortLabel}</Text>
+            </Pressable>
+          ))}
         </View>
 
-        <View style={styles.sectionHead}><Text style={styles.sectionTitle}>Recent</Text><Text style={styles.link}>View all</Text></View>
+        <View style={styles.hero}>
+          <Text style={styles.heroLabel}>{t("mobile.hero.label")}</Text>
+          <Text style={styles.heroTitle}>{t("mobile.hero.title")}</Text>
+          <Text style={styles.heroCopy}>{t("mobile.hero.copy")}</Text>
+        </View>
+
+        <View style={styles.sectionHead}><Text style={styles.sectionTitle}>{t("mobile.recent")}</Text><Text style={styles.link}>{t("mobile.viewAll")}</Text></View>
         {stories.map((story) => (
           <Pressable key={story.title} style={styles.storyCard}>
             <View style={[styles.thumbnail, { backgroundColor: story.color }]}><Text style={styles.thumbnailText}>{story.title[0]}</Text></View>
-            <View style={styles.storyText}><Text style={styles.storyTitle}>{story.title}</Text><Text style={styles.storyMeta}>{story.meta}</Text></View>
+            <View style={styles.storyText}><Text style={styles.storyTitle}>{story.title}</Text><Text style={styles.storyMeta}>{t("mobile.sceneCount", { count: story.sceneCount })} · {story.status}</Text></View>
             <Text style={styles.arrow}>›</Text>
           </Pressable>
         ))}
 
-        <Pressable style={styles.createButton}><Text style={styles.createText}>＋ Create a story</Text></Pressable>
+        <Pressable style={styles.createButton}><Text style={styles.createText}>{t("mobile.createStory")}</Text></Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -43,6 +53,11 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 42 },
   brand: { color: "#1c1c18", fontSize: 22, fontWeight: "700", letterSpacing: -0.8 },
   kicker: { color: "#8b8a80", fontSize: 8, letterSpacing: 1.6, marginTop: 3 },
+  languageRow: { flexDirection: "row", alignSelf: "flex-end", backgroundColor: "#e5e2d9", borderRadius: 10, padding: 3, marginTop: -28, marginBottom: 18 },
+  languageButton: { borderRadius: 7, paddingHorizontal: 11, paddingVertical: 7 },
+  languageButtonActive: { backgroundColor: "#20201c" },
+  languageText: { color: "#77766c", fontSize: 10, fontWeight: "700" },
+  languageTextActive: { color: "#d9f47b" },
   avatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#20201c", alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#d9f47b", fontSize: 11, fontWeight: "600" },
   hero: { backgroundColor: "#20201c", borderRadius: 22, padding: 26, marginBottom: 34 },

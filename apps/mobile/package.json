@@ -10,6 +10,8 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@storyteller/localization": "workspace:*",
     "expo": "~57.0.9",
     "expo-constants": "~57.0.8",
     "expo-linking": "~57.0.4",

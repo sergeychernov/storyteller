@@ -8,5 +8,8 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
+  "references": [
+    { "path": "../../packages/localization" }
+  ],
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

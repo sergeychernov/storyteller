@@ -12,6 +12,7 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 - `apps/web` — React/Vite studio with account onboarding, story creation, and an editor shell
 - `apps/mobile` — Expo Router companion app shell
 - `packages/application` — transport-independent use cases shared by API and future MCP tools
+- `packages/localization` — typed English, Russian, and Serbian Latin product copy shared by web and mobile
 - `packages/domain` — first small story model and lifecycle rules
 - `packages/schemas` — transport request contracts
 - `packages/renderer` — FFmpeg process boundary; no concrete renderers yet
@@ -37,5 +38,7 @@ Then open [http://localhost:3000](http://localhost:3000). The API runs at [http:
 Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mobile app, or `yarn dev:mobile` to start Expo separately. Individual commands remain available as `yarn dev:api`, `yarn dev:web`, `yarn dev:worker`, and `yarn dev:mcp`.
 
 The first vertical slice uses in-memory storage intentionally. Restarting the API clears accounts and stories; persistence will be selected after the editor flow stabilizes.
+
+Web and mobile initially follow the system language and expose an in-app selector for English, Russian, and Serbian Latin. The chosen language is persisted locally on each client.
 
 See [`docs/product-scope.md`](docs/product-scope.md) for the first API surface and [`docs/migration-plan.md`](docs/migration-plan.md) for the incremental plan.

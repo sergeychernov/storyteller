@@ -8,5 +8,8 @@
     "jsx": "react-jsx",
     "lib": ["ES2022"]
   },
+  "references": [
+    { "path": "../../packages/localization" }
+  ],
   "include": ["app/**/*.ts", "app/**/*.tsx"]
 }
