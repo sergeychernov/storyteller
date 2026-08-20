@@ -5,32 +5,16 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: write
-
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: corepack enable
       - run: corepack prepare yarn@4.18.0 --activate
-      - run: yarn install --mode=update-lockfile
-      - name: Commit resolved lockfile
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        run: |
-          if ! git diff --quiet -- yarn.lock; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git add yarn.lock
-            git commit -m "build: update Yarn lockfile [skip ci]"
-            git push
-          fi
       - run: yarn install --immutable
       - run: yarn format:check
       - run: yarn check
