@@ -9,6 +9,8 @@ dist/
 !.yarn/sdks
 !.yarn/versions
 coverage/
+.expo/
+.expo-shared/
 .env
 .env.*
 !.env.example
