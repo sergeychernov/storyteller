@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: corepack prepare yarn@4.18.0 --activate
+      - name: Resolve lockfile
+        run: yarn install --mode=update-lockfile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yarn-lock
+          path: yarn.lock
+      - run: yarn install --immutable
+      - run: yarn check
+      - run: yarn test
+      - run: yarn workspace @storyteller/web vite build

@@ -1,1 +1,19 @@
-{"name":"@storyteller/api","version":"0.0.0","private":true,"type":"module","main":"dist/index.js","types":"dist/index.d.ts","scripts":{"dev":"node --experimental-strip-types src/index.ts"}}
+{
+  "name": "@storyteller/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "dev": "node --experimental-strip-types --watch src/index.ts" },
+  "dependencies": {
+    "@fastify/cors": "11.3.0",
+    "@fastify/swagger": "9.8.1",
+    "@fastify/swagger-ui": "6.1.1",
+    "@storyteller/application": "workspace:*",
+    "@storyteller/schemas": "workspace:*",
+    "fastify": "5.11.3",
+    "fastify-type-provider-zod": "7.0.0",
+    "zod": "4.4.3"
+  }
+}

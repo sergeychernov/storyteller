@@ -1,5 +1,8 @@
-// HTTP transport will be added after persistence and command handlers are chosen.
-export const apiApp = { name: "storyteller-api" } as const;
+import { buildApi } from "./server.js";
 
-console.info(`${apiApp.name} boundary started`);
-setInterval(() => undefined, 60_000);
+const api = await buildApi();
+
+await api.listen({
+  host: process.env.API_HOST ?? "0.0.0.0",
+  port: Number(process.env.API_PORT ?? 3001),
+});

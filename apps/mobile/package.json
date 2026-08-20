@@ -1,1 +1,24 @@
-{"name":"@storyteller/mobile","version":"0.0.0","private":true,"type":"module","scripts":{"dev":"node --experimental-strip-types src/index.ts"}}
+{
+  "name": "@storyteller/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "expo start",
+    "ios": "expo start --ios",
+    "android": "expo start --android",
+    "web": "expo start --web"
+  },
+  "dependencies": {
+    "expo": "~57.0.9",
+    "expo-router": "~57.0.9",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.26.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2"
+  }
+}
