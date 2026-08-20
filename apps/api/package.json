@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "dev": "node --experimental-strip-types --watch src/index.ts"
+    "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",
