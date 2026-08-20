@@ -19,9 +19,12 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 ## Commands
 
 ```bash
-npm install
-npm test
-npm run check
+corepack enable
+yarn install
+yarn test
+yarn check
 ```
+
+Run all application boundaries with `yarn dev`, or one at a time with `yarn dev:api`, `yarn dev:worker`, `yarn dev:mcp`, `yarn dev:web`, and `yarn dev:mobile`. They currently verify that the empty boundaries boot and remain active until `Ctrl+C`; servers, UI frameworks, and their hot reloaders will be introduced with their first vertical slices.
 
 See [`docs/product-scope.md`](docs/product-scope.md) for the first API surface and [`docs/migration-plan.md`](docs/migration-plan.md) for the incremental plan.

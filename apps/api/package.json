@@ -1,1 +1,1 @@
-{"name":"@storyteller/api","version":"0.0.0","private":true,"type":"module","main":"dist/index.js","types":"dist/index.d.ts"}
+{"name":"@storyteller/api","version":"0.0.0","private":true,"type":"module","main":"dist/index.js","types":"dist/index.d.ts","scripts":{"dev":"node --experimental-strip-types src/index.ts"}}

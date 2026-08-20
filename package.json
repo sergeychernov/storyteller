@@ -3,18 +3,25 @@
   "version": "0.0.0",
   "private": true,
   "description": "A TypeScript-first story production pipeline",
+  "packageManager": "yarn@4.18.0",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "build": "tsc -b",
-    "clean": "tsc -b --clean",
-    "check": "tsc -b --pretty false",
-    "test": "npm run build && node --test packages/domain/dist/domain.test.js packages/renderer/dist/ffmpeg.test.js"
+    "build": "node ./node_modules/typescript/bin/tsc -b",
+    "clean": "node ./node_modules/typescript/bin/tsc -b --clean",
+    "check": "node ./node_modules/typescript/bin/tsc -b --pretty false",
+    "test": "yarn build && node --test packages/domain/dist/domain.test.js packages/renderer/dist/ffmpeg.test.js",
+    "dev": "yarn workspaces foreach --all --parallel --interlaced run dev",
+    "dev:api": "yarn workspace @storyteller/api dev",
+    "dev:worker": "yarn workspace @storyteller/worker dev",
+    "dev:mcp": "yarn workspace @storyteller/mcp dev",
+    "dev:web": "yarn workspace @storyteller/web dev",
+    "dev:mobile": "yarn workspace @storyteller/mobile dev"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.9.0"
+    "@types/node": "22.20.1",
+    "typescript": "5.9.3"
   }
 }
