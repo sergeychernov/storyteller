@@ -1,0 +1,20 @@
+# Minimal migration plan
+
+`hermes-story-skills` stays unchanged and outside this repository. It is consulted only when a specific renderer or media behavior is chosen for migration. No legacy manifest or chatbot workflow is imported into the product model.
+
+## Phases
+
+1. **Foundation (this change):** compileable empty apps, API scope, a minimal lifecycle, scene editing rules, FFmpeg runner and publisher port.
+2. **First vertical slice:** persistence plus create-account, create-story, create-scene and material upload; expose the same application service through HTTP and MCP.
+3. **Preview slice:** choose one useful renderer, add idempotent jobs and build scene/story preview plus timeline queries.
+4. **Audio slice:** narration from a chosen scene, music generation and mixing behind provider-neutral ports.
+5. **Publication slice:** account provider linking and one publisher adapter.
+6. **Selective migration:** port another renderer only when the UI needs it. Keep specialized CV/audio/ML in Python behind typed worker ports.
+
+## Safety rules
+
+- Applications contain transport/UI code; domain rules remain transport-neutral.
+- Editing a ready story returns it to `draft` and increments its revision.
+- Rendering cannot start until each scene has material and a selected renderer.
+- MCP and HTTP are peer interfaces to the same future application services.
+- No concrete renderer or platform provider belongs in the foundation.

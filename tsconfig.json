@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/domain" },
+    { "path": "packages/schemas" },
+    { "path": "packages/renderer" },
+    { "path": "packages/publishers" },
+    { "path": "apps/api" },
+    { "path": "apps/worker" },
+    { "path": "apps/mcp" },
+    { "path": "apps/web" },
+    { "path": "apps/mobile" }
+  ]
+}
