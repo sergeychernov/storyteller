@@ -21,8 +21,13 @@ export async function buildApi(application = new StoryApplication()) {
   await app.register(swaggerUi, { routePrefix: "/docs" });
 
   app.setErrorHandler((error, _request, reply) => {
-    const statusCode = error instanceof ApplicationError ? error.statusCode : (error.statusCode ?? 500);
-    void reply.status(statusCode).send({ message: error.message });
+    const statusCode = error instanceof ApplicationError
+      ? error.statusCode
+      : typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number"
+        ? error.statusCode
+        : 500;
+    const message = error instanceof Error ? error.message : "Unexpected error";
+    void reply.status(statusCode).send({ message });
   });
 
   app.get("/health", {
@@ -31,13 +36,16 @@ export async function buildApi(application = new StoryApplication()) {
 
   app.post("/accounts", {
     schema: { body: createAccountSchema, response: { 201: accountSchema, 400: errorSchema } },
-  }, async (request, reply) => reply.status(201).send(application.createAccount(request.body)));
+  }, async (request, reply) => {
+    const account = application.createAccount(request.body);
+    return reply.status(201).send({ ...account, providerConnections: [...account.providerConnections] });
+  });
 
   const accountParams = z.object({ accountId: z.string().uuid() });
 
   app.get("/accounts/:accountId/stories", {
     schema: { params: accountParams, response: { 200: z.array(storySummarySchema), 404: errorSchema } },
-  }, async (request) => application.listStories(request.params.accountId));
+  }, async (request) => [...application.listStories(request.params.accountId)]);
 
   app.post("/accounts/:accountId/stories", {
     schema: { params: accountParams, body: createStorySchema, response: { 201: storySummarySchema, 404: errorSchema } },
