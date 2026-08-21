@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "app",
+    "outDir": "dist",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2022"]
+  },
+  "references": [
+    { "path": "../../packages/localization" }
+  ],
+  "include": ["app/**/*.ts", "app/**/*.tsx"]
+}

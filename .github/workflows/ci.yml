@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+      - run: corepack prepare yarn@4.18.0 --activate
+      - run: yarn install --immutable
+      - run: yarn format:check
+      - run: yarn check
+      - run: yarn test
+      - name: Smoke-test API development runtime
+        run: |
+          yarn workspace @storyteller/api exec tsx src/index.ts > /tmp/storyteller-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://localhost:3001/health > /dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat /tmp/storyteller-api.log
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat /tmp/storyteller-api.log
+          exit 1
+      - run: yarn workspace @storyteller/web vite build
+      - run: yarn workspace @storyteller/mobile exec expo export --platform web --output-dir /tmp/storyteller-mobile-export

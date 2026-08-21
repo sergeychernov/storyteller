@@ -1,7 +1,16 @@
 node_modules/
 dist/
 *.tsbuildinfo
+.corepack/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 coverage/
+.expo/
+.expo-shared/
 .env
 .env.*
 !.env.example

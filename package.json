@@ -1,0 +1,34 @@
+{
+  "name": "storyteller",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A TypeScript-first story production pipeline",
+  "packageManager": "yarn@4.18.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "node ./node_modules/typescript/bin/tsc -b",
+    "clean": "node ./node_modules/typescript/bin/tsc -b --clean",
+    "check": "node ./node_modules/typescript/bin/tsc -b --pretty false",
+    "test": "yarn build && node --test packages/domain/dist/domain.test.js packages/localization/dist/localization.test.js packages/renderer/dist/ffmpeg.test.js apps/api/dist/app.test.js",
+    "dev": "yarn build && yarn workspaces foreach --all --parallel --interlaced --include @storyteller/api --include @storyteller/web run dev",
+    "dev:services": "yarn build && yarn workspaces foreach --all --parallel --interlaced --include @storyteller/api --include @storyteller/worker --include @storyteller/mcp run dev",
+    "dev:all": "yarn build && yarn workspaces foreach --all --parallel --interlaced --include @storyteller/api --include @storyteller/worker --include @storyteller/mcp --include @storyteller/web run dev",
+    "dev:api": "yarn build && yarn workspace @storyteller/api dev",
+    "dev:worker": "yarn workspace @storyteller/worker dev",
+    "dev:mcp": "yarn workspace @storyteller/mcp dev",
+    "dev:web": "yarn workspace @storyteller/web dev",
+    "dev:mobile": "yarn workspace @storyteller/mobile dev",
+    "format": "node scripts/format-manifests.mjs",
+    "format:check": "node scripts/format-manifests.mjs --check"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "typescript": "5.9.3"
+  }
+}

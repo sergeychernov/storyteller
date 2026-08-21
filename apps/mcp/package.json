@@ -1,0 +1,9 @@
+{
+  "name": "@storyteller/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/index.ts"
+  }
+}
