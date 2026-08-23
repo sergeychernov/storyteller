@@ -4,8 +4,11 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 
 | Capability | Method and path |
 | --- | --- |
-| Create account | `POST /accounts` |
-| Create story | `POST /accounts/{accountId}/stories` |
+| Register profile | `POST /auth/register` |
+| Log in | `POST /auth/login` |
+| Read/update own profile | `GET/PATCH /profile` |
+| Create/list projects | `POST/GET /projects` |
+| Create story | `POST /projects/{projectId}/stories` |
 | Create scene | `POST /stories/{storyId}/scenes` |
 | Add material to scene | `POST /stories/{storyId}/scenes/{sceneId}/materials` |
 | Remove material | `DELETE /stories/{storyId}/scenes/{sceneId}/materials/{assetId}` |
@@ -18,7 +21,7 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 | Apply music | `PUT /stories/{storyId}/music` |
 | Preview story | `POST /stories/{storyId}/preview` |
 | View timeline | `GET /stories/{storyId}/timeline` |
-| Link platform provider | `POST /accounts/{accountId}/provider-connections` |
+| Manage platform credentials | `GET/PUT/DELETE /profile/platform-credentials/{provider}` |
 | Publish story | `POST /stories/{storyId}/publications` |
 
 Preview, music generation and publication endpoints create asynchronous jobs. Their status/resource endpoints will be designed with the first vertical slice so idempotency and persistence are not guessed prematurely.

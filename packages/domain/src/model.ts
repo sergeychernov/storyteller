@@ -28,7 +28,7 @@ export interface Music {
 
 export interface Story {
   readonly id: string;
-  readonly accountId: string;
+  readonly projectId: string;
   readonly title?: string;
   readonly status: StoryStatus;
   readonly scenes: readonly Scene[];
@@ -37,12 +37,26 @@ export interface Story {
   readonly revision: number;
 }
 
-export interface Account {
+export interface Profile {
   readonly id: string;
-  readonly providerConnections: readonly ProviderConnection[];
+  readonly name: string;
+  readonly email: string;
 }
 
-export interface ProviderConnection {
-  readonly provider: string;
-  readonly externalAccountId: string;
+export interface Project {
+  readonly id: string;
+  readonly profileId: string;
+  readonly name: string;
+}
+
+export const platformProviders = ["telegram", "tiktok", "instagram"] as const;
+export type PlatformProvider = (typeof platformProviders)[number];
+
+export interface PlatformCredential {
+  readonly id: string;
+  readonly profileId: string;
+  readonly provider: PlatformProvider;
+  readonly externalAccountId?: string;
+  /** Secret material is stored server-side and must never be serialized by an API. */
+  readonly secret: string;
 }

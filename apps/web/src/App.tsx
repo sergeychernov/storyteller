@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TranslationKey } from "@storyteller/localization";
 import { type FormEvent, useState } from "react";
-import { checkHealth, createAccount, createStory, listStories, type Account, type StorySummary } from "./api.js";
+import { checkHealth, createProject, createStory, listProjects, listStories, login, register, type AuthSession, type Project, type StorySummary } from "./api.js";
 import { LanguageSwitcher, useLocalization } from "./localization.js";
 
 export function App() {
   const { t } = useLocalization();
-  const [account, setAccount] = useState<Account | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [selectedStory, setSelectedStory] = useState<StorySummary | null>(null);
   const health = useQuery({ queryKey: ["health"], queryFn: checkHealth, refetchInterval: 10_000 });
 
@@ -22,22 +22,25 @@ export function App() {
       </header>
 
       <main>
-        {!account ? <Welcome onCreated={setAccount} /> : (
-          <Workspace account={account} selectedStory={selectedStory} onSelectStory={setSelectedStory} />
+        {!session ? <Welcome onCreated={setSession} /> : (
+          <Workspace session={session} selectedStory={selectedStory} onSelectStory={setSelectedStory} />
         )}
       </main>
     </div>
   );
 }
 
-function Welcome({ onCreated }: { onCreated: (account: Account) => void }) {
+function Welcome({ onCreated }: { onCreated: (session: AuthSession) => void }) {
   const { t } = useLocalization();
   const [name, setName] = useState("");
-  const mutation = useMutation({ mutationFn: () => createAccount(name), onSuccess: onCreated });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"register" | "login">("register");
+  const mutation = useMutation({ mutationFn: () => mode === "register" ? register(name, email, password) : login(email, password), onSuccess: onCreated });
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (name.trim()) mutation.mutate();
+    if ((mode === "login" || name.trim()) && email.trim() && password.length >= 10) mutation.mutate();
   }
 
   return (
@@ -46,29 +49,41 @@ function Welcome({ onCreated }: { onCreated: (account: Account) => void }) {
       <h1>{t("web.welcome.title.first")}<br /><em>{t("web.welcome.title.second")}</em></h1>
       <p className="welcome-copy">{t("web.welcome.copy")}</p>
       <form className="account-form" onSubmit={submit}>
-        <input aria-label={t("web.welcome.name.label")} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("web.welcome.name.placeholder")} />
-        <button disabled={mutation.isPending}>{mutation.isPending ? t("web.welcome.creating") : t("web.welcome.enter")}</button>
+        {mode === "register" && <input aria-label={t("web.welcome.name.label")} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("web.welcome.name.placeholder")} />}
+        <input aria-label={t("web.welcome.email.label")} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={t("web.welcome.email.placeholder")} />
+        <input aria-label={t("web.welcome.password.label")} type="password" minLength={10} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t("web.welcome.password.placeholder")} />
+        <button disabled={mutation.isPending}>{mutation.isPending ? t("web.welcome.creating") : mode === "register" ? t("web.welcome.enter") : t("web.welcome.login")}</button>
       </form>
+      <button className="auth-mode" type="button" onClick={() => { mutation.reset(); setMode(mode === "register" ? "login" : "register"); }}>
+        {mode === "register" ? t("web.welcome.haveAccount") : t("web.welcome.needAccount")}
+      </button>
       {mutation.error && <p className="error">{t("common.error")}</p>}
     </section>
   );
 }
 
-function Workspace({ account, selectedStory, onSelectStory }: {
-  account: Account;
+function Workspace({ session, selectedStory, onSelectStory }: {
+  session: AuthSession;
   selectedStory: StorySummary | null;
   onSelectStory: (story: StorySummary) => void;
 }) {
   const { t } = useLocalization();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
-  const stories = useQuery({ queryKey: ["stories", account.id], queryFn: () => listStories(account.id) });
+  const [projectName, setProjectName] = useState("");
+  const projects = useQuery({ queryKey: ["projects", session.profile.id], queryFn: () => listProjects(session.accessToken) });
+  const project: Project | undefined = projects.data?.[0];
+  const stories = useQuery({ queryKey: ["stories", project?.id], queryFn: () => listStories(session.accessToken, project!.id), enabled: Boolean(project) });
+  const addProject = useMutation({
+    mutationFn: () => createProject(session.accessToken, projectName),
+    onSuccess: async () => { setProjectName(""); await queryClient.invalidateQueries({ queryKey: ["projects", session.profile.id] }); },
+  });
   const create = useMutation({
-    mutationFn: () => createStory(account.id, title),
+    mutationFn: () => createStory(session.accessToken, project!.id, title),
     onSuccess: async (story) => {
       setTitle("");
       onSelectStory(story);
-      await queryClient.invalidateQueries({ queryKey: ["stories", account.id] });
+      await queryClient.invalidateQueries({ queryKey: ["stories", project?.id] });
     },
   });
 
@@ -76,18 +91,21 @@ function Workspace({ account, selectedStory, onSelectStory }: {
     <div className="workspace">
       <aside className="sidebar">
         <p className="sidebar-label">{t("web.sidebar.workspace")}</p>
-        <h2>{account.name}</h2>
+        <h2>{session.profile.name}</h2>
         <nav><button className="nav-active">{t("web.sidebar.stories")}</button><button>{t("web.sidebar.assets")}</button><button>{t("web.sidebar.connections")}</button></nav>
-        <div className="sidebar-foot">{t("web.sidebar.foundation")}<br /><span>{t("web.sidebar.memory")}</span></div>
+        <div className="sidebar-foot">{t("web.sidebar.foundation")}<br /><span>{t("web.sidebar.postgres")}</span></div>
       </aside>
 
       <section className="content">
         <div className="content-head">
           <div><p className="eyebrow">{t("web.library.eyebrow")}</p><h1>{t("web.library.title")}</h1></div>
-          <form onSubmit={(event) => { event.preventDefault(); if (title.trim()) create.mutate(); }}>
+          {project ? <form onSubmit={(event) => { event.preventDefault(); if (title.trim()) create.mutate(); }}>
             <input aria-label={t("web.library.storyTitle.label")} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("web.library.storyTitle.placeholder")} />
             <button disabled={create.isPending}>{t("web.library.newStory")}</button>
-          </form>
+          </form> : <form onSubmit={(event) => { event.preventDefault(); if (projectName.trim()) addProject.mutate(); }}>
+            <input aria-label={t("web.library.projectName.label")} value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder={t("web.library.projectName.placeholder")} />
+            <button disabled={addProject.isPending}>{t("web.library.newProject")}</button>
+          </form>}
         </div>
 
         <div className="story-grid">

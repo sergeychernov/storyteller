@@ -6,7 +6,7 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 
 ## Workspace
 
-- `apps/api` — Fastify API with OpenAPI docs and the first account/story routes
+- `apps/api` — Fastify API with OpenAPI docs, authenticated profiles, projects, and story routes
 - `apps/worker` — empty background-job boundary
 - `apps/mcp` — empty peer interface to the future application layer
 - `apps/web` — React/Vite studio with account onboarding, story creation, and an editor shell
@@ -39,7 +39,9 @@ Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mob
 
 Production deployment of the web studio, API, worker, and MCP boundary is prepared for Railway. See [`docs/deploy-railway.md`](docs/deploy-railway.md) for service setup, variables, domains, and watch paths. The Expo mobile app is distributed separately through native app stores or EAS.
 
-The first vertical slice uses in-memory storage intentionally. Restarting the API clears accounts and stories; persistence will be selected after the editor flow stabilizes.
+The API persists profiles, sessions, projects, stories, and encrypted platform credentials in PostgreSQL. Set `DATABASE_URL` and a base64-encoded 32-byte `PLATFORM_CREDENTIALS_KEY`; the API applies versioned migrations on startup.
+
+Generate the credentials encryption key with `openssl rand -base64 32`. It must be kept stable between deployments or existing Telegram, TikTok, and Instagram credentials will become unreadable.
 
 Web and mobile initially follow the system language and expose an in-app selector for English, Russian, and Serbian Latin. The chosen language is persisted locally on each client.
 
