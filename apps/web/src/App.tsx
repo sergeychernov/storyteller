@@ -1,14 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TranslationKey } from "@storyteller/localization";
-import { type FormEvent, useState } from "react";
-import { checkHealth, createProject, createStory, listProjects, listStories, login, register, type AuthSession, type Project, type StorySummary } from "./api.js";
+import { type FormEvent, useEffect, useState } from "react";
+import { ApiError, checkHealth, createProject, createStory, getProfile, listProjects, listStories, login, register, type AuthSession, type Project, type StorySummary } from "./api.js";
 import { LanguageSwitcher, useLocalization } from "./localization.js";
 
 export function App() {
   const { t } = useLocalization();
-  const [session, setSession] = useState<AuthSession | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(loadSession);
   const [selectedStory, setSelectedStory] = useState<StorySummary | null>(null);
   const health = useQuery({ queryKey: ["health"], queryFn: checkHealth, refetchInterval: 10_000 });
+
+  useEffect(() => {
+    if (!session) return;
+    void getProfile(session.accessToken).then((profile) => {
+      if (profile.name !== session.profile.name || profile.email !== session.profile.email) {
+        storeSession({ ...session, profile });
+        setSession({ ...session, profile });
+      }
+    }).catch((error: unknown) => {
+      if (error instanceof ApiError && error.status === 401) {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        setSession(null);
+      }
+    });
+  }, [session?.accessToken]);
+
+  function authenticated(nextSession: AuthSession) {
+    storeSession(nextSession);
+    setSession(nextSession);
+  }
 
   return (
     <div className="app-shell">
@@ -22,12 +42,35 @@ export function App() {
       </header>
 
       <main>
-        {!session ? <Welcome onCreated={setSession} /> : (
+        {!session ? <Welcome onCreated={authenticated} /> : (
           <Workspace session={session} selectedStory={selectedStory} onSelectStory={setSelectedStory} />
         )}
       </main>
     </div>
   );
+}
+
+const SESSION_STORAGE_KEY = "storyteller.auth-session";
+
+function loadSession(): AuthSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as Partial<AuthSession>;
+    const expiresAt = typeof session.expiresAt === "string" ? Date.parse(session.expiresAt) : Number.NaN;
+    if (!session.accessToken || !session.profile?.id || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
+    return session as AuthSession;
+  } catch {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    return null;
+  }
+}
+
+function storeSession(session: AuthSession): void {
+  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
 }
 
 function Welcome({ onCreated }: { onCreated: (session: AuthSession) => void }) {

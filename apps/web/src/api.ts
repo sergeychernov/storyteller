@@ -13,6 +13,7 @@ export function register(name: string, email: string, password: string): Promise
 export function login(email: string, password: string): Promise<AuthSession> {
   return request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
 }
+export function getProfile(token: string): Promise<Profile> { return request("/profile", {}, token); }
 export function listProjects(token: string): Promise<Project[]> { return request("/projects", {}, token); }
 export function createProject(token: string, name: string): Promise<Project> {
   return request("/projects", { method: "POST", body: JSON.stringify({ name }) }, token);
@@ -29,7 +30,11 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({ message: response.statusText })) as { message?: string };
-    throw new Error(body.message ?? "Request failed");
+    throw new ApiError(body.message ?? "Request failed", response.status);
   }
   return response.json() as Promise<T>;
+}
+
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
 }
