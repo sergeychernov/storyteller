@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --experimental-strip-types src/index.ts"
+    "build": "node ../../node_modules/typescript/bin/tsc -b",
+    "dev": "node --experimental-strip-types src/index.ts",
+    "start": "node dist/index.js"
   }
 }

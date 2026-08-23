@@ -37,6 +37,8 @@ Then open [http://localhost:3000](http://localhost:3000). The API runs at [http:
 
 Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mobile app, or `yarn dev:mobile` to start Expo separately. Individual commands remain available as `yarn dev:api`, `yarn dev:web`, `yarn dev:worker`, and `yarn dev:mcp`.
 
+Production deployment of the web studio, API, worker, and MCP boundary is prepared for Railway. See [`docs/deploy-railway.md`](docs/deploy-railway.md) for service setup, variables, domains, and watch paths. The Expo mobile app is distributed separately through native app stores or EAS.
+
 The first vertical slice uses in-memory storage intentionally. Restarting the API clears accounts and stories; persistence will be selected after the editor flow stabilizes.
 
 Web and mobile initially follow the system language and expose an in-app selector for English, Russian, and Serbian Latin. The chosen language is persisted locally on each client.

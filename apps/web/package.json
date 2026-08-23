@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node ../../node_modules/typescript/bin/tsc -b ../../packages/localization && vite build",
     "dev": "vite --host 0.0.0.0 --port 3000",
-    "preview": "vite preview --host 0.0.0.0 --port 3000"
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "start": "node server.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.101.4",
