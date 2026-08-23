@@ -8,7 +8,10 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 | Read/update own profile | `GET/PATCH /profile` |
 | Create/list stories | `POST/GET /stories` |
 | Create scene | `POST /stories/{storyId}/scenes` |
-| Add material to scene | `POST /stories/{storyId}/scenes/{sceneId}/materials` |
+| Upload original photo/video to scene (multipart) | `POST /stories/{storyId}/scenes/{sceneId}/materials` |
+| Read authenticated material content | `GET /stories/{storyId}/materials/{materialId}/content` |
+| Reorder scene materials | `PUT /stories/{storyId}/scenes/{sceneId}/material-order` |
+| Configure scene duration, layout and motion | `PATCH /stories/{storyId}/scenes/{sceneId}` |
 | Remove material | `DELETE /stories/{storyId}/scenes/{sceneId}/materials/{assetId}` |
 | Select renderer | `PUT /stories/{storyId}/scenes/{sceneId}/renderer` |
 | Add or remove title | `PUT /stories/{storyId}/scenes/{sceneId}/title` |

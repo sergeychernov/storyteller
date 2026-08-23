@@ -1,5 +1,8 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
-import { createStory, type PlatformCredential, type PlatformProvider, type Profile, type Story } from "@storyteller/domain";
+import {
+  addMaterial, addScene, configureScene, createStory, reorderMaterials,
+  type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
+} from "@storyteller/domain";
 
 export interface ProfileAuthentication extends Profile { readonly passwordHash: string }
 export interface PlatformCredentialSummary {
@@ -26,6 +29,7 @@ export interface StoryRepository {
   createStory(story: Story): Promise<void>;
   listStories(profileId: string): Promise<readonly Story[]>;
   findStory(profileId: string, storyId: string): Promise<Story | undefined>;
+  updateStory(story: Story): Promise<void>;
   upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary>;
   listPlatformCredentials(profileId: string): Promise<readonly PlatformCredentialSummary[]>;
   deletePlatformCredential(profileId: string, provider: PlatformProvider): Promise<boolean>;
@@ -91,10 +95,24 @@ export class StoryApplication {
   async listStories(profileId: string): Promise<readonly StorySummary[]> {
     return (await this.repository.listStories(profileId)).map(summarize);
   }
-  async getStory(profileId: string, storyId: string): Promise<StorySummary> {
+  async getStory(profileId: string, storyId: string): Promise<Story> {
     const story = await this.repository.findStory(profileId, storyId);
     if (!story) throw new ApplicationError(`story not found: ${storyId}`, 404);
-    return summarize(story);
+    return story;
+  }
+  async createScene(profileId: string, storyId: string): Promise<Story> {
+    return this.changeStory(profileId, storyId, (story) => addScene(story, randomUUID()));
+  }
+  async addSceneMaterial(profileId: string, storyId: string, sceneId: string, material: NewSceneMaterial): Promise<Story> {
+    return this.changeStory(profileId, storyId, (story) => addMaterial(story, sceneId, { ...material, id: randomUUID() } as SceneMaterial));
+  }
+  async reorderSceneMaterials(profileId: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
+    return this.changeStory(profileId, storyId, (story) => reorderMaterials(story, sceneId, materialIds));
+  }
+  async configureScene(profileId: string, storyId: string, sceneId: string, input: {
+    durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion;
+  }): Promise<Story> {
+    return this.changeStory(profileId, storyId, (story) => configureScene(story, sceneId, input));
   }
   setPlatformCredential(profileId: string, input: { provider: PlatformProvider; secret: string; externalAccountId?: string }): Promise<PlatformCredentialSummary> {
     return this.repository.upsertPlatformCredential({
@@ -109,6 +127,14 @@ export class StoryApplication {
     if (!await this.repository.deletePlatformCredential(profileId, provider)) {
       throw new ApplicationError(`platform credential not found: ${provider}`, 404);
     }
+  }
+
+  private async changeStory(profileId: string, storyId: string, change: (story: Story) => Story): Promise<Story> {
+    const story = await this.repository.findStory(profileId, storyId);
+    if (!story) throw new ApplicationError(`story not found: ${storyId}`, 404);
+    const changed = change(story);
+    await this.repository.updateStory(changed);
+    return changed;
   }
 }
 

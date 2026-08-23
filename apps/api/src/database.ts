@@ -1,6 +1,7 @@
 import { createCipheriv, randomBytes } from "node:crypto";
 import type { PlatformCredential, PlatformProvider, Profile, Story } from "@storyteller/domain";
 import { ApplicationError, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
+import { sceneMaterialSchema, storySchema } from "@storyteller/schemas";
 import { Pool, type PoolClient } from "pg";
 
 export class PostgresStoryRepository implements StoryRepository {
@@ -57,12 +58,20 @@ export class PostgresStoryRepository implements StoryRepository {
     );
   }
   async listStories(profileId: string): Promise<readonly Story[]> {
-    const result = await this.pool.query<{ payload: Story }>("SELECT payload FROM stories WHERE profile_id = $1 ORDER BY created_at", [profileId]);
-    return result.rows.map(({ payload }) => payload);
+    const result = await this.pool.query<{ payload: unknown }>("SELECT payload FROM stories WHERE profile_id = $1 ORDER BY created_at", [profileId]);
+    return result.rows.map(({ payload }) => normalizeStoredStory(payload));
   }
   async findStory(profileId: string, storyId: string): Promise<Story | undefined> {
-    const result = await this.pool.query<{ payload: Story }>("SELECT payload FROM stories WHERE id = $1 AND profile_id = $2", [storyId, profileId]);
-    return result.rows[0]?.payload;
+    const result = await this.pool.query<{ payload: unknown }>("SELECT payload FROM stories WHERE id = $1 AND profile_id = $2", [storyId, profileId]);
+    const payload = result.rows[0]?.payload;
+    return payload === undefined ? undefined : normalizeStoredStory(payload);
+  }
+  async updateStory(story: Story): Promise<void> {
+    const result = await this.pool.query(
+      "UPDATE stories SET status = $2, scene_count = $3, revision = $4, payload = $5 WHERE id = $1 AND profile_id = $6",
+      [story.id, story.status, story.scenes.length, story.revision, story, story.profileId],
+    );
+    if (result.rowCount !== 1) throw new ApplicationError(`story not found: ${story.id}`, 404);
   }
   async upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary> {
     const encrypted = encryptSecret(credential.secret, this.credentialKey);
@@ -86,6 +95,23 @@ export class PostgresStoryRepository implements StoryRepository {
   async deletePlatformCredential(profileId: string, provider: PlatformProvider): Promise<boolean> {
     return (await this.pool.query("DELETE FROM platform_credentials WHERE profile_id = $1 AND provider = $2", [profileId, provider])).rowCount === 1;
   }
+}
+
+/**
+ * Stories created by the old mock editor may contain material placeholders with
+ * no backing file. Keep their scenes, but do not expose those placeholders as
+ * uploaded media. A later story mutation persists the normalized payload.
+ */
+export function normalizeStoredStory(payload: unknown): Story {
+  if (!isRecord(payload) || !Array.isArray(payload.scenes)) return storySchema.parse(payload) as Story;
+  const scenes = payload.scenes.map((scene) => {
+    if (!isRecord(scene) || !Array.isArray(scene.materials)) return scene;
+    const materials = scene.materials.filter((material) => sceneMaterialSchema.safeParse(material).success);
+    if (materials.length === scene.materials.length) return scene;
+    const { layoutId: _legacyLayout, ...withoutLayout } = scene;
+    return { ...withoutLayout, materials, render: { status: "idle" } };
+  });
+  return storySchema.parse({ ...payload, scenes }) as Story;
 }
 
 export function createPostgresRepository(): { pool: Pool; repository: PostgresStoryRepository } {
@@ -112,3 +138,4 @@ function mapProfile(row: ProfileRow): Profile { return { id: row.id, name: row.n
 function mapCredential(row: CredentialRow): PlatformCredentialSummary {
   return { id: row.id, provider: row.provider, secretHint: row.secret_hint, ...(row.external_account_id === null ? {} : { externalAccountId: row.external_account_id }) };
 }
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null; }

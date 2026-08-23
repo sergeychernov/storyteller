@@ -1,22 +1,28 @@
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
 import {
-  authenticationSchema, bearerSecurity, createStorySchema, errorSchema, healthSchema,
+  authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, errorSchema, healthSchema,
   loginSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
-  setPlatformCredentialSchema, storySummarySchema, updateProfileSchema,
+  reorderSceneMaterialsSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
 import Fastify, { type FastifyRequest } from "fastify";
 import { jsonSchemaTransform, serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { MediaStorage, MediaUploadError } from "./media-storage.js";
 
-export async function buildApi(application: StoryApplication) {
+export async function buildApi(application: StoryApplication, options: { readonly mediaStorage?: MediaStorage } = {}) {
+  const mediaStorage = options.mediaStorage ?? new MediaStorage();
   const app = Fastify({ logger: process.env.NODE_ENV !== "test" })
     .setValidatorCompiler(validatorCompiler).setSerializerCompiler(serializerCompiler).withTypeProvider<ZodTypeProvider>();
 
   const configuredOrigins = process.env.WEB_ORIGIN?.split(",").map((origin) => origin.trim()).filter(Boolean);
   await app.register(cors, { origin: configuredOrigins?.length ? configuredOrigins : true });
+  await app.register(multipart, {
+    limits: { files: 1, fields: 0, parts: 1, fileSize: Number(process.env.MAX_MEDIA_UPLOAD_BYTES ?? 500 * 1024 * 1024) },
+  });
   await app.register(swagger, {
     openapi: {
       info: { title: "Storyteller API", version: "0.2.0" },
@@ -63,8 +69,56 @@ export async function buildApi(application: StoryApplication) {
   }, async (request, reply) => reply.status(201).send(await application.createStory((await authenticate(application, request)).id, request.body)));
   const storyParams = z.object({ storyId: z.string().uuid() });
   app.get("/stories/:storyId", {
-    schema: { security: bearerSecurity, params: storyParams, response: { 200: storySummarySchema, 401: errorSchema, 404: errorSchema } },
-  }, async (request) => application.getStory((await authenticate(application, request)).id, request.params.storyId));
+    schema: { security: bearerSecurity, params: storyParams, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
+  }, async (request) => serializeStory(await application.getStory((await authenticate(application, request)).id, request.params.storyId)));
+  const sceneParams = storyParams.extend({ sceneId: z.string().uuid() });
+  app.post("/stories/:storyId/scenes", {
+    schema: { security: bearerSecurity, params: storyParams, response: { 201: storySchema, 401: errorSchema, 404: errorSchema } },
+  }, async (request, reply) => reply.status(201).send(serializeStory(await application.createScene(
+    (await authenticate(application, request)).id, request.params.storyId,
+  ))));
+  app.post("/stories/:storyId/scenes/:sceneId/materials", {
+    schema: { security: bearerSecurity, params: sceneParams, response: { 201: storySchema, 401: errorSchema, 404: errorSchema, 413: errorSchema, 415: errorSchema, 422: errorSchema } },
+  }, async (request, reply) => {
+    const profile = await authenticate(application, request);
+    const story = await application.getStory(profile.id, request.params.storyId);
+    if (!story.scenes.some(({ id }) => id === request.params.sceneId)) throw new ApplicationError(`scene not found: ${request.params.sceneId}`, 404);
+    const upload = await request.file();
+    if (!upload) throw new MediaUploadError("media file is required", 422);
+    const stored = await mediaStorage.store(upload, { profileId: profile.id, storyId: story.id, sceneId: request.params.sceneId });
+    try {
+      return reply.status(201).send(serializeStory(await application.addSceneMaterial(
+        profile.id, story.id, request.params.sceneId, stored.material,
+      )));
+    } catch (error) {
+      await stored.cleanup();
+      throw error;
+    }
+  });
+  const materialParams = storyParams.extend({ materialId: z.string().uuid() });
+  app.get("/stories/:storyId/materials/:materialId/content", {
+    schema: { security: bearerSecurity, params: materialParams },
+  }, async (request, reply) => {
+    const profile = await authenticate(application, request);
+    const story = await application.getStory(profile.id, request.params.storyId);
+    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
+    return reply.type(material.mimeType).header("cache-control", "private, max-age=3600").send(mediaStorage.open(material.storageKey));
+  });
+  app.put("/stories/:storyId/scenes/:sceneId/material-order", {
+    schema: { security: bearerSecurity, params: sceneParams, body: reorderSceneMaterialsSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
+  }, async (request) => serializeStory(await application.reorderSceneMaterials(
+    (await authenticate(application, request)).id, request.params.storyId, request.params.sceneId, request.body.materialIds,
+  )));
+  app.patch("/stories/:storyId/scenes/:sceneId", {
+    schema: { security: bearerSecurity, params: sceneParams, body: configureSceneSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
+  }, async (request) => serializeStory(await application.configureScene(
+    (await authenticate(application, request)).id, request.params.storyId, request.params.sceneId, {
+      ...(request.body.durationSeconds === undefined ? {} : { durationSeconds: request.body.durationSeconds }),
+      ...(request.body.layoutId === undefined ? {} : { layoutId: request.body.layoutId }),
+      ...(request.body.motion === undefined ? {} : { motion: request.body.motion }),
+    },
+  )));
 
   app.get("/profile/platform-credentials", {
     schema: { security: bearerSecurity, response: { 200: z.array(platformCredentialSchema), 401: errorSchema } },
@@ -89,4 +143,9 @@ async function authenticate(application: StoryApplication, request: FastifyReque
   const authorization = request.headers.authorization;
   if (!authorization?.startsWith("Bearer ")) throw new ApplicationError("authentication required", 401);
   return application.authenticate(authorization.slice(7).trim());
+}
+
+function serializeStory(story: unknown) {
+  // Parse readonly domain collections into the mutable public JSON response shape.
+  return storySchema.parse(story);
 }

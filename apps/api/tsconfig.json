@@ -2,7 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "dist" },
   "references": [
+    { "path": "../../packages/domain" },
     { "path": "../../packages/application" },
+    { "path": "../../packages/renderer" },
     { "path": "../../packages/schemas" }
   ],
   "include": ["src/**/*.ts"]

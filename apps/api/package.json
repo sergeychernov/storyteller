@@ -13,14 +13,18 @@
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",
+    "@fastify/multipart": "^10.1.1",
     "@fastify/swagger": "9.8.1",
     "@fastify/swagger-ui": "6.1.1",
     "@storyteller/application": "workspace:*",
+    "@storyteller/domain": "workspace:*",
+    "@storyteller/renderer": "workspace:*",
     "@storyteller/schemas": "workspace:*",
     "fastify": "5.11.3",
     "fastify-type-provider-zod": "7.0.0",
     "openapi-types": "12.1.3",
     "pg": "8.23.0",
+    "sharp": "^0.35.3",
     "zod": "4.4.3"
   },
   "devDependencies": {

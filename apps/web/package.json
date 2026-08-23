@@ -10,6 +10,7 @@
     "start": "node server.mjs"
   },
   "dependencies": {
+    "@storyteller/domain": "workspace:*",
     "@storyteller/localization": "workspace:*",
     "@tanstack/react-query": "5.101.4",
     "react": "19.2.3",
