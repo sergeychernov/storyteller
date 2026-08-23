@@ -6,8 +6,7 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 | --- | --- |
 | Sign in or complete a new profile | `POST /auth/sign-in` |
 | Read/update own profile | `GET/PATCH /profile` |
-| Create/list projects | `POST/GET /projects` |
-| Create story | `POST /projects/{projectId}/stories` |
+| Create/list stories | `POST/GET /stories` |
 | Create scene | `POST /stories/{storyId}/scenes` |
 | Add material to scene | `POST /stories/{storyId}/scenes/{sceneId}/materials` |
 | Remove material | `DELETE /stories/{storyId}/scenes/{sceneId}/materials/{assetId}` |

@@ -28,7 +28,7 @@ export interface Music {
 
 export interface Story {
   readonly id: string;
-  readonly projectId: string;
+  readonly profileId: string;
   readonly title?: string;
   readonly status: StoryStatus;
   readonly scenes: readonly Scene[];
@@ -41,12 +41,6 @@ export interface Profile {
   readonly id: string;
   readonly name: string;
   readonly email: string;
-}
-
-export interface Project {
-  readonly id: string;
-  readonly profileId: string;
-  readonly name: string;
 }
 
 export const platformProviders = ["telegram", "tiktok", "instagram"] as const;

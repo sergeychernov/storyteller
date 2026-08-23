@@ -11,11 +11,9 @@ export const signInSchema = loginSchema.extend({ name: registerSchema.shape.name
 export const authenticationSchema = z.object({ accessToken: z.string(), expiresAt: z.iso.datetime(), profile: profileSchema });
 export const updateProfileSchema = z.object({ name: z.string().trim().min(1).max(80) });
 
-export const createProjectSchema = z.object({ name: z.string().trim().min(1).max(100) });
-export const projectSchema = z.object({ id: z.string().uuid(), profileId: z.string().uuid(), name: z.string() });
 export const createStorySchema = z.object({ title: z.string().trim().min(1).max(120) });
 export const storySummarySchema = z.object({
-  id: z.string().uuid(), projectId: z.string().uuid(), title: z.string().optional(),
+  id: z.string().uuid(), profileId: z.string().uuid(), title: z.string().optional(),
   status: z.enum(["draft", "rendering", "ready", "publishing", "published"]),
   sceneCount: z.number().int().nonnegative(), revision: z.number().int().positive(),
 });

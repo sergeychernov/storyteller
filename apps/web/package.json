@@ -10,8 +10,8 @@
     "start": "node server.mjs"
   },
   "dependencies": {
-    "@tanstack/react-query": "5.101.4",
     "@storyteller/localization": "workspace:*",
+    "@tanstack/react-query": "5.101.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-router-dom": "7.18.0"

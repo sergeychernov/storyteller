@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
-import { createStory, type PlatformCredential, type PlatformProvider, type Profile, type Project, type Story } from "@storyteller/domain";
+import { createStory, type PlatformCredential, type PlatformProvider, type Profile, type Story } from "@storyteller/domain";
 
 export interface ProfileAuthentication extends Profile { readonly passwordHash: string }
 export interface PlatformCredentialSummary {
@@ -10,7 +10,7 @@ export interface PlatformCredentialSummary {
 }
 export interface StorySummary {
   readonly id: string;
-  readonly projectId: string;
+  readonly profileId: string;
   readonly title?: string;
   readonly status: Story["status"];
   readonly sceneCount: number;
@@ -23,11 +23,8 @@ export interface StoryRepository {
   createSession(session: SessionRecord): Promise<void>;
   findProfileBySession(tokenHash: string, now: Date): Promise<Profile | undefined>;
   updateProfile(profileId: string, name: string): Promise<Profile>;
-  createProject(project: Project): Promise<void>;
-  listProjects(profileId: string): Promise<readonly Project[]>;
-  projectBelongsToProfile(projectId: string, profileId: string): Promise<boolean>;
   createStory(story: Story): Promise<void>;
-  listStories(projectId: string): Promise<readonly Story[]>;
+  listStories(profileId: string): Promise<readonly Story[]>;
   upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary>;
   listPlatformCredentials(profileId: string): Promise<readonly PlatformCredentialSummary[]>;
   deletePlatformCredential(profileId: string, provider: PlatformProvider): Promise<boolean>;
@@ -85,21 +82,13 @@ export class StoryApplication {
   updateProfile(profileId: string, input: { name: string }): Promise<Profile> {
     return this.repository.updateProfile(profileId, input.name.trim());
   }
-  async createProject(profileId: string, input: { name: string }): Promise<Project> {
-    const project = { id: randomUUID(), profileId, name: input.name.trim() } satisfies Project;
-    await this.repository.createProject(project);
-    return project;
-  }
-  listProjects(profileId: string): Promise<readonly Project[]> { return this.repository.listProjects(profileId); }
-  async createStory(profileId: string, input: { projectId: string; title: string }): Promise<StorySummary> {
-    await this.requireProject(profileId, input.projectId);
-    const story = createStory({ id: randomUUID(), projectId: input.projectId, title: input.title.trim() });
+  async createStory(profileId: string, input: { title: string }): Promise<StorySummary> {
+    const story = createStory({ id: randomUUID(), profileId, title: input.title.trim() });
     await this.repository.createStory(story);
     return summarize(story);
   }
-  async listStories(profileId: string, projectId: string): Promise<readonly StorySummary[]> {
-    await this.requireProject(profileId, projectId);
-    return (await this.repository.listStories(projectId)).map(summarize);
+  async listStories(profileId: string): Promise<readonly StorySummary[]> {
+    return (await this.repository.listStories(profileId)).map(summarize);
   }
   setPlatformCredential(profileId: string, input: { provider: PlatformProvider; secret: string; externalAccountId?: string }): Promise<PlatformCredentialSummary> {
     return this.repository.upsertPlatformCredential({
@@ -115,9 +104,6 @@ export class StoryApplication {
       throw new ApplicationError(`platform credential not found: ${provider}`, 404);
     }
   }
-  private async requireProject(profileId: string, projectId: string): Promise<void> {
-    if (!await this.repository.projectBelongsToProfile(projectId, profileId)) throw new ApplicationError(`project not found: ${projectId}`, 404);
-  }
 }
 
 export class ApplicationError extends Error {
@@ -125,7 +111,7 @@ export class ApplicationError extends Error {
 }
 
 function summarize(story: Story): StorySummary {
-  return { id: story.id, projectId: story.projectId, ...(story.title === undefined ? {} : { title: story.title }), status: story.status, sceneCount: story.scenes.length, revision: story.revision };
+  return { id: story.id, profileId: story.profileId, ...(story.title === undefined ? {} : { title: story.title }), status: story.status, sceneCount: story.scenes.length, revision: story.revision };
 }
 function normalizeEmail(email: string): string { return email.trim().toLowerCase(); }
 function issueSession(profileId: string): { accessToken: string; record: SessionRecord } {

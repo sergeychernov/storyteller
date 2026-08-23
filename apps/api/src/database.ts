@@ -1,5 +1,5 @@
 import { createCipheriv, randomBytes } from "node:crypto";
-import type { PlatformCredential, PlatformProvider, Profile, Project, Story } from "@storyteller/domain";
+import type { PlatformCredential, PlatformProvider, Profile, Story } from "@storyteller/domain";
 import { ApplicationError, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
 import { Pool, type PoolClient } from "pg";
 
@@ -50,24 +50,14 @@ export class PostgresStoryRepository implements StoryRepository {
     if (!row) throw new ApplicationError("profile not found", 404);
     return mapProfile(row);
   }
-  async createProject(project: Project): Promise<void> {
-    await this.pool.query("INSERT INTO projects (id, profile_id, name) VALUES ($1, $2, $3)", [project.id, project.profileId, project.name]);
-  }
-  async listProjects(profileId: string): Promise<readonly Project[]> {
-    const result = await this.pool.query<ProjectRow>("SELECT id, profile_id, name FROM projects WHERE profile_id = $1 ORDER BY created_at", [profileId]);
-    return result.rows.map((row) => ({ id: row.id, profileId: row.profile_id, name: row.name }));
-  }
-  async projectBelongsToProfile(projectId: string, profileId: string): Promise<boolean> {
-    return (await this.pool.query("SELECT 1 FROM projects WHERE id = $1 AND profile_id = $2", [projectId, profileId])).rowCount === 1;
-  }
   async createStory(story: Story): Promise<void> {
     await this.pool.query(
-      "INSERT INTO stories (id, project_id, title, status, scene_count, revision, payload) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-      [story.id, story.projectId, story.title ?? null, story.status, story.scenes.length, story.revision, story],
+      "INSERT INTO stories (id, profile_id, title, status, scene_count, revision, payload) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+      [story.id, story.profileId, story.title ?? null, story.status, story.scenes.length, story.revision, story],
     );
   }
-  async listStories(projectId: string): Promise<readonly Story[]> {
-    const result = await this.pool.query<{ payload: Story }>("SELECT payload FROM stories WHERE project_id = $1 ORDER BY created_at", [projectId]);
+  async listStories(profileId: string): Promise<readonly Story[]> {
+    const result = await this.pool.query<{ payload: Story }>("SELECT payload FROM stories WHERE profile_id = $1 ORDER BY created_at", [profileId]);
     return result.rows.map(({ payload }) => payload);
   }
   async upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary> {
@@ -113,7 +103,6 @@ function encryptSecret(secret: string, key: Buffer): string {
   return `${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${ciphertext.toString("base64url")}`;
 }
 interface ProfileRow { id: string; name: string; email: string }
-interface ProjectRow { id: string; profile_id: string; name: string }
 interface CredentialRow { id: string; provider: PlatformProvider; external_account_id: string | null; secret_hint: string }
 function mapProfile(row: ProfileRow): Profile { return { id: row.id, name: row.name, email: row.email }; }
 function mapCredential(row: CredentialRow): PlatformCredentialSummary {

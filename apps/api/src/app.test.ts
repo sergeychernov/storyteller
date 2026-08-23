@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { StoryApplication, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
-import type { PlatformCredential, PlatformProvider, Profile, Project, Story } from "@storyteller/domain";
+import type { PlatformCredential, PlatformProvider, Profile, Story } from "@storyteller/domain";
 import { buildApi } from "./server.js";
 
-test("protects a profile and stores stories inside its projects", async () => {
+test("protects a profile and stores its stories", async () => {
   process.env.NODE_ENV = "test";
   const api = await buildApi(new StoryApplication(new MemoryRepository()));
   assert.equal((await api.inject({ method: "GET", url: "/profile" })).statusCode, 401);
@@ -22,12 +22,10 @@ test("protects a profile and stores stories inside its projects", async () => {
   const headers = { authorization: `Bearer ${auth.accessToken}` };
   assert.equal((await api.inject({ method: "GET", url: "/profile", headers })).json<Profile>().email, "sergej@example.com");
 
-  const projectResponse = await api.inject({ method: "POST", url: "/projects", headers, payload: { name: "Short videos" } });
-  const project = projectResponse.json<Project>();
-  const storyResponse = await api.inject({ method: "POST", url: `/projects/${project.id}/stories`, headers, payload: { title: "First story" } });
+  const storyResponse = await api.inject({ method: "POST", url: "/stories", headers, payload: { title: "First story" } });
   assert.equal(storyResponse.statusCode, 201);
-  assert.equal(storyResponse.json<{ projectId: string }>().projectId, project.id);
-  assert.equal((await api.inject({ method: "GET", url: `/projects/${project.id}/stories`, headers })).json<unknown[]>().length, 1);
+  assert.equal(storyResponse.json<{ profileId: string }>().profileId, auth.profile.id);
+  assert.equal((await api.inject({ method: "GET", url: "/stories", headers })).json<unknown[]>().length, 1);
   await api.close();
 });
 
@@ -51,7 +49,6 @@ test("never exposes a stored platform secret", async () => {
 class MemoryRepository implements StoryRepository {
   readonly profiles = new Map<string, ProfileAuthentication>();
   readonly sessions = new Map<string, SessionRecord>();
-  readonly projects = new Map<string, Project>();
   readonly stories = new Map<string, Story>();
   readonly credentials = new Map<string, PlatformCredentialSummary>();
   async createProfileWithSession(profile: ProfileAuthentication, session: SessionRecord) {
@@ -65,11 +62,8 @@ class MemoryRepository implements StoryRepository {
     return profile && { id: profile.id, name: profile.name, email: profile.email };
   }
   async updateProfile(profileId: string, name: string) { const old = this.profiles.get(profileId)!; const profile = { ...old, name }; this.profiles.set(profileId, profile); return profile; }
-  async createProject(project: Project) { this.projects.set(project.id, project); }
-  async listProjects(profileId: string) { return [...this.projects.values()].filter((project) => project.profileId === profileId); }
-  async projectBelongsToProfile(projectId: string, profileId: string) { return this.projects.get(projectId)?.profileId === profileId; }
   async createStory(story: Story) { this.stories.set(story.id, story); }
-  async listStories(projectId: string) { return [...this.stories.values()].filter((story) => story.projectId === projectId); }
+  async listStories(profileId: string) { return [...this.stories.values()].filter((story) => story.profileId === profileId); }
   async upsertPlatformCredential(credential: PlatformCredential) {
     const summary = { id: credential.id, provider: credential.provider, secretHint: `••••${credential.secret.slice(-4)}` } satisfies PlatformCredentialSummary;
     this.credentials.set(`${credential.profileId}:${credential.provider}`, summary); return summary;

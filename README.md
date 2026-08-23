@@ -6,7 +6,7 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 
 ## Workspace
 
-- `apps/api` — Fastify API with OpenAPI docs, authenticated profiles, projects, and story routes
+- `apps/api` — Fastify API with OpenAPI docs, authenticated profiles, and story routes
 - `apps/worker` — empty background-job boundary
 - `apps/mcp` — empty peer interface to the future application layer
 - `apps/web` — React/Vite studio with account onboarding, story creation, and an editor shell
@@ -30,8 +30,12 @@ yarn check
 Run the API and web studio together:
 
 ```bash
+cp .env.example .env
+# Fill PLATFORM_CREDENTIALS_KEY once with: openssl rand -base64 32
 yarn dev
 ```
+
+The local API dev and migration commands automatically load the repository-root `.env`. Existing process variables take precedence, so Railway continues to use its service variables.
 
 Then open [http://localhost:3000](http://localhost:3000). The API runs at [http://localhost:3001](http://localhost:3001), and its interactive documentation is at [http://localhost:3001/docs](http://localhost:3001/docs).
 
@@ -39,7 +43,7 @@ Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mob
 
 Production deployment of the web studio, API, worker, and MCP boundary is prepared for Railway. See [`docs/deploy-railway.md`](docs/deploy-railway.md) for service setup, variables, domains, and watch paths. The Expo mobile app is distributed separately through native app stores or EAS.
 
-The API persists profiles, sessions, projects, stories, and encrypted platform credentials in PostgreSQL. Set `DATABASE_URL` and a base64-encoded 32-byte `PLATFORM_CREDENTIALS_KEY`; the API applies versioned migrations on startup.
+The API persists profiles, sessions, stories, and encrypted platform credentials in PostgreSQL. Set `DATABASE_URL` and a base64-encoded 32-byte `PLATFORM_CREDENTIALS_KEY`; the API applies versioned migrations on startup.
 
 Generate the credentials encryption key with `openssl rand -base64 32`. It must be kept stable between deployments or existing Telegram, TikTok, and Instagram credentials will become unreadable.
 

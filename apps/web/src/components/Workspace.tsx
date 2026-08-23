@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TranslationKey } from "@storyteller/localization";
 import { useState } from "react";
-import { createProject, createStory, listProjects, listStories, type AuthSession, type Project, type StorySummary } from "../api.js";
+import { createStory, listStories, type AuthSession, type StorySummary } from "../api.js";
 import { useLocalization } from "../localization.js";
 import { EditorShell } from "./EditorShell.js";
 
@@ -15,20 +15,13 @@ export function Workspace({ session, selectedStory, onSelectStory }: WorkspacePr
   const { t } = useLocalization();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
-  const [projectName, setProjectName] = useState("");
-  const projects = useQuery({ queryKey: ["projects", session.profile.id], queryFn: () => listProjects(session.accessToken) });
-  const project: Project | undefined = projects.data?.[0];
-  const stories = useQuery({ queryKey: ["stories", project?.id], queryFn: () => listStories(session.accessToken, project!.id), enabled: Boolean(project) });
-  const addProject = useMutation({
-    mutationFn: () => createProject(session.accessToken, projectName),
-    onSuccess: async () => { setProjectName(""); await queryClient.invalidateQueries({ queryKey: ["projects", session.profile.id] }); },
-  });
+  const stories = useQuery({ queryKey: ["stories", session.profile.id], queryFn: () => listStories(session.accessToken) });
   const addStory = useMutation({
-    mutationFn: () => createStory(session.accessToken, project!.id, title),
+    mutationFn: () => createStory(session.accessToken, title),
     onSuccess: async (story) => {
       setTitle("");
       onSelectStory(story);
-      await queryClient.invalidateQueries({ queryKey: ["stories", project?.id] });
+      await queryClient.invalidateQueries({ queryKey: ["stories", session.profile.id] });
     },
   });
 
@@ -44,13 +37,10 @@ export function Workspace({ session, selectedStory, onSelectStory }: WorkspacePr
       <section className="content">
         <div className="content-head">
           <div><p className="eyebrow">{t("web.library.eyebrow")}</p><h1>{t("web.library.title")}</h1></div>
-          {project ? <form onSubmit={(event) => { event.preventDefault(); if (title.trim()) addStory.mutate(); }}>
+          <form onSubmit={(event) => { event.preventDefault(); if (title.trim()) addStory.mutate(); }}>
             <input aria-label={t("web.library.storyTitle.label")} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("web.library.storyTitle.placeholder")} />
             <button disabled={addStory.isPending}>{t("web.library.newStory")}</button>
-          </form> : <form onSubmit={(event) => { event.preventDefault(); if (projectName.trim()) addProject.mutate(); }}>
-            <input aria-label={t("web.library.projectName.label")} value={projectName} onChange={(event) => setProjectName(event.target.value)} placeholder={t("web.library.projectName.placeholder")} />
-            <button disabled={addProject.isPending}>{t("web.library.newProject")}</button>
-          </form>}
+          </form>
         </div>
 
         <div className="story-grid">

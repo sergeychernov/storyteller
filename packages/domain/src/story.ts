@@ -1,7 +1,7 @@
 import { DomainError } from "./errors.js";
 import type { AssetRef, Narration, Scene, Story } from "./model.js";
 
-export function createStory(input: { id: string; projectId: string; title?: string }): Story {
+export function createStory(input: { id: string; profileId: string; title?: string }): Story {
   return {
     ...input,
     status: "draft",

@@ -3,8 +3,8 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
 import {
-  authenticationSchema, bearerSecurity, createProjectSchema, createStorySchema, errorSchema, healthSchema,
-  loginSchema, platformCredentialSchema, platformParamsSchema, profileSchema, projectSchema, registerSchema, signInSchema,
+  authenticationSchema, bearerSecurity, createStorySchema, errorSchema, healthSchema,
+  loginSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
   setPlatformCredentialSchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
 import Fastify, { type FastifyRequest } from "fastify";
@@ -55,22 +55,12 @@ export async function buildApi(application: StoryApplication) {
     schema: { security: bearerSecurity, body: updateProfileSchema, response: { 200: profileSchema, 401: errorSchema } },
   }, async (request) => application.updateProfile((await authenticate(application, request)).id, request.body));
 
-  app.get("/projects", {
-    schema: { security: bearerSecurity, response: { 200: z.array(projectSchema), 401: errorSchema } },
-  }, async (request) => [...await application.listProjects((await authenticate(application, request)).id)]);
-  app.post("/projects", {
-    schema: { security: bearerSecurity, body: createProjectSchema, response: { 201: projectSchema, 401: errorSchema } },
-  }, async (request, reply) => reply.status(201).send(await application.createProject((await authenticate(application, request)).id, request.body)));
-
-  const projectParams = z.object({ projectId: z.string().uuid() });
-  app.get("/projects/:projectId/stories", {
-    schema: { security: bearerSecurity, params: projectParams, response: { 200: z.array(storySummarySchema), 401: errorSchema, 404: errorSchema } },
-  }, async (request) => [...await application.listStories((await authenticate(application, request)).id, request.params.projectId)]);
-  app.post("/projects/:projectId/stories", {
-    schema: { security: bearerSecurity, params: projectParams, body: createStorySchema, response: { 201: storySummarySchema, 401: errorSchema, 404: errorSchema } },
-  }, async (request, reply) => reply.status(201).send(await application.createStory((await authenticate(application, request)).id, {
-    projectId: request.params.projectId, title: request.body.title,
-  })));
+  app.get("/stories", {
+    schema: { security: bearerSecurity, response: { 200: z.array(storySummarySchema), 401: errorSchema } },
+  }, async (request) => [...await application.listStories((await authenticate(application, request)).id)]);
+  app.post("/stories", {
+    schema: { security: bearerSecurity, body: createStorySchema, response: { 201: storySummarySchema, 401: errorSchema } },
+  }, async (request, reply) => reply.status(201).send(await application.createStory((await authenticate(application, request)).id, request.body)));
 
   app.get("/profile/platform-credentials", {
     schema: { security: bearerSecurity, response: { 200: z.array(platformCredentialSchema), 401: errorSchema } },

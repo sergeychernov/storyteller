@@ -31,6 +31,20 @@ const migrations = [{
       UNIQUE(profile_id, provider)
     );
   `,
+}, {
+  version: 2,
+  sql: `
+    ALTER TABLE stories ADD COLUMN profile_id uuid REFERENCES profiles(id) ON DELETE CASCADE;
+    UPDATE stories s
+    SET profile_id = p.profile_id,
+        payload = (s.payload - 'projectId') || jsonb_build_object('profileId', p.profile_id::text)
+    FROM projects p
+    WHERE s.project_id = p.id;
+    ALTER TABLE stories ALTER COLUMN profile_id SET NOT NULL;
+    CREATE INDEX stories_profile_id_idx ON stories(profile_id);
+    ALTER TABLE stories DROP COLUMN project_id;
+    DROP TABLE projects;
+  `,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

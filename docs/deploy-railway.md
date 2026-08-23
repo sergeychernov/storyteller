@@ -90,4 +90,4 @@ curl --fail "https://<api-domain>/health"
 curl --fail "https://<web-domain>/"
 ```
 
-Registration, sessions, projects, stories, and encrypted platform credentials persist in PostgreSQL and can be shared safely by multiple API replicas.
+Registration, sessions, stories, and encrypted platform credentials persist in PostgreSQL and can be shared safely by multiple API replicas.

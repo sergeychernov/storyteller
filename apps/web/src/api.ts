@@ -1,9 +1,8 @@
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 export interface Profile { id: string; name: string; email: string }
 export interface AuthSession { accessToken: string; expiresAt: string; profile: Profile }
-export interface Project { id: string; profileId: string; name: string }
 export interface StorySummary {
-  id: string; projectId: string; title?: string;
+  id: string; profileId: string; title?: string;
   status: "draft" | "rendering" | "ready" | "publishing" | "published"; sceneCount: number; revision: number;
 }
 export async function checkHealth(): Promise<boolean> { try { return (await fetch(`${apiUrl}/health`)).ok; } catch { return false; } }
@@ -11,15 +10,11 @@ export function signIn(email: string, password: string, name?: string): Promise<
   return request("/auth/sign-in", { method: "POST", body: JSON.stringify({ email, password, ...(name ? { name } : {}) }) });
 }
 export function getProfile(token: string): Promise<Profile> { return request("/profile", {}, token); }
-export function listProjects(token: string): Promise<Project[]> { return request("/projects", {}, token); }
-export function createProject(token: string, name: string): Promise<Project> {
-  return request("/projects", { method: "POST", body: JSON.stringify({ name }) }, token);
+export function createStory(token: string, title: string): Promise<StorySummary> {
+  return request("/stories", { method: "POST", body: JSON.stringify({ title }) }, token);
 }
-export function createStory(token: string, projectId: string, title: string): Promise<StorySummary> {
-  return request(`/projects/${projectId}/stories`, { method: "POST", body: JSON.stringify({ title }) }, token);
-}
-export function listStories(token: string, projectId: string): Promise<StorySummary[]> {
-  return request(`/projects/${projectId}/stories`, {}, token);
+export function listStories(token: string): Promise<StorySummary[]> {
+  return request("/stories", {}, token);
 }
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, {
