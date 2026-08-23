@@ -43,6 +43,14 @@ const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
 export class StoryApplication {
   constructor(private readonly repository: StoryRepository) {}
 
+  async signIn(input: { email: string; password: string; name?: string }): Promise<AuthenticationResult> {
+    const email = normalizeEmail(input.email);
+    const authentication = await this.repository.findProfileAuthenticationByEmail(email);
+    if (authentication) return this.loginAuthentication(authentication, input.password);
+    if (!input.name?.trim()) throw new ApplicationError("profile name is required", 422, "profile_name_required");
+    return this.register({ name: input.name, email, password: input.password });
+  }
+
   async register(input: { name: string; email: string; password: string }): Promise<AuthenticationResult> {
     const profile: ProfileAuthentication = {
       id: randomUUID(), name: input.name.trim(), email: normalizeEmail(input.email), passwordHash: await hashPassword(input.password),
@@ -56,9 +64,12 @@ export class StoryApplication {
 
   async login(input: { email: string; password: string }): Promise<AuthenticationResult> {
     const authentication = await this.repository.findProfileAuthenticationByEmail(normalizeEmail(input.email));
-    if (!authentication || !await verifyPassword(input.password, authentication.passwordHash)) {
-      throw new ApplicationError("invalid email or password", 401);
-    }
+    if (!authentication) throw new ApplicationError("invalid email or password", 401);
+    return this.loginAuthentication(authentication, input.password);
+  }
+
+  private async loginAuthentication(authentication: ProfileAuthentication, password: string): Promise<AuthenticationResult> {
+    if (!await verifyPassword(password, authentication.passwordHash)) throw new ApplicationError("invalid email or password", 401);
     const issued = issueSession(authentication.id);
     await this.repository.createSession(issued.record);
     return { accessToken: issued.accessToken, expiresAt: issued.record.expiresAt.toISOString(), profile: publicProfile(authentication) };
@@ -110,7 +121,7 @@ export class StoryApplication {
 }
 
 export class ApplicationError extends Error {
-  constructor(message: string, readonly statusCode: number) { super(message); }
+  constructor(message: string, readonly statusCode: number, readonly code?: string) { super(message); }
 }
 
 function summarize(story: Story): StorySummary {

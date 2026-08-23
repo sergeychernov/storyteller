@@ -4,8 +4,7 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 
 | Capability | Method and path |
 | --- | --- |
-| Register profile | `POST /auth/register` |
-| Log in | `POST /auth/login` |
+| Sign in or complete a new profile | `POST /auth/sign-in` |
 | Read/update own profile | `GET/PATCH /profile` |
 | Create/list projects | `POST/GET /projects` |
 | Create story | `POST /projects/{projectId}/stories` |

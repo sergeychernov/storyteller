@@ -4,7 +4,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
 import {
   authenticationSchema, bearerSecurity, createProjectSchema, createStorySchema, errorSchema, healthSchema,
-  loginSchema, platformCredentialSchema, platformParamsSchema, profileSchema, projectSchema, registerSchema,
+  loginSchema, platformCredentialSchema, platformParamsSchema, profileSchema, projectSchema, registerSchema, signInSchema,
   setPlatformCredentialSchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
 import Fastify, { type FastifyRequest } from "fastify";
@@ -28,7 +28,10 @@ export async function buildApi(application: StoryApplication) {
   app.setErrorHandler((error, _request, reply) => {
     const statusCode = error instanceof ApplicationError ? error.statusCode
       : typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : 500;
-    void reply.status(statusCode).send({ message: error instanceof Error ? error.message : "Unexpected error" });
+    void reply.status(statusCode).send({
+      message: error instanceof Error ? error.message : "Unexpected error",
+      ...(error instanceof ApplicationError && error.code ? { code: error.code } : {}),
+    });
   });
 
   app.get("/health", { schema: { response: { 200: healthSchema } } }, async () => ({ status: "ok" as const }));
@@ -38,6 +41,12 @@ export async function buildApi(application: StoryApplication) {
   app.post("/auth/login", {
     schema: { body: loginSchema, response: { 200: authenticationSchema, 401: errorSchema } },
   }, async (request) => application.login(request.body));
+  app.post("/auth/sign-in", {
+    schema: { body: signInSchema, response: { 200: authenticationSchema, 401: errorSchema, 409: errorSchema, 422: errorSchema } },
+  }, async (request) => application.signIn({
+    email: request.body.email, password: request.body.password,
+    ...(request.body.name === undefined ? {} : { name: request.body.name }),
+  }));
 
   app.get("/profile", {
     schema: { security: bearerSecurity, response: { 200: profileSchema, 401: errorSchema } },

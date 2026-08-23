@@ -7,6 +7,7 @@ export const registerSchema = z.object({
   password: z.string().min(10).max(200),
 });
 export const loginSchema = registerSchema.pick({ email: true, password: true });
+export const signInSchema = loginSchema.extend({ name: registerSchema.shape.name.optional() });
 export const authenticationSchema = z.object({ accessToken: z.string(), expiresAt: z.iso.datetime(), profile: profileSchema });
 export const updateProfileSchema = z.object({ name: z.string().trim().min(1).max(80) });
 
@@ -30,7 +31,7 @@ export const platformCredentialSchema = z.object({
 
 export const bearerSecurity = [{ bearerAuth: [] }];
 export const healthSchema = z.object({ status: z.literal("ok") });
-export const errorSchema = z.object({ message: z.string() });
+export const errorSchema = z.object({ message: z.string(), code: z.string().optional() });
 
 export type RegisterRequest = z.infer<typeof registerSchema>;
 export type LoginRequest = z.infer<typeof loginSchema>;

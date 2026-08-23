@@ -9,10 +9,15 @@ test("protects a profile and stores stories inside its projects", async () => {
   const api = await buildApi(new StoryApplication(new MemoryRepository()));
   assert.equal((await api.inject({ method: "GET", url: "/profile" })).statusCode, 401);
 
-  const registration = await api.inject({
-    method: "POST", url: "/auth/register", payload: { name: "Sergej", email: "sergej@example.com", password: "long-test-password" },
+  const nameRequest = await api.inject({
+    method: "POST", url: "/auth/sign-in", payload: { email: "sergej@example.com", password: "long-test-password" },
   });
-  assert.equal(registration.statusCode, 201);
+  assert.equal(nameRequest.statusCode, 422);
+  assert.equal(nameRequest.json<{ code: string }>().code, "profile_name_required");
+  const registration = await api.inject({
+    method: "POST", url: "/auth/sign-in", payload: { name: "Sergej", email: "sergej@example.com", password: "long-test-password" },
+  });
+  assert.equal(registration.statusCode, 200);
   const auth = registration.json<{ accessToken: string; profile: Profile }>();
   const headers = { authorization: `Bearer ${auth.accessToken}` };
   assert.equal((await api.inject({ method: "GET", url: "/profile", headers })).json<Profile>().email, "sergej@example.com");
