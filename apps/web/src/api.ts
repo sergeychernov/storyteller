@@ -16,6 +16,9 @@ export function createStory(token: string, title: string): Promise<StorySummary>
 export function listStories(token: string): Promise<StorySummary[]> {
   return request("/stories", {}, token);
 }
+export function getStory(token: string, storyId: string): Promise<StorySummary> {
+  return request(`/stories/${storyId}`, {}, token);
+}
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, {
     ...init, headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers },

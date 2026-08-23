@@ -25,6 +25,7 @@ export interface StoryRepository {
   updateProfile(profileId: string, name: string): Promise<Profile>;
   createStory(story: Story): Promise<void>;
   listStories(profileId: string): Promise<readonly Story[]>;
+  findStory(profileId: string, storyId: string): Promise<Story | undefined>;
   upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary>;
   listPlatformCredentials(profileId: string): Promise<readonly PlatformCredentialSummary[]>;
   deletePlatformCredential(profileId: string, provider: PlatformProvider): Promise<boolean>;
@@ -89,6 +90,11 @@ export class StoryApplication {
   }
   async listStories(profileId: string): Promise<readonly StorySummary[]> {
     return (await this.repository.listStories(profileId)).map(summarize);
+  }
+  async getStory(profileId: string, storyId: string): Promise<StorySummary> {
+    const story = await this.repository.findStory(profileId, storyId);
+    if (!story) throw new ApplicationError(`story not found: ${storyId}`, 404);
+    return summarize(story);
   }
   setPlatformCredential(profileId: string, input: { provider: PlatformProvider; secret: string; externalAccountId?: string }): Promise<PlatformCredentialSummary> {
     return this.repository.upsertPlatformCredential({

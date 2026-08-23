@@ -60,6 +60,10 @@ export class PostgresStoryRepository implements StoryRepository {
     const result = await this.pool.query<{ payload: Story }>("SELECT payload FROM stories WHERE profile_id = $1 ORDER BY created_at", [profileId]);
     return result.rows.map(({ payload }) => payload);
   }
+  async findStory(profileId: string, storyId: string): Promise<Story | undefined> {
+    const result = await this.pool.query<{ payload: Story }>("SELECT payload FROM stories WHERE id = $1 AND profile_id = $2", [storyId, profileId]);
+    return result.rows[0]?.payload;
+  }
   async upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary> {
     const encrypted = encryptSecret(credential.secret, this.credentialKey);
     const hint = credential.secret.length <= 4 ? "••••" : `••••${credential.secret.slice(-4)}`;

@@ -24,8 +24,10 @@ test("protects a profile and stores its stories", async () => {
 
   const storyResponse = await api.inject({ method: "POST", url: "/stories", headers, payload: { title: "First story" } });
   assert.equal(storyResponse.statusCode, 201);
-  assert.equal(storyResponse.json<{ profileId: string }>().profileId, auth.profile.id);
+  const story = storyResponse.json<{ id: string; profileId: string }>();
+  assert.equal(story.profileId, auth.profile.id);
   assert.equal((await api.inject({ method: "GET", url: "/stories", headers })).json<unknown[]>().length, 1);
+  assert.equal((await api.inject({ method: "GET", url: `/stories/${story.id}`, headers })).statusCode, 200);
   await api.close();
 });
 
@@ -64,6 +66,7 @@ class MemoryRepository implements StoryRepository {
   async updateProfile(profileId: string, name: string) { const old = this.profiles.get(profileId)!; const profile = { ...old, name }; this.profiles.set(profileId, profile); return profile; }
   async createStory(story: Story) { this.stories.set(story.id, story); }
   async listStories(profileId: string) { return [...this.stories.values()].filter((story) => story.profileId === profileId); }
+  async findStory(profileId: string, storyId: string) { const story = this.stories.get(storyId); return story?.profileId === profileId ? story : undefined; }
   async upsertPlatformCredential(credential: PlatformCredential) {
     const summary = { id: credential.id, provider: credential.provider, secretHint: `••••${credential.secret.slice(-4)}` } satisfies PlatformCredentialSummary;
     this.credentials.set(`${credential.profileId}:${credential.provider}`, summary); return summary;

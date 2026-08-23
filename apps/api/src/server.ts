@@ -61,6 +61,10 @@ export async function buildApi(application: StoryApplication) {
   app.post("/stories", {
     schema: { security: bearerSecurity, body: createStorySchema, response: { 201: storySummarySchema, 401: errorSchema } },
   }, async (request, reply) => reply.status(201).send(await application.createStory((await authenticate(application, request)).id, request.body)));
+  const storyParams = z.object({ storyId: z.string().uuid() });
+  app.get("/stories/:storyId", {
+    schema: { security: bearerSecurity, params: storyParams, response: { 200: storySummarySchema, 401: errorSchema, 404: errorSchema } },
+  }, async (request) => application.getStory((await authenticate(application, request)).id, request.params.storyId));
 
   app.get("/profile/platform-credentials", {
     schema: { security: bearerSecurity, response: { 200: z.array(platformCredentialSchema), 401: errorSchema } },
