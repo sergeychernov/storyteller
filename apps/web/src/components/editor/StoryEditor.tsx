@@ -5,7 +5,7 @@ import {
   type AuthSession, type SceneMotion, type Story,
 } from "../../api.js";
 import { useLocalization } from "../../localization.js";
-import { getEditorCopy } from "./editor-copy.js";
+import { getEditorCopy, getEditorOperationError } from "./editor-copy.js";
 import { EmptyScenePipeline } from "./EmptyScenePipeline.js";
 import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneInspector } from "./SceneInspector.js";
@@ -47,7 +47,7 @@ export function StoryEditor({ story, session }: { readonly story: Story; readonl
   if (!selected) return <EmptyScenePipeline copy={copy} creating={addSceneMutation.isPending} error={addSceneMutation.isError} onCreate={addFirstScene} />;
   return (
     <div className="story-editor">
-      {operationError && <div className="editor-operation-error" role="alert">{copy.operationError}</div>}
+      {operationError && <div className="editor-operation-error" role="alert">{getEditorOperationError(copy, operationError)}</div>}
       <SceneRail scenes={story.scenes} selectedId={selected.id} copy={copy} onSelect={setSelectedId} onAdd={() => addSceneMutation.mutate()} adding={addSceneMutation.isPending} />
       <main className="editor-workspace">
         <ScenePreview scene={selected} copy={copy} storyId={story.id} session={session} />

@@ -10,6 +10,8 @@ const copies = {
     zoomIn: "Zoom in", zoomOut: "Zoom out", panLeft: "Move left", panRight: "Move right", noMotion: "No added motion",
     creatingScene: "Creating scene…", emptyPipelineHint: "No scenes yet. Add one in the pipeline on the left.",
     sceneCreateError: "Could not create the scene. Check that the API is running and try again.", operationError: "The change was not saved. Try again.",
+    uploadTooLarge: "The file is larger than the allowed upload size.", uploadUnsupported: "This photo or video format is not supported.",
+    uploadUnreadable: "The photo or video could not be read. Check that the file plays and try again.",
   },
   ru: {
     scenes: "Сцены", addScene: "Добавить сцену", scene: "Сцена", emptyScene: "Добавьте фотографию или видео",
@@ -20,6 +22,8 @@ const copies = {
     zoomIn: "Зум ин", zoomOut: "Зум аут", panLeft: "Движение влево", panRight: "Движение вправо", noMotion: "Без движения",
     creatingScene: "Создаём сцену…", emptyPipelineHint: "Сцен пока нет. Добавьте сцену в pipeline слева.",
     sceneCreateError: "Не удалось создать сцену. Проверьте, что API запущен, и попробуйте ещё раз.", operationError: "Изменение не сохранилось. Попробуйте ещё раз.",
+    uploadTooLarge: "Файл превышает допустимый размер загрузки.", uploadUnsupported: "Этот формат фотографии или видео не поддерживается.",
+    uploadUnreadable: "Не удалось прочитать фотографию или видео. Проверьте, что файл воспроизводится, и попробуйте ещё раз.",
   },
   "sr-Latn": {
     scenes: "Scene", addScene: "Dodaj scenu", scene: "Scena", emptyScene: "Dodajte fotografiju ili video",
@@ -30,8 +34,18 @@ const copies = {
     zoomIn: "Zumiraj", zoomOut: "Odumiraj", panLeft: "Kretanje levo", panRight: "Kretanje desno", noMotion: "Bez dodatnog kretanja",
     creatingScene: "Kreiranje scene…", emptyPipelineHint: "Još nema scena. Dodajte scenu u pipeline-u levo.",
     sceneCreateError: "Scena nije kreirana. Proverite da li API radi i pokušajte ponovo.", operationError: "Promena nije sačuvana. Pokušajte ponovo.",
+    uploadTooLarge: "Datoteka prelazi dozvoljenu veličinu otpremanja.", uploadUnsupported: "Ovaj format fotografije ili videa nije podržan.",
+    uploadUnreadable: "Fotografija ili video nisu mogli da se pročitaju. Proverite da li se datoteka reprodukuje i pokušajte ponovo.",
   },
 } as const;
 
 export type EditorCopy = { readonly [Key in keyof typeof copies.en]: string };
 export function getEditorCopy(locale: Locale): EditorCopy { return copies[locale]; }
+
+export function getEditorOperationError(copy: EditorCopy, error: unknown): string {
+  const status = typeof error === "object" && error !== null && "status" in error ? error.status : undefined;
+  if (status === 413) return copy.uploadTooLarge;
+  if (status === 415) return copy.uploadUnsupported;
+  if (status === 422) return copy.uploadUnreadable;
+  return copy.operationError;
+}

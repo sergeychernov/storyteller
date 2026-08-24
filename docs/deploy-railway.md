@@ -32,6 +32,7 @@ The worker and MCP processes are intentionally placeholders today. Omit them fro
 | `mcp` | `yarn workspace @storyteller/mcp build` | `yarn workspace @storyteller/mcp start` |
 
 Railway should install dependencies with `yarn install --immutable`; the repository pins Yarn 4 through `packageManager`.
+The root `railpack.json` adds FFmpeg to the runtime image. The API uses its bundled `ffprobe` command to inspect uploaded videos before adding them to a scene.
 
 ## Domains and variables
 
@@ -44,6 +45,8 @@ VITE_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 `VITE_API_URL` is compiled into the browser bundle, so changing it triggers a new web deployment. No `PORT` variable needs to be created: Railway injects it for public services.
 
 Attach a Railway PostgreSQL service to the API so Railway injects `DATABASE_URL`. Also configure `PLATFORM_CREDENTIALS_KEY` with the output of `openssl rand -base64 32`, and set `WEB_ORIGIN` to the public web URL (multiple origins may be comma-separated). The API applies migrations during startup.
+
+Attach a persistent Volume to the API service at `/data` and set `MEDIA_ROOT=/data/media`. Uploaded originals live on the API filesystem until object storage is connected, so files outside this volume would disappear on a redeploy.
 
 Configure the API healthcheck path as `/health` with a 60-second timeout.
 
@@ -61,6 +64,7 @@ Railway's automatic monorepo import may initially watch only the application dir
 /.yarnrc.yml
 /tsconfig.base.json
 /tsconfig.json
+/railpack.json
 ```
 
 ### `api`
@@ -70,11 +74,13 @@ Railway's automatic monorepo import may initially watch only the application dir
 /packages/application/**
 /packages/domain/**
 /packages/schemas/**
+/packages/renderer/**
 /package.json
 /yarn.lock
 /.yarnrc.yml
 /tsconfig.base.json
 /tsconfig.json
+/railpack.json
 ```
 
 ### `worker` and `mcp`
