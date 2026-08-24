@@ -31,9 +31,12 @@ export async function buildApi(application: StoryApplication, options: { readonl
     transform: jsonSchemaTransform,
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const statusCode = error instanceof ApplicationError ? error.statusCode
       : typeof error === "object" && error !== null && "statusCode" in error && typeof error.statusCode === "number" ? error.statusCode : 500;
+    const logContext = { err: error, statusCode, method: request.method, url: request.url };
+    if (statusCode >= 500) request.log.error(logContext, "request failed");
+    else if (request.url.includes("/materials")) request.log.warn(logContext, "media request failed");
     void reply.status(statusCode).send({
       message: error instanceof Error ? error.message : "Unexpected error",
       ...(error instanceof ApplicationError && error.code ? { code: error.code } : {}),
