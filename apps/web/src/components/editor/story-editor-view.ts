@@ -1,0 +1,25 @@
+import type { AuthSession, Scene, SceneMotion, Story } from "../../api.js";
+import type { EditorCopy } from "./editor-copy.js";
+
+export interface SceneChange {
+  readonly durationSeconds?: number;
+  readonly layoutId?: string | null;
+  readonly motion?: SceneMotion;
+}
+
+export interface StoryEditorViewProps {
+  readonly story: Story;
+  readonly session: AuthSession;
+  readonly selected: Scene | undefined;
+  readonly copy: EditorCopy;
+  readonly saving: boolean;
+  readonly adding: boolean;
+  readonly uploading: boolean;
+  readonly uploadCount: number;
+  readonly operationErrorMessage: string | undefined;
+  readonly onSelect: (id: string) => void;
+  readonly onAdd: () => void;
+  readonly onUpload: (files: readonly File[]) => void;
+  readonly onReorder: (ids: readonly string[]) => void;
+  readonly onChange: (change: SceneChange) => void;
+}
