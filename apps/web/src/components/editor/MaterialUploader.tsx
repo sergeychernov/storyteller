@@ -14,8 +14,9 @@ export function MaterialUploader({ copy, disabled, uploading, uploadCount, onUpl
 
   return (
     <>
-      <button type="button" className={`secondary-button compact material-upload-button ${uploading ? "loading-button" : ""}`} disabled={disabled} onClick={() => input.current?.click()}>
-        {uploading ? copy.uploadingMaterials.replace("{{count}}", String(uploadCount)) : `＋ ${copy.addMaterial}`}
+      <button type="button" className={`material-add-card ${uploading ? "loading-button" : ""}`} disabled={disabled} onClick={() => input.current?.click()}>
+        <span aria-hidden="true">＋</span>
+        <strong>{uploading ? copy.uploadingMaterials.replace("{{count}}", String(uploadCount)) : copy.addMaterial}</strong>
       </button>
       <input
         ref={input}

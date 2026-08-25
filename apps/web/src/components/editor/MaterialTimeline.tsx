@@ -4,7 +4,6 @@ import { MaterialActions } from "./MaterialActions.js";
 import { MaterialDragGhost } from "./MaterialDragGhost.js";
 import { MaterialUploader } from "./MaterialUploader.js";
 import { MaterialThumbnail } from "./MaterialThumbnail.js";
-import { SceneDebugButton } from "./SceneDebugButton.js";
 import { useMaterialDrag } from "./use-material-drag.js";
 
 interface MaterialTimelineProps {
@@ -19,7 +18,6 @@ export function MaterialTimeline({ scene, copy, saving, uploading, uploadCount, 
 
   return (
     <section className="material-section">
-      <div className="editor-section-head"><h2>{copy.materials}</h2><div className="material-section-actions"><SceneDebugButton scene={scene} copy={copy} /><MaterialUploader copy={copy} disabled={saving} uploading={uploading} uploadCount={uploadCount} onUpload={onUpload} /></div></div>
       <div className="material-strip" ref={stripRef}>
         {orderedMaterials.map((material, index) => (
           <article
@@ -43,6 +41,7 @@ export function MaterialTimeline({ scene, copy, saving, uploading, uploadCount, 
             </div>
           </article>
         ))}
+        <MaterialUploader copy={copy} disabled={saving} uploading={uploading} uploadCount={uploadCount} onUpload={onUpload} />
       </div>
       {dragVisual && <MaterialDragGhost {...dragVisual} storyId={storyId} session={session} />}
     </section>
