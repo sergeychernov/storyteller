@@ -27,7 +27,8 @@ const materialFileShape = {
 export const sceneMaterialSchema = z.discriminatedUnion("kind", [
   z.object({ ...materialFileShape, kind: z.literal("image") }),
   z.object({
-    ...materialFileShape, kind: z.literal("video"), hasAudio: z.boolean(), audioTags: z.array(videoAudioTagSchema),
+    ...materialFileShape, kind: z.literal("video"), hasAudio: z.boolean(),
+    sourceDurationSeconds: z.number().positive().optional(), audioTags: z.array(videoAudioTagSchema),
   }),
 ]);
 export const sceneSchema = z.object({

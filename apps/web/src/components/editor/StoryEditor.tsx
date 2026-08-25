@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
-  configureStoryScene, createScene, reorderSceneMaterials, uploadSceneMaterial,
+  configureStoryScene, createScene, uploadSceneMaterial,
   type AuthSession, type SceneMotion, type Story,
 } from "../../api.js";
 import { useLocalization } from "../../localization.js";
@@ -11,6 +11,7 @@ import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneInspector } from "./SceneInspector.js";
 import { ScenePreview } from "./ScenePreview.js";
 import { SceneRail } from "./SceneRail.js";
+import { useReorderSceneMaterials } from "./use-reorder-scene-materials.js";
 
 export function StoryEditor({ story, session }: { readonly story: Story; readonly session: AuthSession }) {
   const { locale } = useLocalization();
@@ -31,7 +32,7 @@ export function StoryEditor({ story, session }: { readonly story: Story; readonl
     },
     onSuccess: update,
   });
-  const reorderMutation = useMutation({ mutationFn: ({ sceneId, ids }: { sceneId: string; ids: readonly string[] }) => reorderSceneMaterials(session.accessToken, story.id, sceneId, ids), onSuccess: update });
+  const reorderMutation = useReorderSceneMaterials(session.accessToken, story.id);
   const configureMutation = useMutation({ mutationFn: ({ sceneId, change }: { sceneId: string; change: { durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion } }) => configureStoryScene(session.accessToken, story.id, sceneId, change), onSuccess: update });
   const selected = story.scenes.find(({ id }) => id === selectedId) ?? story.scenes[0];
   const saving = addSceneMutation.isPending || uploadMaterialsMutation.isPending || reorderMutation.isPending || configureMutation.isPending;
@@ -52,11 +53,11 @@ export function StoryEditor({ story, session }: { readonly story: Story; readonl
       <main className="editor-workspace">
         <ScenePreview scene={selected} copy={copy} storyId={story.id} session={session} />
         <MaterialTimeline
-          materials={selected.materials} copy={copy} saving={saving} storyId={story.id} session={session}
+          scene={selected} copy={copy} saving={saving} storyId={story.id} session={session}
           uploading={uploadMaterialsMutation.isPending}
           uploadCount={uploadMaterialsMutation.variables?.files.length ?? 0}
           onUpload={(files) => uploadMaterialsMutation.mutate({ sceneId: selected.id, files })}
-          onMove={(from, to) => { const ids = selected.materials.map(({ id }) => id); [ids[from], ids[to]] = [ids[to]!, ids[from]!]; reorderMutation.mutate({ sceneId: selected.id, ids }); }}
+          onReorder={(ids) => reorderMutation.mutate({ sceneId: selected.id, ids })}
         />
       </main>
       <SceneInspector scene={selected} copy={copy} saving={saving} onChange={(change) => configureMutation.mutate({ sceneId: selected.id, change })} />

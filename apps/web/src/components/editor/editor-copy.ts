@@ -3,7 +3,7 @@ import type { Locale } from "@storyteller/localization";
 const copies = {
   en: {
     scenes: "Scenes", addScene: "Add scene", scene: "Scene", emptyScene: "Start by adding a photo or video",
-    materialOrder: "Materials · order matters", addMaterial: "Upload materials", uploadingMaterials: "Uploading {{count}}…",
+    materials: "Materials", addMaterial: "Upload materials", uploadingMaterials: "Uploading {{count}}…",
     portrait: "Portrait", landscape: "Landscape", silent: "Silent", audioUnclassified: "Audio needs labels", voice: "Voice", music: "Music", ambient: "Background sound",
     layout: "Layout", layoutHint: "Options follow the orientation sequence", motion: "Movement", duration: "Duration",
     seconds: "sec", preview: "Scene preview",
@@ -12,10 +12,13 @@ const copies = {
     sceneCreateError: "Could not create the scene. Check that the API is running and try again.", operationError: "The change was not saved. Try again.",
     uploadTooLarge: "The file is larger than the allowed upload size.", uploadUnsupported: "This photo or video format is not supported.",
     uploadUnreadable: "The photo or video could not be read. Check that the file plays and try again.",
+    fileInfo: "File information", fileName: "Name", fileSize: "Size", fileFormat: "Format", fileDimensions: "Dimensions", fileDuration: "Duration", sourceAudio: "Source audio",
+    sceneDebug: "Scene debug data", editMaterial: "Edit material", cropMaterial: "Crop", trimMaterial: "Trim video",
+    materialEditorHint: "Non-destructive editing tools will be added here.", dragMaterial: "Reorder material {{number}}", dragMaterialHint: "Drag to reorder. Use the arrow keys with a keyboard.", close: "Close",
   },
   ru: {
     scenes: "Сцены", addScene: "Добавить сцену", scene: "Сцена", emptyScene: "Добавьте фотографию или видео",
-    materialOrder: "Материалы · порядок важен", addMaterial: "Загрузить материалы", uploadingMaterials: "Загружаем: {{count}}…",
+    materials: "Материалы", addMaterial: "Загрузить материалы", uploadingMaterials: "Загружаем: {{count}}…",
     portrait: "Портрет", landscape: "Альбом", silent: "Без звука", audioUnclassified: "Звук нужно разметить", voice: "Голос", music: "Музыка", ambient: "Фоновый звук",
     layout: "Layout", layoutHint: "Варианты зависят от последовательности ориентаций", motion: "Движение", duration: "Длительность",
     seconds: "сек", preview: "Предпросмотр сцены",
@@ -24,10 +27,13 @@ const copies = {
     sceneCreateError: "Не удалось создать сцену. Проверьте, что API запущен, и попробуйте ещё раз.", operationError: "Изменение не сохранилось. Попробуйте ещё раз.",
     uploadTooLarge: "Файл превышает допустимый размер загрузки.", uploadUnsupported: "Этот формат фотографии или видео не поддерживается.",
     uploadUnreadable: "Не удалось прочитать фотографию или видео. Проверьте, что файл воспроизводится, и попробуйте ещё раз.",
+    fileInfo: "Информация о файле", fileName: "Название", fileSize: "Размер", fileFormat: "Формат", fileDimensions: "Разрешение", fileDuration: "Длительность", sourceAudio: "Исходный звук",
+    sceneDebug: "Отладочные данные сцены", editMaterial: "Редактировать материал", cropMaterial: "Кадрировать", trimMaterial: "Обрезать видео",
+    materialEditorHint: "Здесь появятся инструменты неразрушающего редактирования.", dragMaterial: "Изменить порядок материала {{number}}", dragMaterialHint: "Перетащите для изменения порядка. С клавиатуры используйте стрелки.", close: "Закрыть",
   },
   "sr-Latn": {
     scenes: "Scene", addScene: "Dodaj scenu", scene: "Scena", emptyScene: "Dodajte fotografiju ili video",
-    materialOrder: "Materijali · redosled je važan", addMaterial: "Otpremi materijale", uploadingMaterials: "Otpremanje: {{count}}…",
+    materials: "Materijali", addMaterial: "Otpremi materijale", uploadingMaterials: "Otpremanje: {{count}}…",
     portrait: "Portret", landscape: "Pejzaž", silent: "Bez zvuka", audioUnclassified: "Zvuk treba označiti", voice: "Glas", music: "Muzika", ambient: "Pozadinski zvuk",
     layout: "Raspored", layoutHint: "Opcije prate redosled orijentacija", motion: "Kretanje", duration: "Trajanje",
     seconds: "sek", preview: "Pregled scene",
@@ -36,6 +42,9 @@ const copies = {
     sceneCreateError: "Scena nije kreirana. Proverite da li API radi i pokušajte ponovo.", operationError: "Promena nije sačuvana. Pokušajte ponovo.",
     uploadTooLarge: "Datoteka prelazi dozvoljenu veličinu otpremanja.", uploadUnsupported: "Ovaj format fotografije ili videa nije podržan.",
     uploadUnreadable: "Fotografija ili video nisu mogli da se pročitaju. Proverite da li se datoteka reprodukuje i pokušajte ponovo.",
+    fileInfo: "Informacije o datoteci", fileName: "Naziv", fileSize: "Veličina", fileFormat: "Format", fileDimensions: "Dimenzije", fileDuration: "Trajanje", sourceAudio: "Izvorni zvuk",
+    sceneDebug: "Podaci scene za otklanjanje grešaka", editMaterial: "Uredi materijal", cropMaterial: "Iseci kadar", trimMaterial: "Skrati video",
+    materialEditorHint: "Ovde će biti dodati alati za nedestruktivno uređivanje.", dragMaterial: "Promeni redosled materijala {{number}}", dragMaterialHint: "Prevucite za promenu redosleda. Koristite strelice na tastaturi.", close: "Zatvori",
   },
 } as const;
 

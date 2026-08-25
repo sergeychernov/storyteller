@@ -50,7 +50,10 @@ export class MediaStorage {
         mimeType, sizeBytes: size, width: detected.width, height: detected.height,
       } as const;
       const material: NewSceneMaterial = kind === "video"
-        ? { ...common, kind, hasAudio: detected.hasAudio, audioTags: [] }
+        ? {
+          ...common, kind, hasAudio: detected.hasAudio, audioTags: [],
+          ...(detected.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: detected.sourceDurationSeconds }),
+        }
         : { ...common, kind };
       return { material, cleanup: () => rm(finalPath, { force: true }) };
     } catch (error) {
@@ -73,9 +76,10 @@ export class MediaStorage {
 }
 
 export function detectMediaMetadata(probe: unknown, kind: "image" | "video"): {
-  width: number; height: number; orientation: MaterialOrientation; hasAudio: boolean;
+  width: number; height: number; orientation: MaterialOrientation; hasAudio: boolean; sourceDurationSeconds?: number;
 } {
   const streams = isRecord(probe) && Array.isArray(probe.streams) ? probe.streams.filter(isRecord) : [];
+  const format = isRecord(probe) && isRecord(probe.format) ? probe.format : undefined;
   const visual = streams.find((stream) => stream.codec_type === "video");
   const encodedWidth = numberValue(visual?.width);
   const encodedHeight = numberValue(visual?.height);
@@ -84,14 +88,17 @@ export function detectMediaMetadata(probe: unknown, kind: "image" | "video"): {
   const rotated = Math.abs(rotation) % 180 === 90;
   const width = rotated ? encodedHeight : encodedWidth;
   const height = rotated ? encodedWidth : encodedHeight;
+  const rawDuration = kind === "video" ? numberValue(visual?.duration) ?? numberValue(format?.duration) : undefined;
+  const duration = rawDuration !== undefined && rawDuration > 0 ? rawDuration : undefined;
   return {
     width, height, orientation: width < height ? "portrait" : "landscape",
     hasAudio: kind === "video" && streams.some((stream) => stream.codec_type === "audio"),
+    ...(duration === undefined ? {} : { sourceDurationSeconds: Math.round(duration * 1_000) / 1_000 }),
   };
 }
 
 export async function detectImageMetadata(path: string): Promise<{
-  width: number; height: number; orientation: MaterialOrientation; hasAudio: false;
+  width: number; height: number; orientation: MaterialOrientation; hasAudio: false; sourceDurationSeconds?: never;
 }> {
   const metadata = await sharp(path).metadata();
   const displayed = metadata.autoOrient ?? metadata;

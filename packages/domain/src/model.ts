@@ -27,6 +27,7 @@ export interface ImageMaterial extends MaterialFile {
 export interface VideoMaterial extends MaterialFile {
   readonly kind: "video";
   readonly hasAudio: boolean;
+  readonly sourceDurationSeconds?: number;
   /** Empty tags with hasAudio=true mean the source track still needs classification. */
   readonly audioTags: readonly VideoAudioTag[];
 }

@@ -21,7 +21,7 @@ export function EmptyScenePipeline({ copy, creating, error, onCreate }: EmptySce
           </div>
         </section>
         <section className="material-section empty-material-section">
-          <div className="editor-section-head"><div><h2>{copy.materialOrder}</h2><small>—</small></div><button className="secondary-button compact" disabled>＋ {copy.addMaterial}</button></div>
+          <div className="editor-section-head"><h2>{copy.materials}</h2><button className="secondary-button compact" disabled>＋ {copy.addMaterial}</button></div>
           <div className="empty-material-track"><i /><i /><i /></div>
         </section>
       </main>

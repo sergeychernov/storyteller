@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  addMaterial, addNarration, addScene, configureScene, createStory, getLayoutOptions, reorderMaterials,
+  addMaterial, addNarration, addScene, configureScene, createStory, getLayoutOptions, mergeMaterialOrder, reorderMaterials,
   selectRenderer, setSceneTitle, transitionStory,
 } from "./index.js";
 
@@ -24,6 +24,21 @@ test("material order determines layout choices and changing order invalidates th
   story = configureScene(story, "scene-1", { layoutId: "2+1" });
   story = reorderMaterials(story, "scene-1", ["l1", "p1", "p2"]);
   assert.equal(story.scenes[0]!.layoutId, undefined);
+});
+
+test("new materials merge into an in-progress local order", () => {
+  const first = { id: "first", version: 1 };
+  const second = { id: "second", version: 1 };
+  const uploaded = { id: "uploaded", version: 1 };
+  const refreshedFirst = { id: "first", version: 2 };
+
+  const merged = mergeMaterialOrder(
+    [second, first],
+    [refreshedFirst, second, uploaded],
+  );
+
+  assert.deepEqual(merged.map(({ id }) => id), ["second", "first", "uploaded"]);
+  assert.equal(merged[1], refreshedFirst);
 });
 
 test("six portrait materials expose four explicit cascade choices", () => {

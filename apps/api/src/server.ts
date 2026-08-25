@@ -19,7 +19,10 @@ export async function buildApi(application: StoryApplication, options: { readonl
     .setValidatorCompiler(validatorCompiler).setSerializerCompiler(serializerCompiler).withTypeProvider<ZodTypeProvider>();
 
   const configuredOrigins = process.env.WEB_ORIGIN?.split(",").map((origin) => origin.trim()).filter(Boolean);
-  await app.register(cors, { origin: configuredOrigins?.length ? configuredOrigins : true });
+  await app.register(cors, {
+    origin: configuredOrigins?.length ? configuredOrigins : true,
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  });
   await app.register(multipart, {
     limits: { files: 1, fields: 0, parts: 1, fileSize: Number(process.env.MAX_MEDIA_UPLOAD_BYTES ?? 500 * 1024 * 1024) },
   });

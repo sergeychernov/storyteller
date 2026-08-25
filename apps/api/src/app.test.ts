@@ -15,6 +15,15 @@ test("protects a profile, uploads media and stores its stories", async (context)
   context.after(() => rm(mediaRoot, { recursive: true, force: true }));
   const api = await buildApi(new StoryApplication(new MemoryRepository()), { mediaStorage: new MediaStorage(mediaRoot) });
   assert.equal((await api.inject({ method: "GET", url: "/profile" })).statusCode, 401);
+  const reorderPreflight = await api.inject({
+    method: "OPTIONS", url: "/stories/00000000-0000-4000-8000-000000000001/scenes/00000000-0000-4000-8000-000000000002/material-order",
+    headers: {
+      origin: "http://localhost:3000", "access-control-request-method": "PUT",
+      "access-control-request-headers": "authorization,content-type",
+    },
+  });
+  assert.equal(reorderPreflight.statusCode, 204);
+  assert.match(reorderPreflight.headers["access-control-allow-methods"] ?? "", /\bPUT\b/);
 
   const nameRequest = await api.inject({
     method: "POST", url: "/auth/sign-in", payload: { email: "sergej@example.com", password: "long-test-password" },
@@ -59,6 +68,18 @@ test("protects a profile, uploads media and stores its stories", async (context)
     payload: { durationSeconds: 8, layoutId: "full-frame", motion: "zoom-in" },
   });
   assert.equal(configured.json<{ scenes: { durationSeconds: number; layoutId: string }[] }>().scenes[0]!.durationSeconds, 8);
+  const secondMultipart = multipartFile("second.png", "image/png", png);
+  const withSecondPhoto = await api.inject({
+    method: "POST", url: `/stories/${story.id}/scenes/${sceneId}/materials`,
+    payload: secondMultipart.body, headers: { ...headers, "content-type": secondMultipart.contentType },
+  });
+  const twoMaterials = withSecondPhoto.json<{ scenes: { materials: { id: string; name: string }[] }[] }>().scenes[0]!.materials;
+  const reordered = await api.inject({
+    method: "PUT", url: `/stories/${story.id}/scenes/${sceneId}/material-order`, headers,
+    payload: { materialIds: [twoMaterials[1]!.id, twoMaterials[0]!.id] },
+  });
+  assert.equal(reordered.statusCode, 200);
+  assert.deepEqual(reordered.json<{ scenes: { materials: { name: string }[] }[] }>().scenes[0]!.materials.map(({ name }) => name), ["second.png", "portrait.png"]);
   await api.close();
 });
 
@@ -68,7 +89,9 @@ test("detects displayed orientation, rotation and an audio stream from probe dat
   });
   assert.deepEqual(detectMediaMetadata({ streams: [
     { codec_type: "video", width: 1920, height: 1080, side_data_list: [{ rotation: -90 }] }, { codec_type: "audio" },
-  ] }, "video"), { width: 1080, height: 1920, orientation: "portrait", hasAudio: true });
+  ], format: { duration: "7.25" } }, "video"), {
+    width: 1080, height: 1920, orientation: "portrait", hasAudio: true, sourceDurationSeconds: 7.25,
+  });
 });
 
 test("opens a legacy story without fileless material placeholders", () => {

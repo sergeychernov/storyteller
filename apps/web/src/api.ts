@@ -13,7 +13,7 @@ export type SceneMaterial = {
   sizeBytes: number; width: number; height: number;
 } | {
   id: string; kind: "video"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
-  sizeBytes: number; width: number; height: number; hasAudio: boolean; audioTags: VideoAudioTag[];
+  sizeBytes: number; width: number; height: number; hasAudio: boolean; sourceDurationSeconds?: number; audioTags: VideoAudioTag[];
 };
 export interface Scene {
   id: string; materials: SceneMaterial[]; durationSeconds: number; layoutId?: string; motion: SceneMotion;
