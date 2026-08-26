@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
   addMaterial, addScene, configureScene, createStory, removeMaterial, reorderMaterials,
-  type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
+  type FocusPoint, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
 } from "@storyteller/domain";
 
 export interface ProfileAuthentication extends Profile { readonly passwordHash: string }
@@ -123,7 +123,7 @@ export class StoryApplication {
     return this.changeStory(profileId, storyId, (story) => reorderMaterials(story, sceneId, materialIds));
   }
   async configureScene(profileId: string, storyId: string, sceneId: string, input: {
-    durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion;
+    durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint;
   }): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => configureScene(story, sceneId, input));
   }

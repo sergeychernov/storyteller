@@ -7,6 +7,11 @@ export type MaterialOrientation = "portrait" | "landscape";
 export type VideoAudioTag = "voice" | "music" | "ambient";
 export type SceneMotion = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right";
 
+export interface FocusPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
 export interface AssetRef { readonly id: string; readonly kind: AssetKind }
 
 export interface MaterialFile {
@@ -41,6 +46,7 @@ export interface Scene {
   readonly durationSeconds: number;
   readonly layoutId?: string;
   readonly motion: SceneMotion;
+  readonly focusPoint?: FocusPoint;
   readonly rendererId?: string;
   readonly title?: string;
   readonly render: { readonly status: JobStatus; readonly artifactId?: string };

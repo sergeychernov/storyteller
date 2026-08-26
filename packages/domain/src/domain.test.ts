@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addMaterial, addNarration, addScene, configureScene, createStory, getLayoutOptions, mergeMaterialOrder, reorderMaterials,
-  removeMaterial, selectRenderer, setSceneTitle, transitionStory,
+  focusDwellProgress, removeMaterial, selectRenderer, setSceneTitle, transitionStory,
 } from "./index.js";
 
 test("a render starts only when every scene has material and a renderer", () => {
@@ -26,6 +26,46 @@ test("material order determines layout choices and changing order invalidates th
   assert.equal(story.scenes[0]!.layoutId, undefined);
 });
 
+test("one image gets orientation-aware motion, centered focus and the still-image renderer", () => {
+  const empty = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  const landscape = addMaterial(empty, "scene-1", imageMaterial("photo", "landscape"));
+  assert.equal(landscape.scenes[0]?.layoutId, "full-frame");
+  assert.equal(landscape.scenes[0]?.motion, "pan-right");
+  assert.deepEqual(landscape.scenes[0]?.focusPoint, { x: 0.5, y: 0.5 });
+  assert.equal(landscape.scenes[0]?.rendererId, "still-image");
+  const focused = configureScene(landscape, "scene-1", { focusPoint: { x: 0.25, y: 0.75 } });
+  assert.deepEqual(focused.scenes[0]?.focusPoint, { x: 0.25, y: 0.75 });
+  assert.throws(() => configureScene(landscape, "scene-1", { motion: "zoom-in" }), /not available/);
+
+  const portrait = addMaterial(empty, "scene-1", imageMaterial("portrait", "portrait"));
+  assert.equal(portrait.scenes[0]?.motion, "zoom-in");
+});
+
+test("focus belongs only to the single-image renderer", () => {
+  const empty = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  assert.throws(() => configureScene(empty, "scene-1", { focusPoint: { x: 0.2, y: 0.7 } }), /single-image renderer/);
+  const oneImage = addMaterial(empty, "scene-1", imageMaterial("first", "portrait"));
+  const layout = addMaterial(oneImage, "scene-1", imageMaterial("second", "portrait"));
+  assert.equal(layout.scenes[0]?.rendererId, undefined);
+  assert.equal(layout.scenes[0]?.focusPoint, undefined);
+  assert.throws(() => configureScene(layout, "scene-1", { focusPoint: { x: 0.2, y: 0.7 } }), /single-image renderer/);
+});
+
+test("focus dwell keeps full pan travel and slows at the focus", () => {
+  const focus = 0.35;
+  assert.equal(focusDwellProgress(0, focus), 0);
+  assert.equal(focusDwellProgress(1, focus), 1);
+  assert.ok(Math.abs(focusDwellProgress(focus, focus) - focus) < 1e-9);
+  const localTravel = focusDwellProgress(focus + 0.001, focus) - focusDwellProgress(focus - 0.001, focus);
+  assert.ok(localTravel < 0.0015);
+  for (const checkedFocus of [0, 0.1, 0.35, 0.5, 0.9, 1]) {
+    const values = Array.from({ length: 101 }, (_, index) => focusDwellProgress(index / 100, checkedFocus));
+    assert.equal(values[0], 0);
+    assert.equal(values.at(-1), 1);
+    assert.ok(values.every((value, index) => index === 0 || value >= values[index - 1]!));
+  }
+});
+
 test("removing a material invalidates the layout and rejects an unknown material", () => {
   let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
   story = addMaterial(story, "scene-1", imageMaterial("p1", "portrait"));
@@ -33,7 +73,7 @@ test("removing a material invalidates the layout and rejects an unknown material
   story = configureScene(story, "scene-1", { layoutId: "overlap-stack" });
   const changed = removeMaterial(story, "scene-1", "p1");
   assert.deepEqual(changed.scenes[0]!.materials.map(({ id }) => id), ["p2"]);
-  assert.equal(changed.scenes[0]!.layoutId, undefined);
+  assert.equal(changed.scenes[0]!.layoutId, "full-frame");
   assert.throws(() => removeMaterial(changed, "scene-1", "missing"), /unknown material/);
 });
 

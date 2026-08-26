@@ -74,9 +74,14 @@ test("protects a profile, uploads media and stores its stories", async (context)
   assert.deepEqual(contentAccess.json(), { url: null });
   const configured = await api.inject({
     method: "PATCH", url: `/stories/${story.id}/scenes/${sceneId}`, headers,
-    payload: { durationSeconds: 8, layoutId: "full-frame", motion: "zoom-in" },
+    payload: { durationSeconds: 8, layoutId: "full-frame", motion: "pan-left", focusPoint: { x: 0.2, y: 0.65 } },
   });
-  assert.equal(configured.json<{ scenes: { durationSeconds: number; layoutId: string }[] }>().scenes[0]!.durationSeconds, 8);
+  const configuredScene = configured.json<{
+    scenes: { durationSeconds: number; layoutId: string; motion: string; focusPoint: { x: number; y: number } }[];
+  }>().scenes[0]!;
+  assert.equal(configuredScene.durationSeconds, 8);
+  assert.equal(configuredScene.motion, "pan-left");
+  assert.deepEqual(configuredScene.focusPoint, { x: 0.2, y: 0.65 });
   const secondMultipart = multipartFile("second.png", "image/png", png);
   const withSecondPhoto = await api.inject({
     method: "POST", url: `/stories/${story.id}/scenes/${sceneId}/materials`,
@@ -150,7 +155,40 @@ test("opens a legacy story without fileless material placeholders", () => {
   });
   assert.deepEqual(normalized.scenes[0]?.materials, []);
   assert.equal(normalized.scenes[0]?.layoutId, undefined);
+  assert.equal(normalized.scenes[0]?.focusPoint, undefined);
   assert.deepEqual(normalized.scenes[0]?.render, { status: "idle" });
+});
+
+test("upgrades a legacy scene with one image to the still-image renderer", () => {
+  const normalized = normalizeStoredStory({
+    id: "e95428cd-ae65-4334-8497-1f31b88c8124",
+    profileId: "675efe5b-18a4-46f9-a210-00a8ebf9a01d",
+    title: "Legacy still",
+    status: "draft",
+    revision: 3,
+    scenes: [{
+      id: "f89171cc-9473-4a01-a02a-fb93e5d4da6f",
+      durationSeconds: 8,
+      layoutId: "full-frame",
+      motion: "zoom-in",
+      materials: [{
+        id: "08140c76-10ba-48c5-a000-fa56c9e7364a",
+        kind: "image",
+        name: "portrait.png",
+        orientation: "portrait",
+        storageKey: "profile/story/portrait.png",
+        mimeType: "image/png",
+        sizeBytes: 1024,
+        width: 1080,
+        height: 1920,
+      }],
+      render: { status: "idle" },
+    }],
+    narrations: [],
+    music: { generationStatus: "idle", applied: false },
+  });
+  assert.equal(normalized.scenes[0]?.rendererId, "still-image");
+  assert.deepEqual(normalized.scenes[0]?.focusPoint, { x: 0.5, y: 0.5 });
 });
 
 test("never exposes a stored platform secret", async () => {

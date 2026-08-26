@@ -107,8 +107,14 @@ export function normalizeStoredStory(payload: unknown): Story {
   const scenes = payload.scenes.map((scene) => {
     if (!isRecord(scene) || !Array.isArray(scene.materials)) return scene;
     const materials = scene.materials.filter((material) => sceneMaterialSchema.safeParse(material).success);
-    if (materials.length === scene.materials.length) return scene;
-    const { layoutId: _legacyLayout, ...withoutLayout } = scene;
+    const singleImageRenderer = (scene.rendererId === undefined || scene.rendererId === "still-image") && materials.length === 1
+      && isRecord(materials[0]) && materials[0].kind === "image";
+    const { focusPoint: oldFocusPoint, ...withoutFocus } = scene;
+    const withRendererFocus = singleImageRenderer
+      ? { ...withoutFocus, rendererId: "still-image", focusPoint: oldFocusPoint ?? { x: 0.5, y: 0.5 } }
+      : withoutFocus;
+    if (materials.length === scene.materials.length) return withRendererFocus;
+    const { layoutId: _legacyLayout, ...withoutLayout } = withRendererFocus;
     return { ...withoutLayout, materials, render: { status: "idle" } };
   });
   return storySchema.parse({ ...payload, scenes }) as Story;

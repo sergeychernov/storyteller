@@ -157,6 +157,7 @@ export async function buildApi(application: StoryApplication, options: { readonl
       ...(request.body.durationSeconds === undefined ? {} : { durationSeconds: request.body.durationSeconds }),
       ...(request.body.layoutId === undefined ? {} : { layoutId: request.body.layoutId }),
       ...(request.body.motion === undefined ? {} : { motion: request.body.motion }),
+      ...(request.body.focusPoint === undefined ? {} : { focusPoint: request.body.focusPoint }),
     },
   )));
 

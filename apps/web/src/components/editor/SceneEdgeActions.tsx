@@ -14,12 +14,12 @@ interface SceneEdgeActionsProps {
 }
 
 export function SceneEdgeActions({ copy, adding, active, onAdd, variant = "default", adjacent, dimmed = false }: SceneEdgeActionsProps) {
-  return (
+  const actions = (
     <div className={classNames(
       styles.actions,
       variant !== "default" && styles[variant],
-      adjacent && styles[adjacent],
-      dimmed && styles.dimmed,
+      variant !== "default" && adjacent && styles[adjacent],
+      variant !== "default" && dimmed && styles.dimmed,
     )}>
       <span className={styles.mark}>＋</span>
       <p>{copy.sceneEdgeHint}</p>
@@ -38,6 +38,20 @@ export function SceneEdgeActions({ copy, adding, active, onAdd, variant = "defau
         </button>
       </div>
       <small>{copy.coverEditorPending}</small>
+    </div>
+  );
+
+  if (variant !== "default") {
+    return actions;
+  }
+
+  return (
+    <div className={classNames(
+      styles.frameSlot,
+      adjacent && styles[adjacent],
+      dimmed && styles.dimmed,
+    )}>
+      {actions}
     </div>
   );
 }

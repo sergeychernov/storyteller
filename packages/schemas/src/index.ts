@@ -20,6 +20,7 @@ export const storySummarySchema = z.object({
 export const materialOrientationSchema = z.enum(["portrait", "landscape"]);
 export const videoAudioTagSchema = z.enum(["voice", "music", "ambient"]);
 export const sceneMotionSchema = z.enum(["none", "zoom-in", "zoom-out", "pan-left", "pan-right"]);
+export const focusPointSchema = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
 const materialFileShape = {
   id: z.string().uuid(), name: z.string(), orientation: materialOrientationSchema, storageKey: z.string(), mimeType: z.string(),
   sizeBytes: z.number().int().nonnegative(), width: z.number().int().positive(), height: z.number().int().positive(),
@@ -37,7 +38,8 @@ export const materialContentAccessSchema = z.object({
 });
 export const sceneSchema = z.object({
   id: z.string().uuid(), materials: z.array(sceneMaterialSchema), durationSeconds: z.number().min(3).max(15),
-  layoutId: z.string().optional(), motion: sceneMotionSchema, rendererId: z.string().optional(), title: z.string().optional(),
+  layoutId: z.string().optional(), motion: sceneMotionSchema, focusPoint: focusPointSchema.optional(),
+  rendererId: z.string().optional(), title: z.string().optional(),
   render: z.object({ status: z.enum(["idle", "queued", "running", "ready", "failed"]), artifactId: z.string().optional() }),
 });
 export const storySchema = z.object({
@@ -49,7 +51,8 @@ export const storySchema = z.object({
 });
 export const reorderSceneMaterialsSchema = z.object({ materialIds: z.array(z.string().uuid()) });
 export const configureSceneSchema = z.object({
-  durationSeconds: z.number().min(3).max(15).optional(), layoutId: z.string().nullable().optional(), motion: sceneMotionSchema.optional(),
+  durationSeconds: z.number().min(3).max(15).optional(), layoutId: z.string().nullable().optional(),
+  motion: sceneMotionSchema.optional(), focusPoint: focusPointSchema.optional(),
 });
 
 export const platformProviderSchema = z.enum(["telegram", "tiktok", "instagram"]);

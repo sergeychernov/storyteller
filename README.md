@@ -15,7 +15,7 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 - `packages/localization` — typed English, Russian, and Serbian Latin product copy shared by web and mobile
 - `packages/domain` — first small story model and lifecycle rules
 - `packages/schemas` — transport request contracts
-- `packages/renderer` — FFmpeg process boundary; no concrete renderers yet
+- `packages/renderer` — FFmpeg process boundary and the first concrete renderer for an animated still image
 - `packages/publishers` — provider-neutral publication port; no adapters yet
 
 ## Commands

@@ -1,6 +1,7 @@
 import { DomainError } from "./errors.js";
 import { getLayoutOptions } from "./layout.js";
-import type { Narration, Scene, SceneMaterial, SceneMotion, Story } from "./model.js";
+import type { FocusPoint, Narration, Scene, SceneMaterial, SceneMotion, Story } from "./model.js";
+import { centeredFocusPoint, defaultSingleImageMotion, getSceneMotionOptions } from "./scene-motion.js";
 
 export function createStory(input: { id: string; profileId: string; title?: string }): Story {
   return {
@@ -24,14 +25,14 @@ export function addScene(story: Story, sceneId: string): Story {
 export function addMaterial(story: Story, sceneId: string, material: SceneMaterial): Story {
   return updateScene(story, sceneId, (scene) => {
     if (scene.materials.some(({ id }) => id === material.id)) throw new DomainError(`material already exists: ${material.id}`);
-    return resetLayout({ ...scene, materials: [...scene.materials, material] });
+    return resetMaterialPresentation({ ...scene, materials: [...scene.materials, material] });
   });
 }
 
 export function removeMaterial(story: Story, sceneId: string, materialId: string): Story {
   return updateScene(story, sceneId, (scene) => {
     if (!scene.materials.some(({ id }) => id === materialId)) throw new DomainError(`unknown material: ${materialId}`);
-    return resetLayout({ ...scene, materials: scene.materials.filter(({ id }) => id !== materialId) });
+    return resetMaterialPresentation({ ...scene, materials: scene.materials.filter(({ id }) => id !== materialId) });
   });
 }
 
@@ -51,6 +52,7 @@ export function configureScene(story: Story, sceneId: string, input: {
   durationSeconds?: number;
   layoutId?: string | null;
   motion?: SceneMotion;
+  focusPoint?: FocusPoint;
 }): Story {
   return updateScene(story, sceneId, (scene) => {
     const durationSeconds = input.durationSeconds ?? scene.durationSeconds;
@@ -59,11 +61,24 @@ export function configureScene(story: Story, sceneId: string, input: {
       const available = getLayoutOptions(scene.materials);
       if (!available.some(({ id }) => id === input.layoutId)) throw new DomainError(`layout is not available: ${input.layoutId}`);
     }
+    const motion = input.motion ?? scene.motion;
+    if (!getSceneMotionOptions(scene.materials).includes(motion)) {
+      throw new DomainError(`motion is not available for this material orientation: ${motion}`);
+    }
+    if (input.focusPoint) {
+      if (scene.rendererId !== "still-image" || scene.materials.length !== 1 || scene.materials[0]?.kind !== "image") {
+        throw new DomainError("focus point is available only for the single-image renderer");
+      }
+      if (![input.focusPoint.x, input.focusPoint.y].every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) {
+        throw new DomainError("focus point coordinates must be between 0 and 1");
+      }
+    }
     const { layoutId: _oldLayout, ...withoutLayout } = scene;
     return {
       ...withoutLayout,
       durationSeconds,
-      motion: input.motion ?? scene.motion,
+      motion,
+      ...(input.focusPoint ? { focusPoint: input.focusPoint } : {}),
       ...(input.layoutId === undefined ? (scene.layoutId ? { layoutId: scene.layoutId } : {}) : input.layoutId ? { layoutId: input.layoutId } : {}),
       render: { status: "idle" },
     };
@@ -117,4 +132,20 @@ function changed(story: Story, change: Partial<Pick<Story, "scenes" | "narration
 function resetLayout(scene: Scene): Scene {
   const { layoutId: _layoutId, ...withoutLayout } = scene;
   return { ...withoutLayout, render: { status: "idle" } };
+}
+
+function resetMaterialPresentation(scene: Scene): Scene {
+  const reset = resetLayout(scene);
+  if (reset.materials.length !== 1) {
+    const { focusPoint: _focusPoint, rendererId: _rendererId, ...withoutRenderer } = reset;
+    return { ...withoutRenderer, motion: "none" };
+  }
+  const material = reset.materials[0]!;
+  const { focusPoint: _focusPoint, ...withoutFocus } = reset;
+  return {
+    ...withoutFocus,
+    layoutId: "full-frame",
+    motion: defaultSingleImageMotion(material),
+    ...(material.kind === "image" ? { rendererId: "still-image", focusPoint: centeredFocusPoint } : {}),
+  };
 }

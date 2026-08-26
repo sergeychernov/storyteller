@@ -1,10 +1,11 @@
-import type { AuthSession, Scene, SceneMotion, Story } from "../../api.js";
+import type { AuthSession, FocusPoint, Scene, SceneMotion, Story } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 
 export interface SceneChange {
   readonly durationSeconds?: number;
   readonly layoutId?: string | null;
   readonly motion?: SceneMotion;
+  readonly focusPoint?: FocusPoint;
 }
 
 export interface StoryEditorViewProps {

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import type { AuthSession, Scene, SceneMotion } from "../../api.js";
+import type { AuthSession, Scene } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneInspector } from "./SceneInspector.js";
 import styles from "./SceneEditorTabs.module.css";
+import type { SceneChange } from "./story-editor-view.js";
 
 interface SceneEditorTabsProps {
   readonly scene: Scene;
@@ -16,17 +17,16 @@ interface SceneEditorTabsProps {
   readonly onUpload: (files: readonly File[]) => void;
   readonly onDeleteMaterial: (materialId: string) => void;
   readonly onReorder: (ids: readonly string[]) => void;
-  readonly onChange: (change: { durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion }) => void;
+  readonly onChange: (change: SceneChange) => void;
 }
 
-type EditorTab = "materials" | "layout" | "motion";
+type EditorTab = "materials" | "composition";
 
 export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, storyId, session, onUpload, onDeleteMaterial, onReorder, onChange }: SceneEditorTabsProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>("materials");
   const tabs: readonly { id: EditorTab; label: string }[] = [
     { id: "materials", label: `${copy.materials} · ${scene.materials.length}` },
-    { id: "layout", label: copy.layout },
-    { id: "motion", label: copy.motion },
+    { id: "composition", label: copy.layout },
   ];
   return (
     <section className={styles.shell}>
@@ -56,8 +56,7 @@ export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, s
           onDeleteMaterial={onDeleteMaterial}
           onReorder={onReorder}
         />}
-        {activeTab === "layout" && <SceneInspector scene={scene} copy={copy} saving={saving} panel="layout" onChange={onChange} />}
-        {activeTab === "motion" && <SceneInspector scene={scene} copy={copy} saving={saving} panel="motion" onChange={onChange} />}
+        {activeTab === "composition" && <SceneInspector scene={scene} copy={copy} saving={saving} storyId={storyId} session={session} onChange={onChange} />}
       </div>
     </section>
   );

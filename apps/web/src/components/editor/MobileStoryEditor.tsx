@@ -30,8 +30,10 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
           storyId={story.id}
           session={session}
           adding={adding}
+          saving={saving}
           onSelect={onSelect}
           onAdd={onAdd}
+          onChange={onChange}
         />
       </div>
       {selected && <SceneEditorTabs

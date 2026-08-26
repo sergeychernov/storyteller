@@ -8,15 +8,19 @@ export interface StorySummary {
 export type MaterialOrientation = "portrait" | "landscape";
 export type VideoAudioTag = "voice" | "music" | "ambient";
 export type SceneMotion = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right";
-export type SceneMaterial = {
+export interface FocusPoint { x: number; y: number }
+export type ImageMaterial = {
   id: string; kind: "image"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
   sizeBytes: number; width: number; height: number;
-} | {
+};
+export type VideoMaterial = {
   id: string; kind: "video"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
   sizeBytes: number; width: number; height: number; hasAudio: boolean; sourceDurationSeconds?: number; audioTags: VideoAudioTag[];
 };
+export type SceneMaterial = ImageMaterial | VideoMaterial;
 export interface Scene {
   id: string; materials: SceneMaterial[]; durationSeconds: number; layoutId?: string; motion: SceneMotion;
+  focusPoint?: FocusPoint;
   rendererId?: string; title?: string; render: { status: "idle" | "queued" | "running" | "ready" | "failed"; artifactId?: string };
 }
 export interface Story extends Omit<StorySummary, "sceneCount"> {
@@ -60,7 +64,7 @@ export function reorderSceneMaterials(token: string, storyId: string, sceneId: s
   return request(`/stories/${storyId}/scenes/${sceneId}/material-order`, { method: "PUT", body: JSON.stringify({ materialIds }) }, token);
 }
 export function configureStoryScene(token: string, storyId: string, sceneId: string, settings: {
-  durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion;
+  durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint;
 }): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}`, { method: "PATCH", body: JSON.stringify(settings) }, token);
 }

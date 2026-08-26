@@ -6,6 +6,7 @@ import { SceneCanvas } from "./SceneCanvas.js";
 import { SceneEdgeActions } from "./SceneEdgeActions.js";
 import { buildSceneCarouselSlots, sceneCarouselKey, type SceneCarouselSlot } from "./scene-carousel-model.js";
 import styles from "./SceneCarousel.module.css";
+import type { SceneChange } from "./story-editor-view.js";
 
 interface SceneCarouselProps {
   readonly scenes: readonly Scene[];
@@ -14,13 +15,15 @@ interface SceneCarouselProps {
   readonly storyId: string;
   readonly session: AuthSession;
   readonly adding: boolean;
+  readonly saving: boolean;
   readonly onSelect: (id: string) => void;
   readonly onAdd: () => void;
+  readonly onChange: (change: SceneChange) => void;
 }
 
 const emptyKey = "edge:empty";
 
-export function SceneCarousel({ scenes, selectedId, copy, storyId, session, adding, onSelect, onAdd }: SceneCarouselProps) {
+export function SceneCarousel({ scenes, selectedId, copy, storyId, session, adding, saving, onSelect, onAdd, onChange }: SceneCarouselProps) {
   const slots = useMemo(() => buildSceneCarouselSlots(scenes), [scenes]);
   const viewport = useRef<HTMLDivElement>(null);
   const scrollTimer = useRef<number | undefined>(undefined);
@@ -132,6 +135,8 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
                   adjacent={adjacent}
                   dimmed={Boolean(adjacent)}
                   inactive={!active}
+                  saving={saving}
+                  onChange={slot.scene.id === selectedId ? onChange : undefined}
                 />
               </> : <>
                 <div className={classNames(styles.label, adjacent && styles.dimmed)}><strong>{edgeTitle}</strong></div>

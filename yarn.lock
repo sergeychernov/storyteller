@@ -3139,6 +3139,8 @@ __metadata:
 "@storyteller/renderer@workspace:*, @storyteller/renderer@workspace:packages/renderer":
   version: 0.0.0-use.local
   resolution: "@storyteller/renderer@workspace:packages/renderer"
+  dependencies:
+    "@storyteller/domain": "workspace:*"
   languageName: unknown
   linkType: soft
 

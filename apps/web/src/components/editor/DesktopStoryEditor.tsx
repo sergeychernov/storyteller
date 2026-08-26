@@ -24,7 +24,15 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
         <SceneRail scenes={story.scenes} selectedId={selected?.id ?? ""} copy={copy} adding={adding} onSelect={onSelect} onAdd={onAdd} variant="desktop" />
         {selected ? <>
           <main className={styles.workspace}>
-            <ScenePreview scene={selected} copy={copy} storyId={story.id} session={session} compact={props.compact} />
+            <ScenePreview
+              scene={selected}
+              copy={copy}
+              storyId={story.id}
+              session={session}
+              compact={props.compact}
+              saving={saving}
+              onChange={onChange}
+            />
             <section className={styles.materialPanel}>
               <div className={styles.materialHeading}>
                 <h2>{copy.materials}</h2>
@@ -45,7 +53,15 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
               />
             </section>
           </main>
-          <DesktopSceneInspector scene={selected} copy={copy} saving={saving} compact={props.compact} onChange={onChange} />
+          <DesktopSceneInspector
+            scene={selected}
+            copy={copy}
+            saving={saving}
+            compact={props.compact}
+            storyId={story.id}
+            session={session}
+            onChange={onChange}
+          />
         </> : <main className={styles.emptyEditor}>
           <SceneEdgeActions copy={copy} adding={adding} active onAdd={onAdd} variant="desktopEmpty" />
         </main>}
