@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
-  addMaterial, addScene, configureScene, createStory, removeMaterial, reorderMaterials,
+  addMaterial, addScene, configureScene, createStory, removeMaterial, removeScene, reorderMaterials,
   type FocusPoint, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
 } from "@storyteller/domain";
 
@@ -30,6 +30,7 @@ export interface StoryRepository {
   listStories(profileId: string): Promise<readonly Story[]>;
   findStory(profileId: string, storyId: string): Promise<Story | undefined>;
   updateStory(story: Story): Promise<void>;
+  deleteScene(story: Story, sceneId: string, storageKeys: readonly string[]): Promise<void>;
   upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary>;
   listPlatformCredentials(profileId: string): Promise<readonly PlatformCredentialSummary[]>;
   deletePlatformCredential(profileId: string, provider: PlatformProvider): Promise<boolean>;
@@ -102,6 +103,13 @@ export class StoryApplication {
   }
   async createScene(profileId: string, storyId: string): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => addScene(story, randomUUID()));
+  }
+  async deleteScene(profileId: string, storyId: string, sceneId: string): Promise<Story> {
+    const story = await this.getStory(profileId, storyId);
+    const scene = story.scenes.find(({ id }) => id === sceneId);
+    const changed = removeScene(story, sceneId);
+    await this.repository.deleteScene(changed, sceneId, scene?.materials.map(({ storageKey }) => storageKey) ?? []);
+    return changed;
   }
   async addSceneMaterial(profileId: string, storyId: string, sceneId: string, material: NewSceneMaterial): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => addMaterial(story, sceneId, { ...material, id: randomUUID() } as SceneMaterial));

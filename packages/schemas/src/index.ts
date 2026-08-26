@@ -54,6 +54,11 @@ export const configureSceneSchema = z.object({
   durationSeconds: z.number().min(3).max(15).optional(), layoutId: z.string().nullable().optional(),
   motion: sceneMotionSchema.optional(), focusPoint: focusPointSchema.optional(),
 });
+export const sceneRenderStatusSchema = z.enum(["queued", "running", "ready", "failed", "canceled"]);
+export const sceneRenderSchema = z.object({
+  id: z.string().uuid(), status: sceneRenderStatusSchema,
+  sizeBytes: z.number().int().nonnegative().optional(), error: z.string().optional(),
+});
 
 export const platformProviderSchema = z.enum(["telegram", "tiktok", "instagram"]);
 export const platformParamsSchema = z.object({ provider: platformProviderSchema });

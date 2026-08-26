@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createStillImageMotionPlan } from "@storyteller/domain";
 import { buildStillImageFilter, probeMedia, renderStillImage, type MediaProcessRunner } from "./index.js";
 
 test("probeMedia uses an argument array and parses JSON", async () => {
@@ -15,17 +16,37 @@ test("probeMedia uses an argument array and parses JSON", async () => {
   assert.equal(received.at(-1), "clip with spaces.mp4");
 });
 
-test("landscape stills cross the full crop and dwell at the horizontal focus", () => {
-  const filter = buildStillImageFilter({
-    sourcePath: "wide.jpg", outputPath: "wide.mp4", orientation: "landscape", durationSeconds: 6,
+test("landscape stills cross the full crop and dwell when the focus is centered", () => {
+  const rightFilter = buildStillImageFilter({
+    sourcePath: "wide.jpg", outputPath: "wide.mp4", sourceSize: { width: 1920, height: 1080 },
+    orientation: "landscape", durationSeconds: 6,
     motion: "pan-right", focusPoint: { x: 0.3, y: 0.5 },
   });
-  assert.match(filter, /scale=1080:1920:force_original_aspect_ratio=increase/);
-  assert.match(filter, /\(iw-ow\)\*if\(lte\(t\/6\.000\\,0\.300\)/);
-  assert.match(filter, /1\.550/);
-  assert.match(filter, /0\.450/);
+  const leftFilter = buildStillImageFilter({
+    sourcePath: "wide.jpg", outputPath: "wide.mp4", sourceSize: { width: 1920, height: 1080 },
+    orientation: "landscape", durationSeconds: 6,
+    motion: "pan-left", focusPoint: { x: 0.3, y: 0.5 },
+  });
+  const rightPlan = createStillImageMotionPlan({
+    sourceSize: { width: 1920, height: 1080 }, frameSize: { width: 1080, height: 1920 },
+    orientation: "landscape", motion: "pan-right", focusPoint: { x: 0.3, y: 0.5 },
+  });
+  const leftPlan = createStillImageMotionPlan({
+    sourceSize: { width: 1920, height: 1080 }, frameSize: { width: 1080, height: 1920 },
+    orientation: "landscape", motion: "pan-left", focusPoint: { x: 0.3, y: 0.5 },
+  });
+  assert.equal(rightPlan.kind, "pan");
+  assert.equal(leftPlan.kind, "pan");
+  assert.match(rightFilter, /scale=1080:1920:force_original_aspect_ratio=increase/);
+  assert.ok(rightFilter.includes(`if(lte(t/6.000\\,${rightPlan.easing.at.toFixed(6)})`));
+  assert.ok(leftFilter.includes(`if(lte(t/6.000\\,${leftPlan.easing.at.toFixed(6)})`));
+  assert.ok(rightFilter.includes("(iw-ow)*clip(0.000+1.000*if("));
+  assert.ok(leftFilter.includes("(iw-ow)*clip(1.000-1.000*if("));
+  assert.match(rightFilter, /1\.550/);
+  assert.match(rightFilter, /0\.450/);
   assert.throws(() => buildStillImageFilter({
-    sourcePath: "wide.jpg", outputPath: "wide.mp4", orientation: "landscape", durationSeconds: 6, motion: "zoom-in",
+    sourcePath: "wide.jpg", outputPath: "wide.mp4", sourceSize: { width: 1920, height: 1080 },
+    orientation: "landscape", durationSeconds: 6, motion: "zoom-in",
   }), /not valid/);
 });
 
@@ -40,7 +61,8 @@ test("portrait stills zoom around the selected focus at minimum cover scale", as
     },
   };
   await renderStillImage({
-    sourcePath: "portrait.jpg", outputPath: "portrait.mp4", orientation: "portrait", durationSeconds: 4,
+    sourcePath: "portrait.jpg", outputPath: "portrait.mp4", sourceSize: { width: 1080, height: 1920 },
+    orientation: "portrait", durationSeconds: 4,
     motion: "zoom-out", focusPoint: { x: 0.25, y: 0.7 },
   }, runner);
   assert.equal(calls.length, 2);

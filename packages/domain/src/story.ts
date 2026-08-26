@@ -1,7 +1,8 @@
 import { DomainError } from "./errors.js";
 import { getLayoutOptions } from "./layout.js";
 import type { FocusPoint, Narration, Scene, SceneMaterial, SceneMotion, Story } from "./model.js";
-import { centeredFocusPoint, defaultSingleImageMotion, getSceneMotionOptions } from "./scene-motion.js";
+import { defaultSingleImageMotion, getSceneMotionOptions } from "./scene-motion.js";
+import { centeredFocusPoint } from "./still-image-motion.js";
 
 export function createStory(input: { id: string; profileId: string; title?: string }): Story {
   return {
@@ -20,6 +21,15 @@ export function addScene(story: Story, sceneId: string): Story {
   return changed(story, { scenes: [...story.scenes, {
     id: sceneId, materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" },
   }] });
+}
+
+export function removeScene(story: Story, sceneId: string): Story {
+  assertEditable(story);
+  assertScene(story, sceneId);
+  return changed(story, {
+    scenes: story.scenes.filter(({ id }) => id !== sceneId),
+    narrations: story.narrations.filter(({ fromSceneId }) => fromSceneId !== sceneId),
+  });
 }
 
 export function addMaterial(story: Story, sceneId: string, material: SceneMaterial): Story {

@@ -10,12 +10,12 @@ Create one Railway project from the GitHub repository and keep these detected se
 | --- | --- | --- | --- |
 | `web` | `@storyteller/web` | yes | React/Vite studio |
 | `api` | `@storyteller/api` | yes | Fastify API; attach PostgreSQL; healthcheck is `/health` |
-| `worker` | `@storyteller/worker` | no | Placeholder background process |
+| `worker` | `@storyteller/worker` | no | FFmpeg scene renderer and object cleanup |
 | `mcp` | `@storyteller/mcp` | only when external MCP clients need it | Placeholder process; it does not expose HTTP yet |
 
 Do not deploy `@storyteller/mobile` to Railway. It is an Expo native application and should be built with EAS or the native store toolchain.
 
-The worker and MCP processes are intentionally placeholders today. Omit them from the Railway project until their integrations are implemented if you want to avoid idle compute cost.
+The worker is required for scene downloads. The MCP process is still a placeholder and may be omitted to avoid idle compute cost.
 
 ## Import and commands
 
@@ -44,9 +44,9 @@ VITE_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 
 `VITE_API_URL` is compiled into the browser bundle, so changing it triggers a new web deployment. No `PORT` variable needs to be created: Railway injects it for public services.
 
-Attach a Railway PostgreSQL service to the API so Railway injects `DATABASE_URL`. Also configure `PLATFORM_CREDENTIALS_KEY` with the output of `openssl rand -base64 32`, and set `WEB_ORIGIN` to the public web URL (multiple origins may be comma-separated). The API applies migrations during startup.
+Attach a Railway PostgreSQL service to both the API and worker so both receive the same `DATABASE_URL`. Configure `PLATFORM_CREDENTIALS_KEY` on the API with the output of `openssl rand -base64 32`, and set `WEB_ORIGIN` to the public web URL (multiple origins may be comma-separated). The API applies migrations during startup; the worker safely retries while it is waiting for those tables.
 
-Create a private Railway Storage Bucket in the same region as the API. Reference its credentials from the API service using these variables:
+Create a private Railway Storage Bucket in the same region as the API and worker. Reference the same credentials from both services using these variables:
 
 ```dotenv
 MEDIA_STORAGE_DRIVER=s3
@@ -59,7 +59,7 @@ S3_FORCE_PATH_STYLE=false
 S3_DOWNLOAD_URL_TTL_SECONDS=3600
 ```
 
-Replace `media` with the bucket service name on the Railway canvas. Keep the bucket private. The API receives and validates uploads with Sharp or FFprobe, stores the validated originals in the bucket, and returns short-lived presigned URLs after authorizing reads. `MEDIA_TEMP_ROOT` may point to ephemeral disk when a custom temporary directory is needed; completed originals never depend on that disk.
+Replace `media` with the bucket service name on the Railway canvas. Keep the bucket private. The API receives and validates uploads with Sharp or FFprobe and stores the validated originals. The worker downloads originals to ephemeral disk, renders MP4 with FFmpeg, uploads the result, and records only its stable object key in PostgreSQL. Authorized reads may use short-lived presigned URLs. `MEDIA_TEMP_ROOT` may point to ephemeral disk when a custom upload directory is needed; completed originals and renders never depend on that disk.
 
 The default `MEDIA_STORAGE_DRIVER=local` remains available for local development. A persistent Volume is no longer required for production media storage.
 
@@ -92,6 +92,8 @@ Railway's automatic monorepo import may initially watch only the application dir
 /packages/domain/**
 /packages/schemas/**
 /packages/renderer/**
+/packages/render-queue/**
+/packages/storage/**
 /package.json
 /yarn.lock
 /.yarnrc.yml
@@ -100,9 +102,25 @@ Railway's automatic monorepo import may initially watch only the application dir
 /railpack.json
 ```
 
-### `worker` and `mcp`
+### `worker`
 
-Use `/apps/worker/**` or `/apps/mcp/**` respectively, plus the five root configuration and lockfile paths shown above. Add shared package paths when those services begin importing application, renderer, or publisher code.
+```text
+/apps/worker/**
+/packages/domain/**
+/packages/renderer/**
+/packages/render-queue/**
+/packages/storage/**
+/package.json
+/yarn.lock
+/.yarnrc.yml
+/tsconfig.base.json
+/tsconfig.json
+/railpack.json
+```
+
+### `mcp`
+
+Use `/apps/mcp/**` plus the root configuration and lockfile paths shown above. Add shared package paths when the service begins importing application or publisher code.
 
 ## Verification
 

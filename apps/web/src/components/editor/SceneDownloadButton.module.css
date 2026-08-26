@@ -1,0 +1,52 @@
+.button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #cbcbbf;
+  border-radius: 7px;
+  color: #505048;
+  background: #ffffffb8;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  border-color: #879b48;
+  color: #526323;
+  background: #f6ffd9;
+}
+
+.button:focus-visible {
+  outline: 2px solid #879b48;
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid #879b4855;
+  border-top-color: #526323;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

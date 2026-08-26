@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { StoryApplication, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
 import type { PlatformCredential, PlatformProvider, Profile, Story } from "@storyteller/domain";
+import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue } from "@storyteller/render-queue";
 import { normalizeStoredStory } from "./database.js";
 import { buildApi } from "./server.js";
 import { detectMediaMetadata, MediaStorage } from "./media-storage.js";
@@ -14,8 +15,11 @@ test("protects a profile, uploads media and stores its stories", async (context)
   process.env.NODE_ENV = "test";
   const mediaRoot = await mkdtemp(join(tmpdir(), "storyteller-media-test-"));
   context.after(() => rm(mediaRoot, { recursive: true, force: true }));
-  const api = await buildApi(new StoryApplication(new MemoryRepository()), {
-    mediaStorage: new MediaStorage(new LocalObjectStorage(mediaRoot)),
+  const repository = new MemoryRepository();
+  const objectStorage = new LocalObjectStorage(mediaRoot);
+  const renderQueue = new MemoryRenderQueue();
+  const api = await buildApi(new StoryApplication(repository), {
+    mediaStorage: new MediaStorage(objectStorage), objectStorage, renderQueue,
   });
   assert.equal((await api.inject({ method: "GET", url: "/profile" })).statusCode, 401);
   const reorderPreflight = await api.inject({
@@ -82,12 +86,22 @@ test("protects a profile, uploads media and stores its stories", async (context)
   assert.equal(configuredScene.durationSeconds, 8);
   assert.equal(configuredScene.motion, "pan-left");
   assert.deepEqual(configuredScene.focusPoint, { x: 0.2, y: 0.65 });
+  const firstRender = await api.inject({
+    method: "POST", url: `/stories/${story.id}/scenes/${sceneId}/renders`, headers,
+  });
+  const cachedRender = await api.inject({
+    method: "POST", url: `/stories/${story.id}/scenes/${sceneId}/renders`, headers,
+  });
+  assert.equal(firstRender.statusCode, 202);
+  assert.equal(cachedRender.json<{ id: string }>().id, firstRender.json<{ id: string }>().id);
+  assert.equal(renderQueue.jobs.size, 1);
   const secondMultipart = multipartFile("second.png", "image/png", png);
   const withSecondPhoto = await api.inject({
     method: "POST", url: `/stories/${story.id}/scenes/${sceneId}/materials`,
     payload: secondMultipart.body, headers: { ...headers, "content-type": secondMultipart.contentType },
   });
-  const twoMaterials = withSecondPhoto.json<{ scenes: { materials: { id: string; name: string }[] }[] }>().scenes[0]!.materials;
+  const twoMaterials = withSecondPhoto.json<{ scenes: { materials: { id: string; name: string; storageKey: string }[] }[] }>().scenes[0]!.materials;
+  const secondMaterial = twoMaterials.find(({ name }) => name === "second.png")!;
   const reordered = await api.inject({
     method: "PUT", url: `/stories/${story.id}/scenes/${sceneId}/material-order`, headers,
     payload: { materialIds: [twoMaterials[1]!.id, twoMaterials[0]!.id] },
@@ -103,6 +117,9 @@ test("protects a profile, uploads media and stores its stories", async (context)
     method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}/materials/${uploaded.id}`, headers,
   })).statusCode, 404);
   await assert.rejects(access(join(mediaRoot, uploaded.storageKey)), { code: "ENOENT" });
+  const removedScene = await api.inject({ method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}`, headers });
+  assert.equal(removedScene.statusCode, 200);
+  assert.deepEqual(repository.deletedSceneStorageKeys, [secondMaterial.storageKey]);
   await api.close();
 });
 
@@ -213,6 +230,7 @@ class MemoryRepository implements StoryRepository {
   readonly sessions = new Map<string, SessionRecord>();
   readonly stories = new Map<string, Story>();
   readonly credentials = new Map<string, PlatformCredentialSummary>();
+  deletedSceneStorageKeys: readonly string[] = [];
   async createProfileWithSession(profile: ProfileAuthentication, session: SessionRecord) {
     if ([...this.profiles.values()].some(({ email }) => email === profile.email)) return false;
     this.profiles.set(profile.id, profile); this.sessions.set(session.tokenHash, session); return true;
@@ -228,12 +246,39 @@ class MemoryRepository implements StoryRepository {
   async listStories(profileId: string) { return [...this.stories.values()].filter((story) => story.profileId === profileId); }
   async findStory(profileId: string, storyId: string) { const story = this.stories.get(storyId); return story?.profileId === profileId ? story : undefined; }
   async updateStory(story: Story) { this.stories.set(story.id, story); }
+  async deleteScene(story: Story, _sceneId: string, storageKeys: readonly string[]) {
+    this.deletedSceneStorageKeys = storageKeys;
+    this.stories.set(story.id, story);
+  }
   async upsertPlatformCredential(credential: PlatformCredential) {
     const summary = { id: credential.id, provider: credential.provider, secretHint: `••••${credential.secret.slice(-4)}` } satisfies PlatformCredentialSummary;
     this.credentials.set(`${credential.profileId}:${credential.provider}`, summary); return summary;
   }
   async listPlatformCredentials(profileId: string) { return [...this.credentials.entries()].filter(([key]) => key.startsWith(`${profileId}:`)).map(([, value]) => value); }
   async deletePlatformCredential(profileId: string, provider: PlatformProvider) { return this.credentials.delete(`${profileId}:${provider}`); }
+}
+
+class MemoryRenderQueue implements SceneRenderQueue {
+  readonly jobs = new Map<string, SceneRenderJob>();
+  async enqueue(job: Omit<SceneRenderJob, "status" | "storageKey" | "sizeBytes" | "error">): Promise<SceneRenderJob> {
+    const key = `${job.storyId}:${job.sceneId}:${job.inputHash}`;
+    const existing = this.jobs.get(key);
+    if (existing) return existing;
+    const queued = { ...job, status: "queued" as const };
+    this.jobs.set(key, queued);
+    return queued;
+  }
+  findAuthorized(profileId: string, storyId: string, sceneId: string, renderId: string): Promise<SceneRenderJob | undefined> {
+    return Promise.resolve([...this.jobs.values()].find((job) => job.profileId === profileId && job.storyId === storyId
+      && job.sceneId === sceneId && job.id === renderId));
+  }
+  claim(): Promise<SceneRenderJob | undefined> { return Promise.resolve(undefined); }
+  complete(): Promise<boolean> { return Promise.resolve(false); }
+  fail(): Promise<void> { return Promise.resolve(); }
+  scheduleDeletion(): Promise<void> { return Promise.resolve(); }
+  claimDeletion(): Promise<ObjectDeletionJob | undefined> { return Promise.resolve(undefined); }
+  completeDeletion(): Promise<void> { return Promise.resolve(); }
+  failDeletion(): Promise<void> { return Promise.resolve(); }
 }
 
 function multipartFile(filename: string, mimeType: string, content: Buffer) {

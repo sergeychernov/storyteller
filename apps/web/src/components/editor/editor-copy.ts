@@ -24,6 +24,7 @@ const copies = {
     storyStart: "Start of the story", storyEnd: "End of the story", noScenes: "No scenes yet", sceneEdgeHint: "Continue the story or prepare its cover.",
     sceneCarousel: "Story scenes", swipeScenes: "Swipe left or right to change scenes", sceneTools: "Scene tools",
     allStories: "All stories", untitledStory: "Untitled story", saving: "Saving", saved: "Saved", openScene: "Open scene",
+    downloadScene: "Download scene", renderingScene: "Rendering scene…", renderSceneError: "Could not render the scene. Try again.",
   },
   ru: {
     scenes: "Сцены", addScene: "Добавить сцену", scene: "Сцена", emptyScene: "Добавьте фотографию или видео",
@@ -48,6 +49,7 @@ const copies = {
     storyStart: "Начало истории", storyEnd: "Конец истории", noScenes: "Сцен пока нет", sceneEdgeHint: "Продолжите историю или подготовьте её обложку.",
     sceneCarousel: "Сцены истории", swipeScenes: "Смахните влево или вправо, чтобы сменить сцену", sceneTools: "Инструменты сцены",
     allStories: "Все истории", untitledStory: "История без названия", saving: "Сохраняем", saved: "Сохранено", openScene: "Открыть сцену",
+    downloadScene: "Скачать сцену", renderingScene: "Рендерим сцену…", renderSceneError: "Не удалось отрендерить сцену. Попробуйте ещё раз.",
   },
   "sr-Latn": {
     scenes: "Scene", addScene: "Dodaj scenu", scene: "Scena", emptyScene: "Dodajte fotografiju ili video",
@@ -72,6 +74,7 @@ const copies = {
     storyStart: "Početak priče", storyEnd: "Kraj priče", noScenes: "Još nema scena", sceneEdgeHint: "Nastavite priču ili pripremite naslovnicu.",
     sceneCarousel: "Scene priče", swipeScenes: "Prevucite levo ili desno za promenu scene", sceneTools: "Alati scene",
     allStories: "Sve priče", untitledStory: "Priča bez naslova", saving: "Čuvanje", saved: "Sačuvano", openScene: "Otvori scenu",
+    downloadScene: "Preuzmi scenu", renderingScene: "Renderovanje scene…", renderSceneError: "Scena nije renderovana. Pokušajte ponovo.",
   },
 } as const;
 

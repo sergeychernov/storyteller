@@ -45,6 +45,42 @@ const migrations = [{
     ALTER TABLE stories DROP COLUMN project_id;
     DROP TABLE projects;
   `,
+}, {
+  version: 3,
+  sql: `
+    CREATE TABLE scene_renders (
+      id uuid PRIMARY KEY,
+      profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      story_id uuid NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      scene_id uuid NOT NULL,
+      input_hash char(64) NOT NULL,
+      input jsonb NOT NULL,
+      status varchar(20) NOT NULL CHECK (status IN ('queued', 'running', 'ready', 'failed', 'canceled')),
+      storage_key text,
+      size_bytes bigint,
+      error text,
+      attempts integer NOT NULL DEFAULT 0,
+      worker_id text,
+      locked_until timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (story_id, scene_id, input_hash)
+    );
+    CREATE INDEX scene_renders_queue_idx ON scene_renders(status, locked_until, created_at);
+    CREATE INDEX scene_renders_scene_idx ON scene_renders(story_id, scene_id);
+
+    CREATE TABLE object_deletion_jobs (
+      storage_key text PRIMARY KEY,
+      status varchar(20) NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'failed')),
+      attempts integer NOT NULL DEFAULT 0,
+      worker_id text,
+      locked_until timestamptz,
+      error text,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX object_deletion_jobs_queue_idx ON object_deletion_jobs(status, locked_until, created_at);
+  `,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

@@ -6,6 +6,8 @@
     { "path": "packages/application" },
     { "path": "packages/localization" },
     { "path": "packages/renderer" },
+    { "path": "packages/storage" },
+    { "path": "packages/render-queue" },
     { "path": "packages/publishers" },
     { "path": "apps/api" },
     { "path": "apps/worker" },

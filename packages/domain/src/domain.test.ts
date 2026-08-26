@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  addMaterial, addNarration, addScene, configureScene, createStory, getLayoutOptions, mergeMaterialOrder, reorderMaterials,
-  focusDwellProgress, removeMaterial, selectRenderer, setSceneTitle, transitionStory,
+  addMaterial, addNarration, addScene, configureScene, createStillImageMotionPlan, createStory, evaluateStillImageMotion,
+  focusDwellProgress, getLayoutOptions, mergeMaterialOrder, removeMaterial, removeScene, reorderMaterials, selectRenderer, setSceneTitle,
+  transitionStory, verticalStoryFrame,
 } from "./index.js";
 
 test("a render starts only when every scene has material and a renderer", () => {
@@ -66,6 +67,31 @@ test("focus dwell keeps full pan travel and slows at the focus", () => {
   }
 });
 
+test("one still-image plan centers the same focus for both pan directions", () => {
+  const focusPoint = { x: 0.3, y: 0.5 };
+  const sourceSize = { width: 1920, height: 1080 };
+  const right = createStillImageMotionPlan({
+    sourceSize, frameSize: verticalStoryFrame, orientation: "landscape", motion: "pan-right", focusPoint,
+  });
+  const left = createStillImageMotionPlan({
+    sourceSize, frameSize: verticalStoryFrame, orientation: "landscape", motion: "pan-left", focusPoint,
+  });
+  assert.equal(right.kind, "pan");
+  assert.equal(left.kind, "pan");
+  assert.ok(Math.abs(right.baseCrop.x.progress - left.baseCrop.x.progress) < 1e-9);
+  assert.ok(Math.abs(right.easing.at + left.easing.at - 1) < 1e-9);
+
+  const rightDwell = evaluateStillImageMotion(right, right.easing.at);
+  const leftDwell = evaluateStillImageMotion(left, left.easing.at);
+  const rightCenteredSourceX = (0.5 - rightDwell.offsetX) / right.geometry.width;
+  const leftCenteredSourceX = (0.5 - leftDwell.offsetX) / left.geometry.width;
+  assert.ok(Math.abs(rightCenteredSourceX - focusPoint.x) < 1e-9);
+  assert.ok(Math.abs(leftCenteredSourceX - focusPoint.x) < 1e-9);
+  assert.throws(() => createStillImageMotionPlan({
+    sourceSize, frameSize: verticalStoryFrame, orientation: "portrait", motion: "pan-right", focusPoint,
+  }), /not valid for a portrait image/);
+});
+
 test("removing a material invalidates the layout and rejects an unknown material", () => {
   let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
   story = addMaterial(story, "scene-1", imageMaterial("p1", "portrait"));
@@ -121,4 +147,13 @@ test("narration starts at an existing scene", () => {
   const result = addNarration(draft, { id: "voice-1", assetId: "audio-1", fromSceneId: "scene-1" });
   assert.equal(result.narrations[0]?.fromSceneId, "scene-1");
   assert.throws(() => addNarration(draft, { id: "voice-2", assetId: "audio-2", fromSceneId: "missing" }), /unknown scene/);
+});
+
+test("removing a scene also removes narrations anchored to it", () => {
+  let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  story = addScene(story, "scene-2");
+  story = addNarration(story, { id: "voice-1", assetId: "audio-1", fromSceneId: "scene-1" });
+  const changed = removeScene(story, "scene-1");
+  assert.deepEqual(changed.scenes.map(({ id }) => id), ["scene-2"]);
+  assert.deepEqual(changed.narrations, []);
 });

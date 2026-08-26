@@ -1,0 +1,15 @@
+{
+  "name": "@storyteller/render-queue",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@storyteller/domain": "workspace:*",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "8.21.0"
+  }
+}

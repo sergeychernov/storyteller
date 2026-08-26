@@ -73,6 +73,39 @@ export class PostgresStoryRepository implements StoryRepository {
     );
     if (result.rowCount !== 1) throw new ApplicationError(`story not found: ${story.id}`, 404);
   }
+  async deleteScene(story: Story, sceneId: string, storageKeys: readonly string[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO object_deletion_jobs (storage_key)
+         SELECT storage_key FROM scene_renders
+         WHERE story_id = $1 AND scene_id = $2 AND storage_key IS NOT NULL
+         ON CONFLICT (storage_key) DO UPDATE SET status = 'queued', attempts = 0, worker_id = NULL,
+           locked_until = NULL, error = NULL, updated_at = now()`,
+        [story.id, sceneId],
+      );
+      await client.query(
+        `INSERT INTO object_deletion_jobs (storage_key)
+         SELECT unnest($1::text[])
+         ON CONFLICT (storage_key) DO UPDATE SET status = 'queued', attempts = 0, worker_id = NULL,
+           locked_until = NULL, error = NULL, updated_at = now()`,
+        [storageKeys],
+      );
+      await client.query("DELETE FROM scene_renders WHERE story_id = $1 AND scene_id = $2", [story.id, sceneId]);
+      const result = await client.query(
+        "UPDATE stories SET status = $2, scene_count = $3, revision = $4, payload = $5 WHERE id = $1 AND profile_id = $6",
+        [story.id, story.status, story.scenes.length, story.revision, story, story.profileId],
+      );
+      if (result.rowCount !== 1) throw new ApplicationError(`story not found: ${story.id}`, 404);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   async upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary> {
     const encrypted = encryptSecret(credential.secret, this.credentialKey);
     const hint = credential.secret.length <= 4 ? "••••" : `••••${credential.secret.slice(-4)}`;

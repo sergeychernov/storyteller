@@ -4,8 +4,10 @@
   "references": [
     { "path": "../../packages/domain" },
     { "path": "../../packages/application" },
+    { "path": "../../packages/render-queue" },
     { "path": "../../packages/renderer" },
-    { "path": "../../packages/schemas" }
+    { "path": "../../packages/schemas" },
+    { "path": "../../packages/storage" }
   ],
   "include": ["src/**/*.ts"]
 }

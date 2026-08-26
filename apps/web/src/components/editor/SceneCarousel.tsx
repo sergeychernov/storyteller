@@ -3,6 +3,7 @@ import type { AuthSession, Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneCanvas } from "./SceneCanvas.js";
+import { SceneDownloadButton } from "./SceneDownloadButton.js";
 import { SceneEdgeActions } from "./SceneEdgeActions.js";
 import { buildSceneCarouselSlots, sceneCarouselKey, type SceneCarouselSlot } from "./scene-carousel-model.js";
 import styles from "./SceneCarousel.module.css";
@@ -124,7 +125,10 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
               {slot.kind === "scene" ? <>
                 <div className={classNames(styles.label, adjacent && styles.dimmed)}>
                   <strong>{slot.scene.title || `${copy.scene} ${slot.index + 1}`}</strong>
-                  <span>9:16 · {slot.scene.durationSeconds} {copy.seconds}</span>
+                  <span className={styles.labelActions}>
+                    <span>9:16 · {slot.scene.durationSeconds} {copy.seconds}</span>
+                    {active && <SceneDownloadButton scene={slot.scene} storyId={storyId} session={session} copy={copy} />}
+                  </span>
                 </div>
                 <SceneCanvas
                   scene={slot.scene}

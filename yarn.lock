@@ -3058,17 +3058,16 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@storyteller/api@workspace:apps/api"
   dependencies:
-    "@aws-sdk/client-s3": "npm:^3.0.0"
-    "@aws-sdk/lib-storage": "npm:^3.0.0"
-    "@aws-sdk/s3-request-presigner": "npm:^3.0.0"
     "@fastify/cors": "npm:11.3.0"
     "@fastify/multipart": "npm:^10.1.1"
     "@fastify/swagger": "npm:9.8.1"
     "@fastify/swagger-ui": "npm:6.1.1"
     "@storyteller/application": "workspace:*"
     "@storyteller/domain": "workspace:*"
+    "@storyteller/render-queue": "workspace:*"
     "@storyteller/renderer": "workspace:*"
     "@storyteller/schemas": "workspace:*"
+    "@storyteller/storage": "workspace:*"
     "@types/pg": "npm:8.21.0"
     fastify: "npm:5.11.3"
     fastify-type-provider-zod: "npm:7.0.0"
@@ -3136,6 +3135,16 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@storyteller/render-queue@workspace:*, @storyteller/render-queue@workspace:packages/render-queue":
+  version: 0.0.0-use.local
+  resolution: "@storyteller/render-queue@workspace:packages/render-queue"
+  dependencies:
+    "@storyteller/domain": "workspace:*"
+    "@types/pg": "npm:8.21.0"
+    pg: "npm:8.23.0"
+  languageName: unknown
+  linkType: soft
+
 "@storyteller/renderer@workspace:*, @storyteller/renderer@workspace:packages/renderer":
   version: 0.0.0-use.local
   resolution: "@storyteller/renderer@workspace:packages/renderer"
@@ -3150,6 +3159,16 @@ __metadata:
   dependencies:
     "@storyteller/domain": "workspace:*"
     zod: "npm:4.4.3"
+  languageName: unknown
+  linkType: soft
+
+"@storyteller/storage@workspace:*, @storyteller/storage@workspace:packages/storage":
+  version: 0.0.0-use.local
+  resolution: "@storyteller/storage@workspace:packages/storage"
+  dependencies:
+    "@aws-sdk/client-s3": "npm:^3.0.0"
+    "@aws-sdk/lib-storage": "npm:^3.0.0"
+    "@aws-sdk/s3-request-presigner": "npm:^3.0.0"
   languageName: unknown
   linkType: soft
 
@@ -3173,6 +3192,13 @@ __metadata:
 "@storyteller/worker@workspace:apps/worker":
   version: 0.0.0-use.local
   resolution: "@storyteller/worker@workspace:apps/worker"
+  dependencies:
+    "@storyteller/render-queue": "workspace:*"
+    "@storyteller/renderer": "workspace:*"
+    "@storyteller/storage": "workspace:*"
+    "@types/pg": "npm:8.21.0"
+    pg: "npm:8.23.0"
+    tsx: "npm:4.23.12"
   languageName: unknown
   linkType: soft
 

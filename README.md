@@ -7,7 +7,7 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 ## Workspace
 
 - `apps/api` — Fastify API with OpenAPI docs, authenticated profiles, and story routes
-- `apps/worker` — empty background-job boundary
+- `apps/worker` — PostgreSQL-backed scene render and object-cleanup worker
 - `apps/mcp` — empty peer interface to the future application layer
 - `apps/web` — React/Vite studio with account onboarding, story creation, and an editor shell
 - `apps/mobile` — Expo Router companion app shell
@@ -16,6 +16,8 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 - `packages/domain` — first small story model and lifecycle rules
 - `packages/schemas` — transport request contracts
 - `packages/renderer` — FFmpeg process boundary and the first concrete renderer for an animated still image
+- `packages/render-queue` — persistent render cache, worker leases, and object-deletion queue
+- `packages/storage` — shared local/S3 object-storage adapters for API and worker
 - `packages/publishers` — provider-neutral publication port; no adapters yet
 
 ## Commands
@@ -27,7 +29,7 @@ yarn test
 yarn check
 ```
 
-Run the API and web studio together:
+Run the API, render worker, and web studio together:
 
 ```bash
 cp .env.example .env
@@ -43,7 +45,7 @@ Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mob
 
 Production deployment of the web studio, API, worker, and MCP boundary is prepared for Railway. See [`docs/deploy-railway.md`](docs/deploy-railway.md) for service setup, variables, domains, and watch paths. The Expo mobile app is distributed separately through native app stores or EAS.
 
-The API persists profiles, sessions, stories, and encrypted platform credentials in PostgreSQL. Set `DATABASE_URL` and a base64-encoded 32-byte `PLATFORM_CREDENTIALS_KEY`; the API applies versioned migrations on startup.
+The API persists profiles, sessions, stories, render jobs, cached artifact keys, and encrypted platform credentials in PostgreSQL. Set `DATABASE_URL` and a base64-encoded 32-byte `PLATFORM_CREDENTIALS_KEY`; the API applies versioned migrations on startup. The worker uses the same `DATABASE_URL` and object-storage configuration.
 
 Generate the credentials encryption key with `openssl rand -base64 32`. It must be kept stable between deployments or existing Telegram, TikTok, and Instagram credentials will become unreadable.
 

@@ -27,6 +27,12 @@ export interface Story extends Omit<StorySummary, "sceneCount"> {
   scenes: Scene[]; narrations: { id: string; assetId: string; fromSceneId: string }[];
   music: { generationStatus: "idle" | "queued" | "running" | "ready" | "failed"; assetId?: string; applied: boolean };
 }
+export interface SceneRender {
+  id: string;
+  status: "queued" | "running" | "ready" | "failed" | "canceled";
+  sizeBytes?: number;
+  error?: string;
+}
 export async function checkHealth(): Promise<boolean> { try { return (await fetch(`${apiUrl}/health`)).ok; } catch { return false; } }
 export function signIn(email: string, password: string, name?: string): Promise<AuthSession> {
   return request("/auth/sign-in", { method: "POST", body: JSON.stringify({ email, password, ...(name ? { name } : {}) }) });
@@ -43,6 +49,9 @@ export function getStory(token: string, storyId: string): Promise<Story> {
 }
 export function createScene(token: string, storyId: string): Promise<Story> {
   return request(`/stories/${storyId}/scenes`, { method: "POST" }, token);
+}
+export function deleteScene(token: string, storyId: string, sceneId: string): Promise<Story> {
+  return request(`/stories/${storyId}/scenes/${sceneId}`, { method: "DELETE" }, token);
 }
 export function uploadSceneMaterial(token: string, storyId: string, sceneId: string, file: File): Promise<Story> {
   const form = new FormData();
@@ -67,6 +76,19 @@ export function configureStoryScene(token: string, storyId: string, sceneId: str
   durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint;
 }): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}`, { method: "PATCH", body: JSON.stringify(settings) }, token);
+}
+export function requestSceneRender(token: string, storyId: string, sceneId: string, signal?: AbortSignal): Promise<SceneRender> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/renders`, { method: "POST", ...(signal ? { signal } : {}) }, token);
+}
+export function getSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<SceneRender> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/renders/${renderId}`, signal ? { signal } : {}, token);
+}
+export async function downloadSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await fetch(`${apiUrl}/stories/${storyId}/scenes/${sceneId}/renders/${renderId}/content`, {
+    headers: { authorization: `Bearer ${token}` }, ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return response.blob();
 }
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const hasJsonBody = init.body !== undefined && init.body !== null && !(init.body instanceof FormData);

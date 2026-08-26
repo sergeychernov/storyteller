@@ -93,6 +93,12 @@
   flex: 0 0 auto;
 }
 
+.labelActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .adjacentTarget {
   position: absolute;
   z-index: 30;

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
-import { centeredFocusPoint } from "@storyteller/domain";
+import { centeredFocusPoint, createStillImageMotionPlan, verticalStoryFrame } from "@storyteller/domain";
 import type { AuthSession, FocusPoint, ImageMaterial, Scene } from "../../api.js";
 import { FocusPointEditor } from "./FocusPointEditor.js";
 import { MaterialThumbnail } from "./MaterialThumbnail.js";
-import { buildSingleImageMotionFrames, getCoverGeometry } from "./single-image-motion.js";
+import { buildSingleImageMotionFrames } from "./single-image-motion.js";
 import styles from "./SingleImageMaterial.module.css";
 
 interface SingleImageMaterialProps {
@@ -23,10 +23,16 @@ export function SingleImageMaterial({
 }: SingleImageMaterialProps) {
   const media = useRef<HTMLDivElement>(null);
   const focusPoint = scene.focusPoint ?? centeredFocusPoint;
-  const geometry = useMemo(() => getCoverGeometry(material.width, material.height), [material.height, material.width]);
+  const motionPlan = useMemo(() => createStillImageMotionPlan({
+    sourceSize: { width: material.width, height: material.height },
+    frameSize: verticalStoryFrame,
+    orientation: material.orientation,
+    motion: scene.motion,
+    focusPoint,
+  }), [focusPoint, material.height, material.orientation, material.width, scene.motion]);
   const frames = useMemo(
-    () => buildSingleImageMotionFrames(geometry, scene.motion, focusPoint),
-    [focusPoint, geometry, scene.motion],
+    () => buildSingleImageMotionFrames(motionPlan),
+    [motionPlan],
   );
 
   useEffect(() => {
@@ -48,7 +54,7 @@ export function SingleImageMaterial({
     <div
       className={styles.mediaLayer}
       ref={media}
-      style={{ width: `${geometry.width * 100}%`, height: `${geometry.height * 100}%` }}
+      style={{ width: `${motionPlan.geometry.width * 100}%`, height: `${motionPlan.geometry.height * 100}%` }}
     >
       <MaterialThumbnail storyId={storyId} material={material} session={session} presentation="preview" />
       {focusEditable && onFocusChange && <FocusPointEditor
