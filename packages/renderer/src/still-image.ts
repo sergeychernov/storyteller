@@ -50,12 +50,16 @@ export async function renderStillImage(
 ): Promise<unknown> {
   const normalized = normalizeSpec(spec);
   const result = await runner.run("ffmpeg", [
-    normalized.overwrite ? "-y" : "-n", "-v", "error", "-loop", "1", "-t", normalized.durationSeconds.toFixed(3),
+    normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "2", "-filter_complex_threads", "2",
+    "-loop", "1", "-t", normalized.durationSeconds.toFixed(3),
     "-i", normalized.sourcePath, "-filter_complex", buildStillImageFilter(normalized), "-map", "[v0]", "-an",
-    "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", String(normalized.fps),
+    "-c:v", "libx264", "-threads", "2", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", String(normalized.fps),
     "-movflags", "+faststart", normalized.outputPath,
   ]);
-  if (result.exitCode !== 0) throw new Error(`ffmpeg failed (${result.exitCode}): ${result.stderr.trim()}`);
+  if (result.exitCode !== 0) {
+    const termination = result.signal ? `signal ${result.signal}` : `exit ${result.exitCode}`;
+    throw new Error(`ffmpeg failed (${termination}): ${result.stderr.trim()}`);
+  }
   return probeMedia(normalized.outputPath, runner);
 }
 

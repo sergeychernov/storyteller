@@ -68,10 +68,23 @@ test("portrait stills zoom around the selected focus at minimum cover scale", as
   assert.equal(calls.length, 2);
   assert.equal(calls[0]?.executable, "ffmpeg");
   assert.equal(calls[0]?.args[0], "-n");
+  assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("-filter_threads"), calls[0].args.indexOf("-filter_threads") + 2), ["-filter_threads", "2"]);
+  assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("-filter_complex_threads"), calls[0].args.indexOf("-filter_complex_threads") + 2), ["-filter_complex_threads", "2"]);
+  assert.deepEqual(calls[0]?.args.slice(calls[0].args.indexOf("-threads"), calls[0].args.indexOf("-threads") + 2), ["-threads", "2"]);
   const filter = calls[0]?.args[calls[0].args.indexOf("-filter_complex") + 1] ?? "";
   assert.match(filter, /scale=2160:3840/);
   assert.match(filter, /zoompan=z='1\.130-0\.130/);
   assert.match(filter, /iw\*0\.250/);
   assert.match(filter, /ih\*0\.700/);
   assert.equal(calls[0]?.args.at(-1), "portrait.mp4");
+});
+
+test("reports the signal when ffmpeg is killed by the container", async () => {
+  const runner: MediaProcessRunner = {
+    run: () => Promise.resolve({ exitCode: null, signal: "SIGKILL", stdout: "", stderr: "" }),
+  };
+  await assert.rejects(renderStillImage({
+    sourcePath: "wide.jpg", outputPath: "wide.mp4", sourceSize: { width: 3648, height: 2736 },
+    orientation: "landscape", durationSeconds: 3, motion: "pan-left",
+  }, runner), /ffmpeg failed \(signal SIGKILL\)/);
 });

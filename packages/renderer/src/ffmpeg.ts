@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 
 export interface ProcessResult {
-  readonly exitCode: number;
+  readonly exitCode: number | null;
+  readonly signal?: NodeJS.Signals;
   readonly stdout: string;
   readonly stderr: string;
 }
@@ -20,7 +21,12 @@ export class SpawnMediaProcessRunner implements MediaProcessRunner {
       child.stdout.setEncoding("utf8").on("data", (chunk: string) => { stdout += chunk; });
       child.stderr.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
       child.on("error", reject);
-      child.on("close", (exitCode) => resolve({ exitCode: exitCode ?? -1, stdout, stderr }));
+      child.on("close", (exitCode, signal) => resolve({
+        exitCode,
+        ...(signal ? { signal } : {}),
+        stdout,
+        stderr,
+      }));
     });
   }
 }
