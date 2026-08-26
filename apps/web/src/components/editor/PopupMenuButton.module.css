@@ -1,0 +1,57 @@
+.trigger {
+  width: 27px;
+  height: 22px;
+  padding: 0 0 4px;
+  border: 1px solid #ffffff80;
+  border-radius: 999px;
+  color: #fff;
+  background: #171714c7;
+  box-shadow: 0 1px 4px #17171455;
+  font: 700 11px/1 monospace;
+  letter-spacing: -1px;
+}
+
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  border-color: #d9fb76;
+  color: #171714;
+  background: #d9fb76;
+}
+
+.menu {
+  position: fixed;
+  z-index: 900;
+  top: var(--menu-top);
+  left: var(--menu-left);
+  display: grid;
+  width: 196px;
+  padding: 5px;
+  border: 1px solid #cfcbc0;
+  border-radius: 9px;
+  background: #f8f7f2;
+  box-shadow: 0 14px 40px #17171444;
+}
+
+.menu button {
+  padding: 9px 10px;
+  border-radius: 6px;
+  color: #35352f;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+}
+
+.menu button:hover,
+.menu button:focus-visible {
+  outline: none;
+  background: #e8edda;
+}
+
+.menu .danger {
+  color: #a33f34;
+}
+
+.menu .danger:hover,
+.menu .danger:focus-visible {
+  background: #f5dfda;
+}

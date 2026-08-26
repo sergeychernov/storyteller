@@ -106,6 +106,21 @@ export async function buildApi(application: StoryApplication, options: { readonl
     }
   });
   const materialParams = storyParams.extend({ materialId: z.string().uuid() });
+  const sceneMaterialParams = sceneParams.extend({ materialId: z.string().uuid() });
+  app.delete("/stories/:storyId/scenes/:sceneId/materials/:materialId", {
+    schema: { security: bearerSecurity, params: sceneMaterialParams, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
+  }, async (request) => {
+    const profile = await authenticate(application, request);
+    const removed = await application.removeSceneMaterial(
+      profile.id, request.params.storyId, request.params.sceneId, request.params.materialId,
+    );
+    try {
+      await mediaStorage.delete(removed.material.storageKey);
+    } catch (error) {
+      request.log.error({ err: error, storageKey: removed.material.storageKey }, "could not delete removed material from object storage");
+    }
+    return serializeStory(removed.story);
+  });
   app.get("/stories/:storyId/materials/:materialId/content", {
     schema: { security: bearerSecurity, params: materialParams },
   }, async (request, reply) => {

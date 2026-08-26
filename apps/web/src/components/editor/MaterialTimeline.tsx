@@ -12,10 +12,11 @@ interface MaterialTimelineProps {
   readonly scene: Scene; readonly copy: EditorCopy; readonly saving: boolean; readonly uploading: boolean; readonly uploadCount: number;
   readonly storyId: string; readonly session: AuthSession;
   readonly variant: "default" | "mobilePanel" | "desktopPanel";
-  readonly onUpload: (files: readonly File[]) => void; readonly onReorder: (ids: readonly string[]) => void;
+  readonly onUpload: (files: readonly File[]) => void; readonly onDeleteMaterial: (materialId: string) => void;
+  readonly onReorder: (ids: readonly string[]) => void;
 }
 
-export function MaterialTimeline({ scene, copy, saving, uploading, uploadCount, storyId, session, variant, onUpload, onReorder }: MaterialTimelineProps) {
+export function MaterialTimeline({ scene, copy, saving, uploading, uploadCount, storyId, session, variant, onUpload, onDeleteMaterial, onReorder }: MaterialTimelineProps) {
   const materials = scene.materials;
   const { orderedMaterials, draggingId, dragVisual, stripRef, startDrag, moveWithKeyboard } = useMaterialDrag({ materials, saving, onReorder });
 
@@ -45,7 +46,7 @@ export function MaterialTimeline({ scene, copy, saving, uploading, uploadCount, 
           >
             <div className={classNames(styles.thumb, styles[material.orientation])}>
               <MaterialThumbnail storyId={storyId} material={material} session={session} presentation="timeline" />
-              <MaterialActions material={material} copy={copy} compact={variant === "mobilePanel"} />
+              <MaterialActions material={material} copy={copy} disabled={saving} onDelete={() => onDeleteMaterial(material.id)} />
             </div>
           </article>
         ))}

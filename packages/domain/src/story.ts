@@ -29,9 +29,10 @@ export function addMaterial(story: Story, sceneId: string, material: SceneMateri
 }
 
 export function removeMaterial(story: Story, sceneId: string, materialId: string): Story {
-  return updateScene(story, sceneId, (scene) => resetLayout({
-    ...scene, materials: scene.materials.filter(({ id }) => id !== materialId),
-  }));
+  return updateScene(story, sceneId, (scene) => {
+    if (!scene.materials.some(({ id }) => id === materialId)) throw new DomainError(`unknown material: ${materialId}`);
+    return resetLayout({ ...scene, materials: scene.materials.filter(({ id }) => id !== materialId) });
+  });
 }
 
 export function reorderMaterials(story: Story, sceneId: string, materialIds: readonly string[]): Story {

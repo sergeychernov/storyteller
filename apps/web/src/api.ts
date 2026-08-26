@@ -45,6 +45,9 @@ export function uploadSceneMaterial(token: string, storyId: string, sceneId: str
   form.append("file", file, file.name);
   return request(`/stories/${storyId}/scenes/${sceneId}/materials`, { method: "POST", body: form }, token);
 }
+export function deleteSceneMaterial(token: string, storyId: string, sceneId: string, materialId: string): Promise<Story> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/materials/${materialId}`, { method: "DELETE" }, token);
+}
 export async function getMaterialContent(token: string, storyId: string, materialId: string): Promise<Blob> {
   const response = await fetch(`${apiUrl}/stories/${storyId}/materials/${materialId}/content`, { headers: { authorization: `Bearer ${token}` } });
   if (!response.ok) await throwResponseError(response);

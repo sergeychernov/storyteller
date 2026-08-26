@@ -7,7 +7,7 @@ import { SceneEditorHeader } from "./SceneEditorHeader.js";
 import { SceneEditorTabs } from "./SceneEditorTabs.js";
 
 export function MobileStoryEditor(props: StoryEditorViewProps) {
-  const { story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, onSelect, onAdd, onUpload, onReorder, onChange } = props;
+  const { story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, onSelect, onAdd, onUpload, onDeleteMaterial, onReorder, onChange } = props;
 
   return (
     <div className={styles.editor}>
@@ -43,6 +43,7 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
         uploading={uploading}
         uploadCount={uploadCount}
         onUpload={onUpload}
+        onDeleteMaterial={onDeleteMaterial}
         onReorder={onReorder}
         onChange={onChange}
       />}

@@ -20,6 +20,7 @@ export interface StoryEditorViewProps {
   readonly onSelect: (id: string) => void;
   readonly onAdd: () => void;
   readonly onUpload: (files: readonly File[]) => void;
+  readonly onDeleteMaterial: (materialId: string) => void;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onChange: (change: SceneChange) => void;
 }

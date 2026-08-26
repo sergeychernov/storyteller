@@ -74,6 +74,10 @@ export class MediaStorage {
   createDownloadUrl(storageKey: string): Promise<DirectDownload | undefined> {
     return this.objects.createDownloadUrl?.(storageKey) ?? Promise.resolve(undefined);
   }
+
+  delete(storageKey: string): Promise<void> {
+    return this.objects.delete(storageKey);
+  }
 }
 
 async function inspectMedia(path: string, kind: "image" | "video") {

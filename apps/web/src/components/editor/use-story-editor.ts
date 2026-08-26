@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   configureStoryScene,
   createScene,
+  deleteSceneMaterial,
   uploadSceneMaterial,
   type AuthSession,
   type Story,
@@ -44,13 +45,21 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     onSuccess: update,
   });
   const reorderMutation = useReorderSceneMaterials(session.accessToken, story.id);
+  const deleteMaterialMutation = useMutation({
+    mutationFn: ({ sceneId, materialId }: { sceneId: string; materialId: string }) => deleteSceneMaterial(
+      session.accessToken, story.id, sceneId, materialId,
+    ),
+    onSuccess: update,
+  });
   const configureMutation = useMutation({
     mutationFn: ({ sceneId, change }: { sceneId: string; change: SceneChange }) => configureStoryScene(session.accessToken, story.id, sceneId, change),
     onSuccess: update,
   });
   const selected = story.scenes.find(({ id }) => id === selectedId) ?? story.scenes[0];
-  const saving = addSceneMutation.isPending || uploadMaterialsMutation.isPending || reorderMutation.isPending || configureMutation.isPending;
-  const operationError = addSceneMutation.error ?? uploadMaterialsMutation.error ?? reorderMutation.error ?? configureMutation.error;
+  const saving = addSceneMutation.isPending || uploadMaterialsMutation.isPending || deleteMaterialMutation.isPending
+    || reorderMutation.isPending || configureMutation.isPending;
+  const operationError = addSceneMutation.error ?? uploadMaterialsMutation.error ?? deleteMaterialMutation.error
+    ?? reorderMutation.error ?? configureMutation.error;
 
   function addScene() {
     addSceneMutation.reset();
@@ -73,6 +82,9 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     onAdd: addScene,
     onUpload: (files) => {
       if (selected) uploadMaterialsMutation.mutate({ sceneId: selected.id, files });
+    },
+    onDeleteMaterial: (materialId) => {
+      if (selected) deleteMaterialMutation.mutate({ sceneId: selected.id, materialId });
     },
     onReorder: (ids) => {
       if (selected) reorderMutation.mutate({ sceneId: selected.id, ids });

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addMaterial, addNarration, addScene, configureScene, createStory, getLayoutOptions, mergeMaterialOrder, reorderMaterials,
-  selectRenderer, setSceneTitle, transitionStory,
+  removeMaterial, selectRenderer, setSceneTitle, transitionStory,
 } from "./index.js";
 
 test("a render starts only when every scene has material and a renderer", () => {
@@ -24,6 +24,17 @@ test("material order determines layout choices and changing order invalidates th
   story = configureScene(story, "scene-1", { layoutId: "2+1" });
   story = reorderMaterials(story, "scene-1", ["l1", "p1", "p2"]);
   assert.equal(story.scenes[0]!.layoutId, undefined);
+});
+
+test("removing a material invalidates the layout and rejects an unknown material", () => {
+  let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  story = addMaterial(story, "scene-1", imageMaterial("p1", "portrait"));
+  story = addMaterial(story, "scene-1", imageMaterial("p2", "portrait"));
+  story = configureScene(story, "scene-1", { layoutId: "overlap-stack" });
+  const changed = removeMaterial(story, "scene-1", "p1");
+  assert.deepEqual(changed.scenes[0]!.materials.map(({ id }) => id), ["p2"]);
+  assert.equal(changed.scenes[0]!.layoutId, undefined);
+  assert.throws(() => removeMaterial(changed, "scene-1", "missing"), /unknown material/);
 });
 
 test("new materials merge into an in-progress local order", () => {

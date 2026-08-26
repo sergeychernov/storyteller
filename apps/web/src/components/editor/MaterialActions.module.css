@@ -3,13 +3,6 @@
   z-index: 3;
   top: 4px;
   right: 4px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.mobilePanel > button:first-child {
-  display: none;
 }
 
 .fileDetails {
@@ -51,4 +44,34 @@
   margin-top: 4px;
   color: #85847a;
   line-height: 1.5;
+}
+
+.deleteConfirmation {
+  margin: 0;
+  color: #55554d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.confirmationActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.confirmationActions button {
+  padding: 9px 12px;
+  font-size: 12px;
+}
+
+.confirmationActions .cancel {
+  border: 1px solid #cac7bd;
+  color: #47473f;
+  background: transparent;
+}
+
+.confirmationActions .delete {
+  color: #fff;
+  background: #a33f34;
 }

@@ -14,13 +14,14 @@ interface SceneEditorTabsProps {
   readonly storyId: string;
   readonly session: AuthSession;
   readonly onUpload: (files: readonly File[]) => void;
+  readonly onDeleteMaterial: (materialId: string) => void;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onChange: (change: { durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion }) => void;
 }
 
 type EditorTab = "materials" | "layout" | "motion";
 
-export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, storyId, session, onUpload, onReorder, onChange }: SceneEditorTabsProps) {
+export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, storyId, session, onUpload, onDeleteMaterial, onReorder, onChange }: SceneEditorTabsProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>("materials");
   const tabs: readonly { id: EditorTab; label: string }[] = [
     { id: "materials", label: `${copy.materials} · ${scene.materials.length}` },
@@ -52,6 +53,7 @@ export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, s
           uploadCount={uploadCount}
           variant="mobilePanel"
           onUpload={onUpload}
+          onDeleteMaterial={onDeleteMaterial}
           onReorder={onReorder}
         />}
         {activeTab === "layout" && <SceneInspector scene={scene} copy={copy} saving={saving} panel="layout" onChange={onChange} />}

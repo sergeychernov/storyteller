@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
-  addMaterial, addScene, configureScene, createStory, reorderMaterials,
+  addMaterial, addScene, configureScene, createStory, removeMaterial, reorderMaterials,
   type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
 } from "@storyteller/domain";
 
@@ -105,6 +105,19 @@ export class StoryApplication {
   }
   async addSceneMaterial(profileId: string, storyId: string, sceneId: string, material: NewSceneMaterial): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => addMaterial(story, sceneId, { ...material, id: randomUUID() } as SceneMaterial));
+  }
+  async removeSceneMaterial(profileId: string, storyId: string, sceneId: string, materialId: string): Promise<{
+    readonly story: Story;
+    readonly material: SceneMaterial;
+  }> {
+    const story = await this.getStory(profileId, storyId);
+    const scene = story.scenes.find(({ id }) => id === sceneId);
+    if (!scene) throw new ApplicationError(`scene not found: ${sceneId}`, 404);
+    const material = scene.materials.find(({ id }) => id === materialId);
+    if (!material) throw new ApplicationError(`material not found: ${materialId}`, 404);
+    const changed = removeMaterial(story, sceneId, materialId);
+    await this.repository.updateStory(changed);
+    return { story: changed, material };
   }
   async reorderSceneMaterials(profileId: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => reorderMaterials(story, sceneId, materialIds));

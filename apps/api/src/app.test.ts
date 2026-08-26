@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -58,7 +58,7 @@ test("protects a profile, uploads media and stores its stories", async (context)
     payload: multipart.body, headers: { ...headers, "content-type": multipart.contentType },
   });
   assert.equal(withPhoto.statusCode, 201);
-  const uploaded = withPhoto.json<{ scenes: { materials: { id: string; name: string; orientation: string; width: number; height: number }[] }[] }>().scenes[0]!.materials[0]!;
+  const uploaded = withPhoto.json<{ scenes: { materials: { id: string; name: string; orientation: string; storageKey: string; width: number; height: number }[] }[] }>().scenes[0]!.materials[0]!;
   assert.equal(uploaded.name, "portrait.png");
   assert.equal(uploaded.orientation, "landscape");
   assert.equal(uploaded.width, 1);
@@ -89,6 +89,15 @@ test("protects a profile, uploads media and stores its stories", async (context)
   });
   assert.equal(reordered.statusCode, 200);
   assert.deepEqual(reordered.json<{ scenes: { materials: { name: string }[] }[] }>().scenes[0]!.materials.map(({ name }) => name), ["second.png", "portrait.png"]);
+  const deleted = await api.inject({
+    method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}/materials/${uploaded.id}`, headers,
+  });
+  assert.equal(deleted.statusCode, 200);
+  assert.deepEqual(deleted.json<{ scenes: { materials: { name: string }[] }[] }>().scenes[0]!.materials.map(({ name }) => name), ["second.png"]);
+  assert.equal((await api.inject({
+    method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}/materials/${uploaded.id}`, headers,
+  })).statusCode, 404);
+  await assert.rejects(access(join(mediaRoot, uploaded.storageKey)), { code: "ENOENT" });
   await api.close();
 });
 
