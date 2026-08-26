@@ -38,6 +38,32 @@ test("worker processes object deletion jobs", async (context) => {
   await assert.rejects(readFile(join(root, "old/scene.mp4")), { code: "ENOENT" });
 });
 
+test("worker logs the failing render stage and persists the error", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-error-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/photo.jpg", { body: Readable.from(Buffer.from("photo")), contentType: "image/jpeg", contentLength: 5 });
+  const queue = new MemoryQueue(renderJob());
+  const errors: Array<{ message: string; details: Record<string, unknown> }> = [];
+  const worker = new SceneRenderWorker("worker-1", queue, storage, async () => {
+    throw new Error("ffmpeg test failure");
+  }, 10_000, {
+    info() {},
+    error(message, details) { errors.push({ message, details }); },
+  });
+
+  assert.equal(await worker.runOnce(), true);
+  assert.equal(queue.failed, "ffmpeg test failure");
+  assert.deepEqual(errors, [{
+    message: "scene render failed",
+    details: {
+      renderId: "render", storyId: "story", sceneId: "scene", rendererId: "still-image",
+      motion: "pan-left", durationSeconds: 5, sourceWidth: 1600, sourceHeight: 900,
+      outputWidth: 1080, outputHeight: 1920, stage: "render", error: "ffmpeg test failure",
+    },
+  }]);
+});
+
 test("worker schedules cleanup when a scene disappears during rendering", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "storyteller-worker-race-test-"));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -54,6 +80,7 @@ test("worker schedules cleanup when a scene disappears during rendering", async 
 
 class MemoryQueue implements SceneRenderQueue {
   ready?: { storageKey: string; sizeBytes: number };
+  failed?: string;
   deleted?: string;
   scheduled?: string;
   private claimed = false;
@@ -72,7 +99,7 @@ class MemoryQueue implements SceneRenderQueue {
     this.ready = { storageKey, sizeBytes };
     return Promise.resolve(true);
   }
-  fail(): Promise<void> { throw new Error("render unexpectedly failed"); }
+  fail(_renderId: string, _workerId: string, error: string): Promise<void> { this.failed = error; return Promise.resolve(); }
   scheduleDeletion(storageKey: string): Promise<void> {
     this.scheduled = storageKey;
     this.deletion = { storageKey };
