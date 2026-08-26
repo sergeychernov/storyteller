@@ -3,7 +3,9 @@ import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getStory, type AuthSession } from "../api.js";
 import { useLocalization } from "../localization.js";
+import feedbackStyles from "../styles/feedback.module.css";
 import { StoryEditor } from "./editor/StoryEditor.js";
+import styles from "./StoryDetails.module.css";
 
 interface StoryDetailsProps { readonly session: AuthSession; readonly storyId: string; readonly sceneId: string | undefined }
 
@@ -30,8 +32,8 @@ export function StoryDetails({ session, storyId, sceneId }: StoryDetailsProps) {
     onSelect={(id) => navigate(`/stories/${storyId}/scenes/${id}`, { replace: true })}
   />;
 
-  return <section className="scene-editor-loading">
-    <Link className="back-link" to="/stories">← {t("web.story.back")}</Link>
-    {story.isError ? <p className="error">{t("common.error")}</p> : <div className="empty-card">{t("web.story.loading")}</div>}
+  return <section className={styles.loading}>
+    <Link className={feedbackStyles.backLink} to="/stories">← {t("web.story.back")}</Link>
+    {story.isError ? <p className={feedbackStyles.error}>{t("common.error")}</p> : <div className={feedbackStyles.emptyCard}>{t("web.story.loading")}</div>}
   </section>;
 }

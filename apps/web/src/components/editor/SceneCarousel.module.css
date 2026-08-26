@@ -1,0 +1,187 @@
+.carousel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 20px;
+  height: 100%;
+  min-height: 0;
+}
+
+.viewport {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 28px 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  outline: none;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 28px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.viewport:focus-visible {
+  box-shadow: inset 0 0 0 2px #879b48;
+}
+
+.slide {
+  position: relative;
+  display: grid;
+  flex: 0 0 calc(100% - 72px);
+  grid-template-rows: 26px minmax(0, 1fr);
+  place-items: stretch center;
+  min-width: 0;
+  height: 100%;
+  opacity: 0.28;
+  filter: saturate(0.55);
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  transform: scale(0.94);
+  transition: opacity 0.2s ease, filter 0.2s ease, transform 0.2s ease;
+}
+
+.slide:first-child {
+  margin-left: 36px;
+}
+
+.slide:last-child {
+  margin-right: 36px;
+}
+
+.active {
+  opacity: 1;
+  filter: none;
+  transform: scale(1);
+}
+
+.adjacent {
+  opacity: 1;
+  filter: none;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  color: #7b7b72;
+  font-size: 9px;
+}
+
+.label.dimmed {
+  opacity: 0.48;
+  filter: saturate(0.72);
+}
+
+.label strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #505048;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label span {
+  flex: 0 0 auto;
+}
+
+.adjacentTarget {
+  position: absolute;
+  z-index: 30;
+  inset-block: 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: #455126;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.adjacentTarget.previous {
+  right: 0;
+}
+
+.adjacentTarget.next {
+  left: 0;
+}
+
+.adjacentTarget span {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 46px;
+  border: 1px solid #9cac69;
+  background: #d9fb76;
+  box-shadow: 0 5px 14px #29291f26;
+}
+
+.adjacentTarget.previous span {
+  justify-self: end;
+  border-radius: 8px 0 0 8px;
+}
+
+.adjacentTarget.next span {
+  justify-self: start;
+  border-radius: 0 8px 8px 0;
+}
+
+.adjacentTarget:hover span {
+  background: #e3ff91;
+}
+
+.adjacentTarget:focus-visible {
+  outline: none;
+}
+
+.adjacentTarget:focus-visible span {
+  outline: 2px solid #7f9148;
+  outline-offset: 1px;
+}
+
+.swipeHint {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: #8b8a81;
+  font-size: 9px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .viewport {
+    padding-right: max(28px, calc((100% - 700px) / 2));
+    padding-left: max(28px, calc((100% - 700px) / 2));
+    scroll-padding-inline: max(28px, calc((100% - 700px) / 2));
+  }
+
+  .slide {
+    flex-basis: min(calc(100% - 72px), 628px);
+  }
+}
+
+@media (max-height: 640px) {
+  .viewport {
+    padding-top: 7px;
+  }
+
+  .swipeHint {
+    display: none;
+  }
+
+  .carousel {
+    grid-template-rows: minmax(0, 1fr);
+  }
+}

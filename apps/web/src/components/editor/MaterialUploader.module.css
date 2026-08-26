@@ -1,0 +1,58 @@
+.addCard {
+  display: grid;
+  flex: 0 0 70px;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  width: 70px;
+  min-height: 92px;
+  padding: 8px 6px;
+  border: 1px dashed #aeb49b;
+  border-radius: 8px;
+  color: #596331;
+  background: #f1f5e6;
+  text-align: center;
+}
+
+.addCard:hover {
+  border-color: #869550;
+  background: #e9f2d3;
+}
+
+.addCard span {
+  font-size: 23px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.addCard strong {
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.addCard.loading {
+  align-content: center;
+}
+
+.addCard.loading::before {
+  margin: 0;
+  border-color: #6f7f4055;
+  border-top-color: #6f7f40;
+}
+
+.addCard.loading span {
+  display: none;
+}
+
+.visuallyHidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+}

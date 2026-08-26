@@ -1,0 +1,119 @@
+.backdrop {
+  position: fixed;
+  z-index: 1400;
+  inset: 0;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  background: #17171475;
+  backdrop-filter: blur(2px);
+}
+
+.sheet {
+  display: grid;
+  grid-template-rows: 5px auto minmax(0, 1fr) auto;
+  gap: 12px;
+  width: min(100%, 560px);
+  max-height: min(78dvh, 680px);
+  padding: 8px 14px max(14px, env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+  color: #292923;
+  background: #f8f7f2;
+  box-shadow: 0 -18px 54px #17171445;
+}
+
+.grabber {
+  justify-self: center;
+  width: 42px;
+  height: 4px;
+  border-radius: 8px;
+  background: #cfcdc4;
+}
+
+.sheet > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet > header div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sheet > header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.sheet > header span {
+  color: #8b8a81;
+  font-size: 11px;
+}
+
+.sheet > header button {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: #5a5a52;
+  background: #ebe9e2;
+}
+
+.list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.list > button {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid transparent;
+  color: #34352d;
+  background: #eeece5;
+  text-align: left;
+}
+
+.list > button.active {
+  border-color: #9cac69;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px #dce5c2;
+}
+
+.list > button span {
+  color: #849258;
+  font: 10px/1 monospace;
+}
+
+.list > button strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list > button small {
+  color: #898980;
+  font-size: 9px;
+}
+
+.list > p {
+  color: #85867c;
+  font-size: 11px;
+  text-align: center;
+}
+
+.add {
+  width: 100%;
+  border: 1px dashed #aeb49b;
+  color: #292a23;
+  background: #eff4df;
+  font-size: 11px;
+}

@@ -1,0 +1,11 @@
+.json {
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 6px;
+  color: #dbe9b0;
+  background: #20201c;
+  font: 10px/1.55 monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

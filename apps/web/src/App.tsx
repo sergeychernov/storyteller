@@ -13,7 +13,7 @@ export function App() {
   const editingStory = /^\/stories\/[^/]+(?:\/scenes\/[^/]+)?\/?$/.test(pathname);
 
   return (
-    <div className="app-shell">
+    <div>
       {!editingStory && <AppHeader />}
       <Routes>
         <Route path="/" element={<Navigate to={defaultPath} replace />} />

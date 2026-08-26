@@ -1,0 +1,38 @@
+.card {
+  display: grid;
+  grid-template-columns: 54px 1fr auto;
+  align-items: center;
+  gap: 13px;
+  padding: 10px;
+  border: 1px solid #dedbd2;
+  border-radius: 9px;
+  color: #222;
+  background: #fff;
+  text-align: left;
+  text-decoration: none;
+}
+
+.card:hover {
+  border-color: #8c9d58;
+  box-shadow: 0 0 0 2px #dce6c2;
+}
+
+.preview {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 7px;
+  background: #dfe9c3;
+  font-family: serif;
+  font-size: 22px;
+}
+
+.info {
+  display: grid;
+  gap: 5px;
+}
+
+.info small {
+  color: #85847a;
+}

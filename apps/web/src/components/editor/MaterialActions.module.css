@@ -1,0 +1,54 @@
+.actions {
+  position: absolute;
+  z-index: 3;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.mobilePanel > button:first-child {
+  display: none;
+}
+
+.fileDetails {
+  display: grid;
+  gap: 9px;
+  margin: 0;
+}
+
+.fileDetails div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.fileDetails dt {
+  color: #85847a;
+  font-size: 11px;
+}
+
+.fileDetails dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.futureTools {
+  display: grid;
+  gap: 8px;
+}
+
+.futureTools button {
+  color: #4c4c44;
+  background: #eceae3;
+  text-align: left;
+}
+
+.futureTools small {
+  margin-top: 4px;
+  color: #85847a;
+  line-height: 1.5;
+}

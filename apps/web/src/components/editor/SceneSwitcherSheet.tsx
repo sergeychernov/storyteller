@@ -1,7 +1,10 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { Scene } from "../../api.js";
+import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
+import sharedStyles from "./editor-shared.module.css";
+import styles from "./SceneSwitcherSheet.module.css";
 
 interface SceneSwitcherSheetProps {
   readonly open: boolean;
@@ -24,18 +27,18 @@ export function SceneSwitcherSheet({ open, scenes, selectedId, copy, adding, onC
 
   if (!open) return null;
   return createPortal(
-    <div className="scene-switcher-backdrop" onPointerDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <section className="scene-switcher-sheet" role="dialog" aria-modal="true" aria-label={copy.scenes}>
-        <div className="scene-switcher-grabber" />
+    <div className={styles.backdrop} onPointerDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <section className={styles.sheet} role="dialog" aria-modal="true" aria-label={copy.scenes}>
+        <div className={styles.grabber} />
         <header>
           <div><h2>{copy.scenes}</h2><span>{scenes.length}</span></div>
           <button type="button" aria-label={copy.close} onClick={onClose}>×</button>
         </header>
-        <div className="scene-switcher-list">
+        <div className={styles.list}>
           {scenes.map((scene, index) => (
             <button
               type="button"
-              className={scene.id === selectedId ? "active" : ""}
+              className={scene.id === selectedId ? styles.active : undefined}
               key={scene.id}
               onClick={() => { onSelect(scene.id); onClose(); }}
             >
@@ -48,7 +51,7 @@ export function SceneSwitcherSheet({ open, scenes, selectedId, copy, adding, onC
         </div>
         <button
           type="button"
-          className={`scene-switcher-add ${adding ? "loading-button" : ""}`}
+          className={classNames(styles.add, adding && sharedStyles.loading)}
           disabled={adding}
           onClick={() => { onAdd(); onClose(); }}
         >

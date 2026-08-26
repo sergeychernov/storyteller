@@ -1,0 +1,108 @@
+.section {
+  min-width: 0;
+}
+
+.strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 11px 0 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.card {
+  flex: 0 0 auto;
+  padding: 5px;
+  border: 1px solid #d0cdc4;
+  border-radius: 8px;
+  background: #f8f7f2;
+  cursor: grab;
+  touch-action: none;
+  transition: opacity 0.15s, border-color 0.15s, transform 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.card.portrait {
+  width: 78px;
+}
+
+.card.landscape {
+  width: 104px;
+}
+
+.card:active {
+  cursor: grabbing;
+}
+
+.card:focus-visible {
+  outline: 2px solid #7f9148;
+  outline-offset: 2px;
+}
+
+.disabled {
+  cursor: default;
+}
+
+.dragging {
+  z-index: 2;
+  border-color: #7f9148;
+  opacity: 0.22;
+  transform: scale(0.96);
+}
+
+.thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 90px;
+  margin: auto;
+  overflow: hidden;
+  border-radius: 5px;
+  color: #fff;
+  background: #515d39;
+}
+
+.thumb.landscape {
+  width: 94px;
+  height: 56px;
+  background: #647c82;
+}
+
+.mobilePanel .strip {
+  padding-top: 7px;
+}
+
+.mobilePanel .card.portrait,
+.desktopPanel .card.portrait {
+  width: 70px;
+}
+
+.mobilePanel .card.landscape,
+.desktopPanel .card.landscape {
+  width: 96px;
+}
+
+.mobilePanel .thumb,
+.desktopPanel .thumb {
+  width: 60px;
+  height: 80px;
+}
+
+.mobilePanel .thumb.landscape,
+.desktopPanel .thumb.landscape {
+  width: 86px;
+  height: 51px;
+}
+
+.desktopPanel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.desktopPanel .strip {
+  height: 100%;
+  padding: 7px 0 2px;
+}

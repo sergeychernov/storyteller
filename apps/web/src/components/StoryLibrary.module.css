@@ -1,0 +1,42 @@
+.content {
+  min-height: calc(100vh - 70px);
+  padding: 38px clamp(24px, 6vw, 96px) 60px;
+  overflow: hidden;
+}
+
+.head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.head h1 {
+  margin: 0;
+  font-size: 38px;
+  letter-spacing: -0.05em;
+}
+
+.head form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.head input {
+  width: 220px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 28px 0 42px;
+}
+
+@media (max-width: 800px) {
+  .head {
+    flex-direction: column;
+    align-items: start;
+  }
+}

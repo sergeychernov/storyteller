@@ -1,0 +1,72 @@
+.action {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  color: #5a5a52;
+  background: #ebe9e2;
+  font: 600 9px/1 monospace;
+  text-transform: lowercase;
+}
+
+.action:hover {
+  color: #3f4d20;
+  background: #dfe8c7;
+}
+
+.inverted {
+  border: 1px solid #ffffff80;
+  color: #fff;
+  background: #171714c7;
+  box-shadow: 0 1px 4px #17171455;
+}
+
+.inverted:hover {
+  border-color: #d9fb76;
+  color: #171714;
+  background: #d9fb76;
+}
+
+.backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #17171475;
+  backdrop-filter: blur(2px);
+}
+
+.dialog {
+  width: min(430px, 100%);
+  max-height: min(640px, 85vh);
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid #cfcbc0;
+  border-radius: 10px;
+  color: #292923;
+  background: #f8f7f2;
+  box-shadow: 0 24px 70px #17171455;
+}
+
+.dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.dialog h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.dialog > header button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: #5a5a52;
+  background: #ebe9e2;
+}

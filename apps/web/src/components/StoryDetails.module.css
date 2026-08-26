@@ -1,0 +1,4 @@
+.loading {
+  min-height: 100dvh;
+  padding: max(24px, env(safe-area-inset-top)) 24px 40px;
+}

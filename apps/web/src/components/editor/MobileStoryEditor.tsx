@@ -1,3 +1,6 @@
+import { classNames } from "../../class-names.js";
+import sharedStyles from "./editor-shared.module.css";
+import styles from "./MobileStoryEditor.module.css";
 import type { StoryEditorViewProps } from "./story-editor-view.js";
 import { SceneCarousel } from "./SceneCarousel.js";
 import { SceneEditorHeader } from "./SceneEditorHeader.js";
@@ -7,7 +10,7 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
   const { story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, onSelect, onAdd, onUpload, onReorder, onChange } = props;
 
   return (
-    <div className="focus-story-editor">
+    <div className={styles.editor}>
       <SceneEditorHeader
         storyTitle={story.title}
         scenes={story.scenes}
@@ -18,8 +21,8 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
         onSelect={onSelect}
         onAdd={onAdd}
       />
-      {operationErrorMessage && <div className="editor-operation-error focus-editor-error" role="alert">{operationErrorMessage}</div>}
-      <div className="focus-editor-stage">
+      {operationErrorMessage && <div className={classNames(sharedStyles.operationError, styles.operationError)} role="alert">{operationErrorMessage}</div>}
+      <div className={styles.stage}>
         <SceneCarousel
           scenes={story.scenes}
           selectedId={selected?.id ?? ""}

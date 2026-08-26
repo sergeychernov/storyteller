@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Scene } from "../../api.js";
+import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneSwitcherSheet } from "./SceneSwitcherSheet.js";
+import styles from "./SceneEditorHeader.module.css";
 
 interface SceneEditorHeaderProps {
   readonly storyTitle: string | undefined;
@@ -21,13 +23,13 @@ export function SceneEditorHeader({ storyTitle, scenes, selectedId, copy, saving
   const selectedIndex = scenes.findIndex(({ id }) => id === selectedId);
   const selected = selectedIndex >= 0 ? scenes[selectedIndex] : undefined;
   return <>
-    <header className="scene-editor-header">
-      <Link className="scene-editor-back" to="/stories" aria-label={copy.allStories}>‹</Link>
-      <button type="button" className="scene-editor-title" aria-haspopup="dialog" onClick={() => setSwitcherOpen(true)}>
+    <header className={styles.header}>
+      <Link className={styles.back} to="/stories" aria-label={copy.allStories}>‹</Link>
+      <button type="button" className={styles.title} aria-haspopup="dialog" onClick={() => setSwitcherOpen(true)}>
         <strong>{selected ? selected.title || `${copy.scene} ${selectedIndex + 1}` : copy.noScenes} <span>⌄</span></strong>
         <small>{storyTitle || copy.untitledStory}{scenes.length ? ` · ${selectedIndex + 1}/${scenes.length}` : ""}</small>
       </button>
-      <span className={`scene-save-state${saving ? " saving" : ""}`} role="status" aria-label={saving ? copy.saving : copy.saved}>
+      <span className={classNames(styles.saveState, saving && styles.saving)} role="status" aria-label={saving ? copy.saving : copy.saved}>
         {saving ? "●" : "✓"}
       </span>
     </header>

@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AuthSession, Scene } from "../../api.js";
+import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneCanvas } from "./SceneCanvas.js";
 import { SceneEdgeActions } from "./SceneEdgeActions.js";
 import { buildSceneCarouselSlots, sceneCarouselKey, type SceneCarouselSlot } from "./scene-carousel-model.js";
+import styles from "./SceneCarousel.module.css";
 
 interface SceneCarouselProps {
   readonly scenes: readonly Scene[];
@@ -81,9 +83,9 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
 
   const activeIndex = Math.max(0, slots.findIndex(({ key }) => key === activeKey));
   return (
-    <section className="scene-carousel" aria-label={copy.sceneCarousel}>
+    <section className={styles.carousel} aria-label={copy.sceneCarousel}>
       <div
-        className="scene-carousel-viewport"
+        className={styles.viewport}
         ref={viewport}
         tabIndex={0}
         onScroll={handleScroll}
@@ -100,36 +102,52 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
       >
         {slots.map((slot, slotIndex) => {
           const active = slot.key === activeKey;
-          const edgeClass = slot.kind === "edge" ? ` edge-${slot.edge}` : "";
-          const adjacentClass = slotIndex === activeIndex - 1
-            ? " adjacent-previous"
+          const adjacent = slotIndex === activeIndex - 1
+            ? "previous"
             : slotIndex === activeIndex + 1
-              ? " adjacent-next"
-              : "";
+              ? "next"
+              : undefined;
           const edgeTitle = slot.kind === "edge"
             ? slot.edge === "before" ? copy.storyStart : slot.edge === "after" ? copy.storyEnd : copy.noScenes
             : "";
           return (
             <article
-              className={`scene-carousel-slide${active ? " active" : ""}${edgeClass}${adjacentClass}`}
+              className={classNames(styles.slide, active && styles.active, adjacent && styles.adjacent)}
               data-carousel-key={slot.key}
               key={slot.key}
               aria-label={slot.kind === "scene" ? `${copy.scene} ${slot.index + 1}` : undefined}
               aria-current={active ? "true" : undefined}
             >
               {slot.kind === "scene" ? <>
-                <div className="carousel-scene-label">
+                <div className={classNames(styles.label, adjacent && styles.dimmed)}>
                   <strong>{slot.scene.title || `${copy.scene} ${slot.index + 1}`}</strong>
                   <span>9:16 · {slot.scene.durationSeconds} {copy.seconds}</span>
                 </div>
-                <SceneCanvas scene={slot.scene} copy={copy} storyId={storyId} session={session} />
+                <SceneCanvas
+                  scene={slot.scene}
+                  copy={copy}
+                  storyId={storyId}
+                  session={session}
+                  presentation="carousel"
+                  adjacent={adjacent}
+                  dimmed={Boolean(adjacent)}
+                  inactive={!active}
+                />
               </> : <>
-                <div className="carousel-scene-label"><strong>{edgeTitle}</strong></div>
-                <SceneEdgeActions copy={copy} adding={adding} active={active} onAdd={onAdd} />
+                <div className={classNames(styles.label, adjacent && styles.dimmed)}><strong>{edgeTitle}</strong></div>
+                <SceneEdgeActions
+                  copy={copy}
+                  adding={adding}
+                  active={active}
+                  onAdd={onAdd}
+                  variant={slot.edge === "empty" ? "carouselEmpty" : "default"}
+                  adjacent={adjacent}
+                  dimmed={Boolean(adjacent)}
+                />
               </>}
               {!active && (slotIndex === activeIndex - 1 || slotIndex === activeIndex + 1) && <button
                 type="button"
-                className={`scene-adjacent-click-target ${slotIndex < activeIndex ? "previous" : "next"}`}
+                className={classNames(styles.adjacentTarget, slotIndex < activeIndex ? styles.previous : styles.next)}
                 aria-label={slot.kind === "scene" ? `${copy.openScene} ${slot.index + 1}` : edgeTitle}
                 onClick={() => {
                   setActiveKey(slot.key);
@@ -141,7 +159,7 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
           );
         })}
       </div>
-      <p className="scene-swipe-hint">{copy.swipeScenes}</p>
+      <p className={styles.swipeHint}>{copy.swipeScenes}</p>
     </section>
   );
 }

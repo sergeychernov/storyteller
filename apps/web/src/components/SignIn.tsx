@@ -2,6 +2,9 @@ import { useMutation } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
 import { ApiError, signIn, type AuthSession } from "../api.js";
 import { useLocalization } from "../localization.js";
+import feedbackStyles from "../styles/feedback.module.css";
+import typographyStyles from "../styles/typography.module.css";
+import styles from "./SignIn.module.css";
 
 interface SignInProps { readonly onAuthenticated: (session: AuthSession) => void }
 
@@ -30,18 +33,18 @@ export function SignIn({ onAuthenticated }: SignInProps) {
   }
 
   return (
-    <section className="welcome">
-      <p className="eyebrow">{t("web.welcome.eyebrow")}</p>
+    <section className={styles.welcome}>
+      <p className={typographyStyles.eyebrow}>{t("web.welcome.eyebrow")}</p>
       <h1>{t("web.welcome.title.first")}<br /><em>{t("web.welcome.title.second")}</em></h1>
-      <p className="welcome-copy">{t("web.welcome.copy")}</p>
-      <form className="account-form" onSubmit={submit}>
+      <p className={styles.copy}>{t("web.welcome.copy")}</p>
+      <form className={styles.form} onSubmit={submit}>
         <input aria-label={t("web.welcome.email.label")} type="email" value={email} onChange={(event) => changeEmail(event.target.value)} placeholder={t("web.welcome.email.placeholder")} />
         <input aria-label={t("web.welcome.password.label")} type="password" minLength={10} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t("web.welcome.password.placeholder")} />
         {requiresName && <input autoFocus aria-label={t("web.welcome.name.label")} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("web.welcome.name.placeholder")} />}
         <button disabled={mutation.isPending}>{mutation.isPending ? t("web.welcome.signingIn") : t("web.welcome.login")}</button>
       </form>
-      {requiresName && <p className="auth-hint">{t("web.welcome.nameNeeded")}</p>}
-      {mutation.error && !isNameRequired(mutation.error) && <p className="error">{t("common.error")}</p>}
+      {requiresName && <p className={styles.hint}>{t("web.welcome.nameNeeded")}</p>}
+      {mutation.error && !isNameRequired(mutation.error) && <p className={feedbackStyles.error}>{t("common.error")}</p>}
     </section>
   );
 }

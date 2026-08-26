@@ -1,15 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { getMaterialContent, type AuthSession, type SceneMaterial } from "../../api.js";
+import { classNames } from "../../class-names.js";
+import styles from "./MaterialThumbnail.module.css";
 
 interface MaterialThumbnailProps {
   readonly storyId: string;
   readonly material: SceneMaterial;
   readonly session: AuthSession;
+  readonly presentation: "preview" | "timeline";
   readonly className?: string;
 }
 
-export function MaterialThumbnail({ storyId, material, session, className = "" }: MaterialThumbnailProps) {
+export function MaterialThumbnail({ storyId, material, session, presentation, className }: MaterialThumbnailProps) {
   const [url, setUrl] = useState<string>();
   const content = useQuery({
     queryKey: ["material-content", storyId, material.id],
@@ -24,8 +27,9 @@ export function MaterialThumbnail({ storyId, material, session, className = "" }
     return () => URL.revokeObjectURL(objectUrl);
   }, [content.data]);
 
-  if (!url) return <span className={`material-media-placeholder ${className}`}>{material.kind === "video" ? "▶" : "◫"}</span>;
+  const mediaClassName = classNames(styles[presentation], className);
+  if (!url) return <span className={classNames(styles.placeholder, mediaClassName)}>{material.kind === "video" ? "▶" : "◫"}</span>;
   return material.kind === "video"
-    ? <video className={`material-media ${className}`} src={url} muted playsInline preload="metadata" />
-    : <img className={`material-media ${className}`} src={url} alt="" draggable={false} />;
+    ? <video className={classNames(styles.media, mediaClassName)} src={url} muted playsInline preload="metadata" />
+    : <img className={classNames(styles.media, mediaClassName)} src={url} alt="" draggable={false} />;
 }

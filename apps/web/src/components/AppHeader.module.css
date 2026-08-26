@@ -1,0 +1,66 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 70px;
+  padding: 0 28px;
+  color: #fff;
+  background: #12120f;
+}
+
+.brand {
+  color: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.brand span {
+  color: #d9fb76;
+  font-weight: 400;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9b9b91;
+  font-size: 12px;
+}
+
+.status::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d16757;
+  content: "";
+}
+
+.online::before {
+  background: #bde958;
+  box-shadow: 0 0 8px #bde958;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: #222;
+  background: #e7e3d9;
+  font-size: 11px;
+}
+
+@media (max-width: 800px) {
+  .status {
+    display: none;
+  }
+}

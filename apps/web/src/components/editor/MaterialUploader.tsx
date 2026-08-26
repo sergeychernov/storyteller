@@ -1,5 +1,8 @@
 import { useRef } from "react";
+import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
+import sharedStyles from "./editor-shared.module.css";
+import styles from "./MaterialUploader.module.css";
 
 interface MaterialUploaderProps {
   readonly copy: EditorCopy;
@@ -14,13 +17,13 @@ export function MaterialUploader({ copy, disabled, uploading, uploadCount, onUpl
 
   return (
     <>
-      <button type="button" className={`material-add-card ${uploading ? "loading-button" : ""}`} disabled={disabled} onClick={() => input.current?.click()}>
+      <button type="button" className={classNames(styles.addCard, uploading && styles.loading, uploading && sharedStyles.loading)} disabled={disabled} onClick={() => input.current?.click()}>
         <span aria-hidden="true">＋</span>
         <strong>{uploading ? copy.uploadingMaterials.replace("{{count}}", String(uploadCount)) : copy.addMaterial}</strong>
       </button>
       <input
         ref={input}
-        className="visually-hidden"
+        className={styles.visuallyHidden}
         type="file"
         aria-hidden="true"
         tabIndex={-1}

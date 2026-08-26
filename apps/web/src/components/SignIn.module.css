@@ -1,0 +1,43 @@
+.welcome {
+  min-height: calc(100vh - 70px);
+  padding: 11vh 10vw;
+  background: radial-gradient(circle at 80% 10%, #e2f2b6 0, transparent 34%), #f3f1eb;
+}
+
+.welcome h1 {
+  max-width: 850px;
+  margin: 0;
+  font-size: clamp(48px, 7vw, 96px);
+  font-weight: 500;
+  letter-spacing: -0.06em;
+  line-height: 0.98;
+}
+
+.welcome h1 em {
+  color: #697c37;
+  font-family: "Playfair Display", serif;
+}
+
+.copy {
+  max-width: 540px;
+  margin: 34px 0;
+  color: #6a6a61;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.form input {
+  width: min(360px, 58vw);
+}
+
+.hint {
+  margin-top: 12px;
+  color: #697c37;
+  font-size: 13px;
+}

@@ -1,0 +1,103 @@
+.header {
+  display: grid;
+  flex: 0 0 58px;
+  grid-template-columns: 190px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 58px;
+  padding: 0 18px;
+  color: #fff;
+  background: #12120f;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #d9fb76;
+  font-size: 21px;
+  text-decoration: none;
+}
+
+.back span {
+  overflow: hidden;
+  color: #deded6;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.back:hover span {
+  color: #fff;
+}
+
+.title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.title strong,
+.title small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title strong {
+  font-size: 14px;
+}
+
+.title small {
+  color: #a7a79e;
+  font-size: 10px;
+}
+
+.saveState {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #c7c7be;
+  font-size: 10px;
+}
+
+.saveState i {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  color: #25261f;
+  background: #d9fb76;
+  font-style: normal;
+}
+
+.saving i {
+  color: #d9fb76;
+  background: #2b2c25;
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+.compact {
+  grid-template-columns: 160px minmax(0, 1fr) auto;
+  padding-inline: 12px;
+}
+
+.compact .saveState {
+  font-size: 0;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+
+@media (min-width: 1380px) {
+  .header:not(.compact) {
+    grid-template-columns: 220px minmax(0, 1fr) auto;
+    padding-inline: 22px;
+  }
+}

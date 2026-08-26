@@ -1,0 +1,84 @@
+.actions {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: 9 / 16;
+  padding: 20px;
+  overflow: hidden;
+  border: 1px dashed #aeb49b;
+  border-radius: 8px;
+  color: #484a3f;
+  background: #f3f5e9;
+  box-shadow: 0 14px 34px #29291f18;
+  text-align: center;
+}
+
+.carouselEmpty {
+  width: 100%;
+  aspect-ratio: auto;
+}
+
+.desktopEmpty {
+  max-height: min(620px, calc(100dvh - 110px));
+}
+
+.dimmed {
+  opacity: 0.48;
+  filter: saturate(0.72);
+}
+
+.previous {
+  justify-self: end;
+}
+
+.next {
+  justify-self: start;
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #4f5e2c;
+  background: #d9fb76;
+  font-size: 24px;
+  font-weight: 300;
+}
+
+.actions p {
+  max-width: 250px;
+  margin: 0;
+  color: #77786e;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.actions small {
+  color: #999a91;
+  font-size: 8px;
+}
+
+.buttons {
+  display: grid;
+  gap: 7px;
+  width: min(100%, 230px);
+  margin-top: 4px;
+}
+
+.buttons button {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 10px;
+}
+
+.primaryAction {
+  background: #24251e;
+}

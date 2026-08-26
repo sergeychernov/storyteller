@@ -1,15 +1,23 @@
 import type { SceneMaterial } from "../../api.js";
+import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MiniDialogButton } from "./MiniDialogButton.js";
+import styles from "./MaterialActions.module.css";
 
-export function MaterialActions({ material, copy }: { readonly material: SceneMaterial; readonly copy: EditorCopy }) {
+interface MaterialActionsProps {
+  readonly material: SceneMaterial;
+  readonly copy: EditorCopy;
+  readonly compact: boolean;
+}
+
+export function MaterialActions({ material, copy, compact }: MaterialActionsProps) {
   const audio = material.kind === "video"
     ? material.audioTags.length ? material.audioTags.map((tag) => copy[tag]).join(", ") : material.hasAudio ? copy.audioUnclassified : copy.silent
     : undefined;
 
-  return <div className="material-actions">
-    <MiniDialogButton code="i" label={copy.fileInfo} title={copy.fileInfo} closeLabel={copy.close}>
-      <dl className="file-details">
+  return <div className={classNames(styles.actions, compact && styles.mobilePanel)}>
+    <MiniDialogButton code="i" label={copy.fileInfo} title={copy.fileInfo} closeLabel={copy.close} inverted>
+      <dl className={styles.fileDetails}>
         <div><dt>{copy.fileName}</dt><dd>{material.name}</dd></div>
         <div><dt>{copy.fileSize}</dt><dd>{formatFileSize(material.sizeBytes)}</dd></div>
         <div><dt>{copy.fileFormat}</dt><dd>{material.mimeType}</dd></div>
@@ -18,8 +26,8 @@ export function MaterialActions({ material, copy }: { readonly material: SceneMa
         {audio && <div><dt>{copy.sourceAudio}</dt><dd>{audio}</dd></div>}
       </dl>
     </MiniDialogButton>
-    <MiniDialogButton code="e" label={copy.editMaterial} title={copy.editMaterial} closeLabel={copy.close}>
-      <div className="future-tools">
+    <MiniDialogButton code="e" label={copy.editMaterial} title={copy.editMaterial} closeLabel={copy.close} inverted>
+      <div className={styles.futureTools}>
         <button type="button" disabled>{copy.cropMaterial}</button>
         {material.kind === "video" && <button type="button" disabled>{copy.trimMaterial}</button>}
         <small>{copy.materialEditorHint}</small>

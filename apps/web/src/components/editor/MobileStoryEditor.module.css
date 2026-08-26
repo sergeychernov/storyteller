@@ -1,0 +1,21 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 520px;
+  overflow: hidden;
+  background: #ebe9e2;
+}
+
+.operationError {
+  flex: 0 0 auto;
+  grid-column: auto;
+  padding: 7px 14px;
+}
+
+.stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}

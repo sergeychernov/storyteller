@@ -1,0 +1,24 @@
+.languageSwitcher {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #9b9b91;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.languageSwitcher select {
+  width: auto;
+  padding: 6px 25px 6px 8px;
+  border-color: #3b3b35;
+  color: #fff;
+  background: #22221e;
+  font-size: 11px;
+}
+
+@media (max-width: 800px) {
+  .languageSwitcher > span {
+    display: none;
+  }
+}

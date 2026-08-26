@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { classNames } from "../../class-names.js";
+import styles from "./MiniDialogButton.module.css";
 
 interface MiniDialogButtonProps {
   readonly code: string;
@@ -7,9 +9,10 @@ interface MiniDialogButtonProps {
   readonly title: string;
   readonly closeLabel: string;
   readonly children: ReactNode;
+  readonly inverted?: boolean;
 }
 
-export function MiniDialogButton({ code, label, title, closeLabel, children }: MiniDialogButtonProps) {
+export function MiniDialogButton({ code, label, title, closeLabel, children, inverted = false }: MiniDialogButtonProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -20,10 +23,10 @@ export function MiniDialogButton({ code, label, title, closeLabel, children }: M
   }, [open]);
 
   return <>
-    <button type="button" className="mini-action" aria-label={label} title={label} onClick={() => setOpen(true)}>{code}</button>
+    <button type="button" className={classNames(styles.action, inverted && styles.inverted)} aria-label={label} title={label} onClick={() => setOpen(true)}>{code}</button>
     {open && createPortal(
-      <div className="mini-dialog-backdrop" onMouseDown={(event) => { if (event.currentTarget === event.target) setOpen(false); }}>
-        <section className="mini-dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <div className={styles.backdrop} onMouseDown={(event) => { if (event.currentTarget === event.target) setOpen(false); }}>
+        <section className={styles.dialog} role="dialog" aria-modal="true" aria-label={title}>
           <header><h3>{title}</h3><button type="button" aria-label={closeLabel} onClick={() => setOpen(false)}>×</button></header>
           {children}
         </section>

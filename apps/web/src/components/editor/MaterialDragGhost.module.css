@@ -1,0 +1,38 @@
+.ghost {
+  position: fixed;
+  z-index: 1200;
+  top: 0;
+  left: 0;
+  display: grid;
+  box-sizing: border-box;
+  place-items: center;
+  padding: 5px;
+  border: 1px solid #94aa52;
+  border-radius: 8px;
+  opacity: 0.72;
+  background: #f8f7f2;
+  box-shadow: 0 12px 28px #29292338;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: lift 0.12s ease-out;
+}
+
+.dropping {
+  opacity: 0;
+  box-shadow: 0 2px 8px #29292320;
+  transition: transform 0.17s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.17s ease-out, box-shadow 0.17s ease-out;
+}
+
+.thumb {
+  margin: 0;
+}
+
+@keyframes lift {
+  from {
+    opacity: 0.3;
+  }
+
+  to {
+    opacity: 0.72;
+  }
+}

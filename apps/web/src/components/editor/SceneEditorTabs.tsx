@@ -3,6 +3,7 @@ import type { AuthSession, Scene, SceneMotion } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneInspector } from "./SceneInspector.js";
+import styles from "./SceneEditorTabs.module.css";
 
 interface SceneEditorTabsProps {
   readonly scene: Scene;
@@ -27,9 +28,9 @@ export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, s
     { id: "motion", label: copy.motion },
   ];
   return (
-    <section className="scene-editor-tab-shell">
-      <div className="scene-editor-panel-grabber" />
-      <div className="scene-editor-tabs" role="tablist" aria-label={copy.sceneTools}>
+    <section className={styles.shell}>
+      <div className={styles.grabber} />
+      <div className={styles.tabs} role="tablist" aria-label={copy.sceneTools}>
         {tabs.map((tab) => <button
           type="button"
           role="tab"
@@ -40,7 +41,7 @@ export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, s
           onClick={() => setActiveTab(tab.id)}
         >{tab.label}</button>)}
       </div>
-      <div className="scene-editor-tab-content" role="tabpanel" id={`scene-panel-${activeTab}`} aria-labelledby={`scene-tab-${activeTab}`}>
+      <div className={styles.content} role="tabpanel" id={`scene-panel-${activeTab}`} aria-labelledby={`scene-tab-${activeTab}`}>
         {activeTab === "materials" && <MaterialTimeline
           scene={scene}
           copy={copy}
@@ -49,6 +50,7 @@ export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, s
           session={session}
           uploading={uploading}
           uploadCount={uploadCount}
+          variant="mobilePanel"
           onUpload={onUpload}
           onReorder={onReorder}
         />}

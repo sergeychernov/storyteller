@@ -1,0 +1,43 @@
+.secondaryButton {
+  border: 1px solid #cac7bd;
+  color: #47473f;
+  background: transparent;
+}
+
+.secondaryButton:hover {
+  border-color: #869550;
+  background: #f2f7e5;
+}
+
+.secondaryButtonCompact {
+  padding: 8px 10px;
+  font-size: 11px;
+}
+
+.loading::before {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 9px;
+  border: 2px solid #ffffff55;
+  border-top-color: #fff;
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: spin 0.7s linear infinite;
+  content: "";
+}
+
+.operationError {
+  grid-column: 1 / -1;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e1b8b0;
+  color: #873e34;
+  background: #f5dfda;
+  font-size: 11px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import type { Scene } from "../../api.js";
+import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneInspector } from "./SceneInspector.js";
+import styles from "./DesktopSceneInspector.module.css";
 import type { SceneChange } from "./story-editor-view.js";
 
 interface DesktopSceneInspectorProps {
@@ -36,8 +38,8 @@ export function DesktopSceneInspector({ scene, copy, saving, compact, onChange }
   }, [compact, open]);
 
   if (compact && !open) return (
-    <aside className="desktop-scene-inspector compact collapsed" aria-label={copy.sceneTools}>
-      <div className="desktop-inspector-rail">
+    <aside className={classNames(styles.inspector, styles.collapsed)} aria-label={copy.sceneTools}>
+      <div className={styles.rail}>
         <button type="button" aria-label={copy.layout} title={copy.layout} onClick={() => { setActiveTab("layout"); setOpen(true); }}>▦</button>
         <button type="button" aria-label={copy.motion} title={copy.motion} onClick={() => { setActiveTab("motion"); setOpen(true); }}>↗</button>
       </div>
@@ -45,9 +47,9 @@ export function DesktopSceneInspector({ scene, copy, saving, compact, onChange }
   );
 
   return (
-    <aside className={`desktop-scene-inspector${compact ? " compact open" : ""}`}>
-      <div className={`desktop-inspector-head${compact ? " with-close" : ""}`}>
-        <div className="desktop-inspector-tabs" role="tablist" aria-label={copy.sceneTools}>
+    <aside className={classNames(styles.inspector, compact && styles.open)}>
+      <div className={classNames(styles.head, compact && styles.withClose)}>
+        <div className={styles.tabs} role="tablist" aria-label={copy.sceneTools}>
           {tabs.map((tab) => <button
             type="button"
             role="tab"
@@ -58,15 +60,15 @@ export function DesktopSceneInspector({ scene, copy, saving, compact, onChange }
             onClick={() => setActiveTab(tab.id)}
           >{tab.label}</button>)}
         </div>
-        {compact && <button type="button" className="desktop-inspector-close" aria-label={copy.close} onClick={() => setOpen(false)}>×</button>}
+        {compact && <button type="button" className={styles.close} aria-label={copy.close} onClick={() => setOpen(false)}>×</button>}
       </div>
       <div
-        className="desktop-inspector-content"
+        className={styles.content}
         role="tabpanel"
         id={`desktop-inspector-panel-${activeTab}`}
         aria-labelledby={`desktop-inspector-tab-${activeTab}`}
       >
-        <SceneInspector scene={scene} copy={copy} saving={saving} panel={activeTab} onChange={onChange} />
+        <SceneInspector scene={scene} copy={copy} saving={saving} panel={activeTab} variant="desktop" onChange={onChange} />
       </div>
     </aside>
   );
