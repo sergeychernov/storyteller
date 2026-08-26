@@ -46,7 +46,24 @@ VITE_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 
 Attach a Railway PostgreSQL service to the API so Railway injects `DATABASE_URL`. Also configure `PLATFORM_CREDENTIALS_KEY` with the output of `openssl rand -base64 32`, and set `WEB_ORIGIN` to the public web URL (multiple origins may be comma-separated). The API applies migrations during startup.
 
-Attach a persistent Volume to the API service at `/data` and set `MEDIA_ROOT=/data/media`. Uploaded originals live on the API filesystem until object storage is connected, so files outside this volume would disappear on a redeploy.
+Create a private Railway Storage Bucket in the same region as the API. Reference its credentials from the API service using these variables:
+
+```dotenv
+MEDIA_STORAGE_DRIVER=s3
+S3_BUCKET=${{media.BUCKET}}
+S3_ENDPOINT=${{media.ENDPOINT}}
+S3_REGION=${{media.REGION}}
+S3_ACCESS_KEY_ID=${{media.ACCESS_KEY_ID}}
+S3_SECRET_ACCESS_KEY=${{media.SECRET_ACCESS_KEY}}
+S3_FORCE_PATH_STYLE=false
+S3_DOWNLOAD_URL_TTL_SECONDS=3600
+```
+
+Replace `media` with the bucket service name on the Railway canvas. Keep the bucket private. The API receives and validates uploads with Sharp or FFprobe, stores the validated originals in the bucket, and returns short-lived presigned URLs after authorizing reads. `MEDIA_TEMP_ROOT` may point to ephemeral disk when a custom temporary directory is needed; completed originals never depend on that disk.
+
+The default `MEDIA_STORAGE_DRIVER=local` remains available for local development. A persistent Volume is no longer required for production media storage.
+
+Changing the driver does not copy files that already exist on a local filesystem. Before the first S3 deployment, copy any originals that still need to be preserved into the bucket under their existing `storageKey` paths. Database records whose ephemeral files have already disappeared cannot be recovered by this change and should be removed or uploaded again.
 
 Configure the API healthcheck path as `/health` with a 60-second timeout.
 

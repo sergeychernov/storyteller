@@ -5,7 +5,7 @@ import swaggerUi from "@fastify/swagger-ui";
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
 import {
   authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, errorSchema, healthSchema,
-  loginSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
+  loginSchema, materialContentAccessSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
   reorderSceneMaterialsSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
 import Fastify, { type FastifyRequest } from "fastify";
@@ -97,7 +97,11 @@ export async function buildApi(application: StoryApplication, options: { readonl
         profile.id, story.id, request.params.sceneId, stored.material,
       )));
     } catch (error) {
-      await stored.cleanup();
+      try {
+        await stored.cleanup();
+      } catch (cleanupError) {
+        request.log.error({ err: cleanupError, storageKey: stored.material.storageKey }, "could not roll back stored media");
+      }
       throw error;
     }
   });
@@ -109,7 +113,22 @@ export async function buildApi(application: StoryApplication, options: { readonl
     const story = await application.getStory(profile.id, request.params.storyId);
     const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
-    return reply.type(material.mimeType).header("cache-control", "private, max-age=3600").send(mediaStorage.open(material.storageKey));
+    const direct = await mediaStorage.createDownloadUrl(material.storageKey);
+    if (direct) return reply.header("cache-control", "private, no-store").redirect(direct.url);
+    return reply.type(material.mimeType).header("cache-control", "private, max-age=3600").send(await mediaStorage.open(material.storageKey));
+  });
+  app.get("/stories/:storyId/materials/:materialId/content-access", {
+    schema: { security: bearerSecurity, params: materialParams, response: { 200: materialContentAccessSchema, 401: errorSchema, 404: errorSchema } },
+  }, async (request, reply) => {
+    const profile = await authenticate(application, request);
+    const story = await application.getStory(profile.id, request.params.storyId);
+    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
+    const direct = await mediaStorage.createDownloadUrl(material.storageKey);
+    reply.header("cache-control", "private, no-store");
+    return direct
+      ? { url: direct.url, expiresAt: direct.expiresAt.toISOString() }
+      : { url: null };
   });
   app.put("/stories/:storyId/scenes/:sceneId/material-order", {
     schema: { security: bearerSecurity, params: sceneParams, body: reorderSceneMaterialsSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },

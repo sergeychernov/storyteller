@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { getMaterialContent, type AuthSession, type SceneMaterial } from "../../api.js";
+import { getMaterialContent, getMaterialContentAccess, type AuthSession, type SceneMaterial } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import styles from "./MaterialThumbnail.module.css";
 
@@ -16,12 +16,20 @@ export function MaterialThumbnail({ storyId, material, session, presentation, cl
   const [url, setUrl] = useState<string>();
   const content = useQuery({
     queryKey: ["material-content", storyId, material.id],
-    queryFn: () => getMaterialContent(session.accessToken, storyId, material.id),
-    staleTime: 60 * 60 * 1_000,
+    queryFn: async () => {
+      const access = await getMaterialContentAccess(session.accessToken, storyId, material.id);
+      return access.url ?? getMaterialContent(session.accessToken, storyId, material.id);
+    },
+    staleTime: 45 * 60 * 1_000,
+    refetchInterval: 45 * 60 * 1_000,
   });
 
   useEffect(() => {
     if (!content.data) return;
+    if (typeof content.data === "string") {
+      setUrl(content.data);
+      return;
+    }
     const objectUrl = URL.createObjectURL(content.data);
     setUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);

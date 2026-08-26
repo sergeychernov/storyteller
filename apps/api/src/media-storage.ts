@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
-import { basename, dirname, extname, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, extname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
 import { probeMedia } from "@storyteller/renderer";
 import type { MaterialOrientation, NewSceneMaterial } from "@storyteller/domain";
 import sharp from "sharp";
+import { createConfiguredObjectStorage, ObjectStorageError, type DirectDownload, type ObjectStorage } from "./object-storage.js";
 
 export interface UploadedFile {
   readonly filename: string;
@@ -21,11 +22,7 @@ export interface StoredUpload {
 }
 
 export class MediaStorage {
-  readonly root: string;
-
-  constructor(root = configuredMediaRoot()) {
-    this.root = resolve(root);
-  }
+  constructor(private readonly objects: ObjectStorage = createConfiguredObjectStorage()) {}
 
   async store(file: UploadedFile, scope: { profileId: string; storyId: string; sceneId: string }): Promise<StoredUpload> {
     const mimeType = normalizedMimeType(file.mimetype, file.filename);
@@ -33,18 +30,21 @@ export class MediaStorage {
     const id = randomUUID();
     const extension = extensionFor(mimeType, file.filename);
     const storageKey = `${scope.profileId}/${scope.storyId}/${scope.sceneId}/${id}.${extension}`;
-    const finalPath = this.resolveKey(storageKey);
-    const temporaryPath = `${finalPath}.upload`;
-    await mkdir(dirname(finalPath), { recursive: true });
+    const temporaryRoot = resolve(process.env.MEDIA_TEMP_ROOT?.trim() || tmpdir());
+    await mkdir(temporaryRoot, { recursive: true });
+    const temporaryDirectory = await mkdtemp(join(temporaryRoot, "storyteller-upload-"));
+    const temporaryPath = join(temporaryDirectory, `source.${extension}`);
 
     try {
       await pipeline(file.file, createWriteStream(temporaryPath, { flags: "wx" }));
       if (file.file.truncated) throw new MediaUploadError("media file is too large", 413);
-      const detected = kind === "image"
-        ? await detectImageMetadata(temporaryPath)
-        : detectMediaMetadata(await probeMedia(temporaryPath), kind);
+      const detected = await inspectMedia(temporaryPath, kind);
       const { size } = await stat(temporaryPath);
-      await rename(temporaryPath, finalPath);
+      try {
+        await this.objects.put(storageKey, { body: createReadStream(temporaryPath), contentType: mimeType, contentLength: size });
+      } catch (error) {
+        throw new ObjectStorageError("could not store media", 503, { cause: error });
+      }
       const common = {
         kind, name: safeDisplayName(file.filename), orientation: detected.orientation, storageKey,
         mimeType, sizeBytes: size, width: detected.width, height: detected.height,
@@ -55,23 +55,33 @@ export class MediaStorage {
           ...(detected.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: detected.sourceDurationSeconds }),
         }
         : { ...common, kind };
-      return { material, cleanup: () => rm(finalPath, { force: true }) };
+      return { material, cleanup: () => this.objects.delete(storageKey) };
     } catch (error) {
-      await rm(temporaryPath, { force: true });
       if (file.file.truncated) throw new MediaUploadError("media file is too large", 413);
-      if (error instanceof MediaUploadError) throw error;
-      throw new MediaUploadError(error instanceof Error ? `could not inspect media: ${error.message}` : "could not inspect media", 422);
+      if (error instanceof MediaUploadError || error instanceof ObjectStorageError) throw error;
+      throw new MediaUploadError(error instanceof Error ? `could not receive media: ${error.message}` : "could not receive media", 422);
+    } finally {
+      // A temporary-disk cleanup failure must not turn a completed object upload into an orphaned failed request.
+      await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 
-  open(storageKey: string) {
-    return createReadStream(this.resolveKey(storageKey));
+  async open(storageKey: string): Promise<Readable> {
+    if (!this.objects.open) throw new ObjectStorageError("direct media download is required", 501);
+    return this.objects.open(storageKey);
   }
 
-  private resolveKey(storageKey: string): string {
-    const target = resolve(this.root, storageKey);
-    if (target !== this.root && !target.startsWith(`${this.root}${sep}`)) throw new MediaUploadError("invalid media storage key", 400);
-    return target;
+  createDownloadUrl(storageKey: string): Promise<DirectDownload | undefined> {
+    return this.objects.createDownloadUrl?.(storageKey) ?? Promise.resolve(undefined);
+  }
+}
+
+async function inspectMedia(path: string, kind: "image" | "video") {
+  try {
+    return kind === "image" ? await detectImageMetadata(path) : detectMediaMetadata(await probeMedia(path), kind);
+  } catch (error) {
+    if (error instanceof MediaUploadError) throw error;
+    throw new MediaUploadError(error instanceof Error ? `could not inspect media: ${error.message}` : "could not inspect media", 422);
   }
 }
 
@@ -141,11 +151,6 @@ function extensionFor(mimeType: string, filename: string): string {
 
 function safeDisplayName(filename: string): string {
   return basename(filename).replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 255) || "media";
-}
-
-function configuredMediaRoot(): string {
-  const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
-  return resolve(repositoryRoot, process.env.MEDIA_ROOT?.trim() || ".storyteller-media");
 }
 
 function rotationValue(stream: Record<string, unknown> | undefined): number {

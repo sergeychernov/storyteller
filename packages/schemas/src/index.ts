@@ -31,6 +31,10 @@ export const sceneMaterialSchema = z.discriminatedUnion("kind", [
     sourceDurationSeconds: z.number().positive().optional(), audioTags: z.array(videoAudioTagSchema),
   }),
 ]);
+export const materialContentAccessSchema = z.object({
+  url: z.url().nullable(),
+  expiresAt: z.iso.datetime().optional(),
+});
 export const sceneSchema = z.object({
   id: z.string().uuid(), materials: z.array(sceneMaterialSchema), durationSeconds: z.number().min(3).max(15),
   layoutId: z.string().optional(), motion: sceneMotionSchema, rendererId: z.string().optional(), title: z.string().optional(),

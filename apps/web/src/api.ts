@@ -50,6 +50,9 @@ export async function getMaterialContent(token: string, storyId: string, materia
   if (!response.ok) await throwResponseError(response);
   return response.blob();
 }
+export function getMaterialContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
+  return request(`/stories/${storyId}/materials/${materialId}/content-access`, {}, token);
+}
 export function reorderSceneMaterials(token: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}/material-order`, { method: "PUT", body: JSON.stringify({ materialIds }) }, token);
 }

@@ -8,12 +8,15 @@ import type { PlatformCredential, PlatformProvider, Profile, Story } from "@stor
 import { normalizeStoredStory } from "./database.js";
 import { buildApi } from "./server.js";
 import { detectMediaMetadata, MediaStorage } from "./media-storage.js";
+import { LocalObjectStorage, S3ObjectStorage } from "./object-storage.js";
 
 test("protects a profile, uploads media and stores its stories", async (context) => {
   process.env.NODE_ENV = "test";
   const mediaRoot = await mkdtemp(join(tmpdir(), "storyteller-media-test-"));
   context.after(() => rm(mediaRoot, { recursive: true, force: true }));
-  const api = await buildApi(new StoryApplication(new MemoryRepository()), { mediaStorage: new MediaStorage(mediaRoot) });
+  const api = await buildApi(new StoryApplication(new MemoryRepository()), {
+    mediaStorage: new MediaStorage(new LocalObjectStorage(mediaRoot)),
+  });
   assert.equal((await api.inject({ method: "GET", url: "/profile" })).statusCode, 401);
   const reorderPreflight = await api.inject({
     method: "OPTIONS", url: "/stories/00000000-0000-4000-8000-000000000001/scenes/00000000-0000-4000-8000-000000000002/material-order",
@@ -63,6 +66,12 @@ test("protects a profile, uploads media and stores its stories", async (context)
   const content = await api.inject({ method: "GET", url: `/stories/${story.id}/materials/${uploaded.id}/content`, headers });
   assert.equal(content.statusCode, 200);
   assert.deepEqual(content.rawPayload, png);
+  const contentAccess = await api.inject({
+    method: "GET", url: `/stories/${story.id}/materials/${uploaded.id}/content-access`, headers,
+  });
+  assert.equal(contentAccess.statusCode, 200);
+  assert.equal(contentAccess.headers["cache-control"], "private, no-store");
+  assert.deepEqual(contentAccess.json(), { url: null });
   const configured = await api.inject({
     method: "PATCH", url: `/stories/${story.id}/scenes/${sceneId}`, headers,
     payload: { durationSeconds: 8, layoutId: "full-frame", motion: "zoom-in" },
@@ -92,6 +101,24 @@ test("detects displayed orientation, rotation and an audio stream from probe dat
   ], format: { duration: "7.25" } }, "video"), {
     width: 1080, height: 1920, orientation: "portrait", hasAudio: true, sourceDurationSeconds: 7.25,
   });
+});
+
+test("creates a short-lived S3 download URL without exposing the secret key", async () => {
+  const storage = new S3ObjectStorage({
+    bucket: "storyteller-media",
+    endpoint: "https://storage.example.com",
+    region: "auto",
+    accessKeyId: "test-access-key",
+    secretAccessKey: "test-secret-key",
+    downloadUrlTtlSeconds: 600,
+  });
+  const download = await storage.createDownloadUrl("profile/story/scene/material.png");
+  const url = new URL(download.url);
+  assert.equal(url.hostname, "storyteller-media.storage.example.com");
+  assert.equal(url.pathname, "/profile/story/scene/material.png");
+  assert.equal(url.searchParams.get("X-Amz-Expires"), "600");
+  assert.equal(url.searchParams.has("X-Amz-Signature"), true);
+  assert.equal(download.url.includes("test-secret-key"), false);
 });
 
 test("opens a legacy story without fileless material placeholders", () => {
