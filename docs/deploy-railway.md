@@ -32,7 +32,7 @@ The worker is required for scene downloads. The MCP process is still a placehold
 | `mcp` | `yarn workspace @storyteller/mcp build` | `yarn workspace @storyteller/mcp start` |
 
 Railway should install dependencies with `yarn install --immutable`; the repository pins Yarn 4 through `packageManager`.
-The root `railpack.json` adds FFmpeg to the runtime image. The API uses its bundled `ffprobe` command to inspect uploaded videos before adding them to a scene.
+The root `railpack.json` adds FFmpeg to the runtime image. The API uses `ffprobe` to inspect uploads and `ffmpeg` to separate video/audio and denoise/normalize audio before adding the material to a scene. Allow temporary disk space and request time for this processing, in addition to the uploaded file size.
 
 ## Domains and variables
 
@@ -59,7 +59,7 @@ S3_FORCE_PATH_STYLE=false
 S3_DOWNLOAD_URL_TTL_SECONDS=3600
 ```
 
-Replace `media` with the bucket service name on the Railway canvas. Keep the bucket private. The API receives and validates uploads with Sharp or FFprobe and stores the validated originals. The worker downloads originals to ephemeral disk, renders MP4 with FFmpeg, uploads the result, and records only its stable object key in PostgreSQL. Authorized reads may use short-lived presigned URLs. `MEDIA_TEMP_ROOT` may point to ephemeral disk when a custom upload directory is needed; completed originals and renders never depend on that disk.
+Replace `media` with the bucket service name on the Railway canvas. Keep the bucket private. The API stores validated originals plus separate video and processed audio working tracks. The worker downloads the tracks needed for the selected export, renders MP4 or audio-only M4A with FFmpeg, uploads the result, and records its stable object key in PostgreSQL. Authorized reads may use short-lived presigned URLs. `MEDIA_TEMP_ROOT` may point to ephemeral disk when a custom upload directory is needed; completed originals, tracks and exports never depend on that disk. Deploy API, worker and web together so that all services understand video export jobs and metadata-only video edits.
 
 The default `MEDIA_STORAGE_DRIVER=local` remains available for local development. A persistent Volume is no longer required for production media storage.
 

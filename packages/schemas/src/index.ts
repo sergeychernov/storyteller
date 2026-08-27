@@ -27,30 +27,49 @@ const materialCropSchema = z.object({
   width: z.number().positive().max(1), height: z.number().positive().max(1),
 }).refine(({ x, width }) => x + width <= 1.000_001, { message: "crop exceeds image width" })
   .refine(({ y, height }) => y + height <= 1.000_001, { message: "crop exceeds image height" });
-export const editMaterialSchema = z.object({ rotation: materialRotationSchema, crop: materialCropSchema });
+const videoTrimSchema = z.object({
+  startSeconds: z.number().nonnegative(), endSeconds: z.number().positive(),
+}).refine(({ startSeconds, endSeconds }) => endSeconds > startSeconds, { message: "video trim must have a positive duration" });
+export const editMaterialSchema = z.object({
+  rotation: materialRotationSchema, crop: materialCropSchema, trim: videoTrimSchema.optional(),
+});
 const materialFileShape = {
   id: z.string().uuid(), name: z.string(), orientation: materialOrientationSchema, storageKey: z.string(), mimeType: z.string(),
   sizeBytes: z.number().int().nonnegative(), width: z.number().int().positive(), height: z.number().int().positive(),
   edit: z.object({
     rotation: materialRotationSchema,
     crop: materialCropSchema,
+    trim: videoTrimSchema.optional(),
     result: z.object({
       storageKey: z.string(), mimeType: z.string(), sizeBytes: z.number().int().nonnegative(),
       width: z.number().int().positive(), height: z.number().int().positive(), orientation: materialOrientationSchema,
-    }),
+      durationSeconds: z.number().positive().optional(),
+    }).optional(),
   }).optional(),
 };
+const videoTrackSchema = z.object({
+  storageKey: z.string(), mimeType: z.string(), sizeBytes: z.number().int().nonnegative(), durationSeconds: z.number().positive(),
+});
+const audioTrackSchema = videoTrackSchema.extend({
+  sampleRate: z.number().int().positive(), channels: z.number().int().positive(),
+  processing: z.object({
+    version: z.number().int().positive(), filter: z.string(),
+    integratedLufs: z.number().nullable(), truePeakDbfs: z.number().nullable(),
+  }),
+});
 export const sceneMaterialSchema = z.discriminatedUnion("kind", [
   z.object({ ...materialFileShape, kind: z.literal("image") }),
   z.object({
     ...materialFileShape, kind: z.literal("video"), hasAudio: z.boolean(),
     sourceDurationSeconds: z.number().positive().optional(), audioTags: z.array(videoAudioTagSchema),
+    videoTrack: videoTrackSchema.optional(), audioTrack: audioTrackSchema.optional(),
   }),
 ]);
 export const materialContentAccessSchema = z.object({
   url: z.url().nullable(),
   expiresAt: z.iso.datetime().optional(),
 });
+export const materialWaveformSchema = z.object({ peaks: z.array(z.number().min(0).max(1)).max(512) });
 export const sceneSchema = z.object({
   id: z.string().uuid(), materials: z.array(sceneMaterialSchema), durationSeconds: z.number().min(3).max(15),
   layoutId: z.string().optional(), motion: sceneMotionSchema, focusPoint: focusPointSchema.optional(),
@@ -70,6 +89,7 @@ export const configureSceneSchema = z.object({
   motion: sceneMotionSchema.optional(), focusPoint: focusPointSchema.optional(),
 });
 export const sceneRenderStatusSchema = z.enum(["queued", "running", "ready", "failed", "canceled"]);
+export const sceneRenderRequestSchema = z.object({ mode: z.enum(["video", "audio", "combined"]).optional() }).nullish().default({});
 export const sceneRenderSchema = z.object({
   id: z.string().uuid(), status: sceneRenderStatusSchema,
   sizeBytes: z.number().int().nonnegative().optional(), error: z.string().optional(),

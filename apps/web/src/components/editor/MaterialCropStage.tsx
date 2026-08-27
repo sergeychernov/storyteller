@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { MaterialCrop, MaterialEdit, MaterialRotation, SceneMaterial } from "../../api.js";
 import styles from "./MaterialEditor.module.css";
 import { resizeCrop, type CropDragMode } from "./material-editor-model.js";
@@ -14,12 +14,13 @@ interface MaterialCropStageProps {
   readonly label: string;
   readonly disabled: boolean;
   readonly onCropChange: (crop: MaterialCrop) => void;
+  readonly children?: ReactNode;
 }
 
 interface DragState { readonly mode: CropDragMode; readonly x: number; readonly y: number; readonly crop: MaterialCrop }
 
 export function MaterialCropStage({
-  material, url, loading, sourceFailed, edit, width, height, label, disabled, onCropChange,
+  material, url, loading, sourceFailed, edit, width, height, label, disabled, onCropChange, children,
 }: MaterialCropStageProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -27,28 +28,13 @@ export function MaterialCropStage({
 
   useEffect(() => {
     const target = canvas.current;
-    if (!target || !url) return;
+    if (!target || !url || material.kind !== "image") return;
     const context = target.getContext("2d");
     if (!context) return;
-    if (material.kind === "image") {
-      const image = new Image();
-      image.onload = () => drawRotated(context, target, image, edit.rotation);
-      image.src = url;
-      return () => { image.onload = null; };
-    }
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "auto";
-    video.onloadeddata = () => drawRotated(context, target, video, edit.rotation);
-    video.src = url;
-    video.load();
-    return () => {
-      video.onloadeddata = null;
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-    };
+    const image = new Image();
+    image.onload = () => drawRotated(context, target, image, edit.rotation);
+    image.src = url;
+    return () => { image.onload = null; };
   }, [edit.rotation, material.kind, url, width, height]);
 
   function startDrag(event: ReactPointerEvent, mode: CropDragMode) {
@@ -83,7 +69,7 @@ export function MaterialCropStage({
     onPointerUp={() => { drag.current = undefined; }}
     onPointerCancel={() => { drag.current = undefined; }}
   >
-    <canvas ref={canvas} width={width} height={height} />
+    {children ?? <canvas ref={canvas} width={width} height={height} />}
     {(loading || sourceFailed) && <div className={styles.sourceState}>{sourceFailed ? "!" : "…"}</div>}
     {url && <div
       className={styles.cropBox}

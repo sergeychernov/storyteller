@@ -78,6 +78,39 @@ test("worker schedules cleanup when a scene disappears during rendering", async 
   await assert.rejects(readFile(join(root, sceneRenderStorageKey(renderJob()))), { code: "ENOENT" });
 });
 
+test("worker downloads only the tracks required by the export mode", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-tracks-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  for (const mode of ["video", "audio", "combined"] as const) {
+    const opened: string[] = [];
+    let contentType = "";
+    const job: SceneRenderJob = { ...renderJob(), inputHash: mode, input: {
+      ...renderJob().input, rendererId: "video", mode, hasAudio: true, sourceDurationSeconds: 8,
+      edit: { rotation: 90, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 1, endSeconds: 3 } },
+      audio: { storageKey: "source/audio.m4a", name: "audio.m4a", mimeType: "audio/mp4" },
+    } };
+    const queue = new MemoryQueue(job);
+    const worker = new SceneRenderWorker("worker-1", queue, {
+      async open(key) { opened.push(key); return Readable.from("track"); },
+      async put(key, object) { contentType = object.contentType; await storage.put(key, object); },
+      delete: (key) => storage.delete(key),
+    }, undefined, undefined, undefined, async (spec) => {
+      assert.equal(Boolean(spec.sourcePath), mode !== "audio");
+      assert.equal(Boolean(spec.audioPath), mode !== "video");
+      assert.equal(spec.mode, mode);
+      assert.deepEqual(spec.edit.trim, { startSeconds: 1, endSeconds: 3 });
+      await writeFile(spec.outputPath, `rendered-${mode}`);
+    });
+    await worker.runOnce();
+    assert.deepEqual(opened, mode === "audio" ? ["source/audio.m4a"]
+      : mode === "video" ? ["source/photo.jpg"] : ["source/photo.jpg", "source/audio.m4a"]);
+    assert.equal(contentType, mode === "audio" ? "audio/mp4" : "video/mp4");
+    assert.equal(queue.ready?.storageKey, sceneRenderStorageKey(job));
+    assert.equal(queue.failed, undefined);
+  }
+});
+
 class MemoryQueue implements SceneRenderQueue {
   ready?: { storageKey: string; sizeBytes: number };
   failed?: string;

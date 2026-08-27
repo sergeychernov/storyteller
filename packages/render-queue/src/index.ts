@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto";
-import type { FocusPoint, MaterialOrientation, SceneMotion } from "@storyteller/domain";
+import type { FocusPoint, MaterialEdit, MaterialOrientation, SceneMotion, VideoExportMode } from "@storyteller/domain";
 import type { Pool } from "pg";
 
 export const sceneRenderStatuses = ["queued", "running", "ready", "failed", "canceled"] as const;
 export type SceneRenderStatus = (typeof sceneRenderStatuses)[number];
 
-export interface SceneRenderInput {
+export interface StillImageRenderInput {
   readonly rendererId: "still-image";
   readonly rendererVersion: number;
   readonly material: {
@@ -26,6 +26,17 @@ export interface SceneRenderInput {
     readonly codec: "h264";
   };
 }
+
+export interface VideoRenderInput extends Omit<StillImageRenderInput, "rendererId"> {
+  readonly rendererId: "video";
+  readonly mode: VideoExportMode;
+  readonly edit: MaterialEdit;
+  readonly hasAudio: boolean;
+  readonly sourceDurationSeconds?: number;
+  readonly audio?: { readonly storageKey: string; readonly name: string; readonly mimeType: string };
+}
+
+export type SceneRenderInput = StillImageRenderInput | VideoRenderInput;
 
 export interface SceneRenderJob {
   readonly id: string;
@@ -166,8 +177,14 @@ export function hashSceneRenderInput(input: SceneRenderInput): string {
   return createHash("sha256").update(stableJson(input)).digest("hex");
 }
 
-export function sceneRenderStorageKey(job: Pick<SceneRenderJob, "profileId" | "storyId" | "sceneId" | "inputHash">): string {
-  return `projects/${job.profileId}/${job.storyId}/scenes/${job.sceneId}/renders/${job.inputHash}.mp4`;
+export function sceneRenderStorageKey(job: Pick<SceneRenderJob, "profileId" | "storyId" | "sceneId" | "inputHash"> & { input?: SceneRenderInput }): string {
+  const extension = job.input ? sceneRenderFileType(job.input).extension : "mp4";
+  return `projects/${job.profileId}/${job.storyId}/scenes/${job.sceneId}/renders/${job.inputHash}.${extension}`;
+}
+
+export function sceneRenderFileType(input: SceneRenderInput) {
+  return input.rendererId === "video" && input.mode === "audio"
+    ? { extension: "m4a", mimeType: "audio/mp4" } : { extension: "mp4", mimeType: "video/mp4" };
 }
 
 function stableJson(value: unknown): string {

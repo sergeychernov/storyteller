@@ -2,6 +2,7 @@ import type { AuthSession, SceneMaterial } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import styles from "./MaterialThumbnail.module.css";
 import { useMaterialContentUrl } from "./use-material-content-url.js";
+import { CroppedVideo } from "./CroppedVideo.js";
 
 interface MaterialThumbnailProps {
   readonly storyId: string;
@@ -17,6 +18,7 @@ export function MaterialThumbnail({ storyId, material, session, presentation, cl
   const mediaClassName = classNames(styles[presentation], className);
   if (!url) return <span className={classNames(styles.placeholder, mediaClassName)}>{material.kind === "video" ? "▶" : "◫"}</span>;
   return material.kind === "video"
-    ? <video className={classNames(styles.media, mediaClassName)} src={url} muted playsInline preload="metadata" />
+    ? <CroppedVideo material={material} src={url} muted playsInline preload="metadata" fit={presentation === "timeline" ? "contain" : "cover"}
+      onLoadedMetadata={(event) => { event.currentTarget.currentTime = material.edit?.trim?.startSeconds ?? 0; }} />
     : <img className={classNames(styles.media, mediaClassName)} src={url} alt="" draggable={false} />;
 }

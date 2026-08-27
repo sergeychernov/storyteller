@@ -1,0 +1,53 @@
+.video {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.trim {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid #d0cdc4;
+  border-radius: 7px;
+  background: #eeece5;
+}
+
+.trim p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.trim p,
+.playback output {
+  color: #69685f;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.playback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.playback button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 6px;
+  color: #fff;
+  background: #414735;
+}
+
+.playback button svg { width: 20px; height: 20px; fill: currentColor; }
+.playback button:focus-visible { outline: 2px solid #88974e; outline-offset: 2px; }
+
+.trim .error {
+  color: #9c362c;
+}

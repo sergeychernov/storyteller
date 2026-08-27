@@ -21,6 +21,7 @@ type MaterialDialog = "info" | "edit" | "delete";
 export function MaterialActions({ material, copy, disabled, storyId, session, onEdit, onDelete }: MaterialActionsProps) {
   const [dialog, setDialog] = useState<MaterialDialog>();
   const presentation = getMaterialPresentation(material);
+  const duration = presentation.durationSeconds ?? (material.kind === "video" ? material.sourceDurationSeconds : undefined);
   const audio = material.kind === "video"
     ? material.audioTags.length ? material.audioTags.map((tag) => copy[tag]).join(", ") : material.hasAudio ? copy.audioUnclassified : copy.silent
     : undefined;
@@ -38,21 +39,19 @@ export function MaterialActions({ material, copy, disabled, storyId, session, on
         <div><dt>{copy.fileSize}</dt><dd>{formatFileSize(presentation.sizeBytes)}</dd></div>
         <div><dt>{copy.fileFormat}</dt><dd>{presentation.mimeType}</dd></div>
         <div><dt>{copy.fileDimensions}</dt><dd>{presentation.width} × {presentation.height}</dd></div>
-        {material.kind === "video" && <div><dt>{copy.fileDuration}</dt><dd>{material.sourceDurationSeconds === undefined ? "—" : formatDuration(material.sourceDurationSeconds)}</dd></div>}
+        {material.kind === "video" && <div><dt>{copy.fileDuration}</dt><dd>{duration === undefined ? "—" : formatDuration(duration)}</dd></div>}
         {audio && <div><dt>{copy.sourceAudio}</dt><dd>{audio}</dd></div>}
       </dl>
     </MiniDialog>
-    <MiniDialog open={dialog === "edit"} title={copy.editMaterial} closeLabel={copy.close} width="wide" onClose={() => setDialog(undefined)}>
-      <MaterialEditor
-        storyId={storyId}
-        material={material}
-        session={session}
-        copy={copy}
-        disabled={disabled}
-        onCancel={() => setDialog(undefined)}
-        onSave={onEdit}
-      />
-    </MiniDialog>
+    {dialog === "edit" && <MaterialEditor
+      storyId={storyId}
+      material={material}
+      session={session}
+      copy={copy}
+      disabled={disabled}
+      onClose={() => setDialog(undefined)}
+      onSave={onEdit}
+    />}
     <MiniDialog open={dialog === "delete"} title={copy.deleteMaterial} closeLabel={copy.close} onClose={() => setDialog(undefined)}>
       <p className={styles.deleteConfirmation}>{copy.deleteMaterialConfirmation.replace("{{name}}", material.name)}</p>
       <div className={styles.confirmationActions}>

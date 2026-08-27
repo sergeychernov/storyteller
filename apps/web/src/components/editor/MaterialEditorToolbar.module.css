@@ -1,0 +1,45 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
+.presets {
+  padding-inline-start: 6px;
+  border-inline-start: 1px solid #d0cdc4;
+}
+
+.toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 32px;
+  height: 36px;
+  padding: 0 5px;
+  border: 1px solid #d0cdc4;
+  border-radius: 6px;
+  color: #41413a;
+  background: #eeece5;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.toolbar .iconButton { width: 32px; padding: 0; font-size: 20px; }
+.toolbar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.toolbar button:focus-visible { outline: 2px solid #88974e; outline-offset: 2px; }
+
+.toolbar .reset {
+  margin-inline-start: auto;
+  color: #69685f;
+  background: transparent;
+}

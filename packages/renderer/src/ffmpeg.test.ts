@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createStillImageMotionPlan } from "@storyteller/domain";
-import { buildStillImageFilter, probeMedia, renderStillImage, type MediaProcessRunner } from "./index.js";
+import { buildStillImageFilter, PcmWaveform, prepareVideoAudio, probeMedia, renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner } from "./index.js";
 
 test("probeMedia uses an argument array and parses JSON", async () => {
   let received: readonly string[] = [];
@@ -14,6 +17,89 @@ test("probeMedia uses an argument array and parses JSON", async () => {
   };
   assert.deepEqual(await probeMedia("clip with spaces.mp4", runner), { streams: [] });
   assert.equal(received.at(-1), "clip with spaces.mp4");
+});
+
+test("audio processing preserves delayed sound and nonzero source timestamps, including silence", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-audio-alignment-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const runner = new SpawnMediaProcessRunner();
+  async function ffmpeg(args: string[]) {
+    const result = await runner.run("ffmpeg", ["-y", "-v", "error", ...args]);
+    assert.equal(result.exitCode, 0, result.stderr);
+  }
+  const source = join(root, "delayed.mp4");
+  await ffmpeg(["-f", "lavfi", "-i", "color=s=32x32:r=10:d=3", "-itsoffset", "0.75",
+    "-f", "lavfi", "-i", "sine=f=440:r=44100:d=1.5", "-c:v", "libx264", "-c:a", "aac", "-output_ts_offset", "5", source]);
+  const audio = join(root, "audio.m4a");
+  const metadata = await prepareVideoAudio(source, audio, runner);
+  assert.ok(metadata.durationSeconds > 2.2 && metadata.durationSeconds < 2.3, JSON.stringify(metadata));
+  const pcmPath = join(root, "audio.pcm");
+  await ffmpeg(["-i", audio, "-ac", "1", "-ar", "48000", "-f", "s16le", pcmPath]);
+  const pcm = await readFile(pcmPath);
+  const rms = (from: number, to: number) => {
+    let sum = 0;
+    for (let i = Math.round(from * 48000); i < Math.round(to * 48000); i++) sum += pcm.readInt16LE(i * 2) ** 2;
+    return Math.sqrt(sum / ((to - from) * 48000));
+  };
+  assert.ok(rms(0, 0.6) < 5, "leading silence must preserve the sound's original offset");
+  assert.ok(rms(0.9, 1.1) > 100, "the beginning of the sound must remain audible");
+  assert.ok(rms(2, 2.15) > 100, "the end of the sound must remain audible");
+  const exported = join(root, "selected.m4a");
+  await renderVideo({ audioPath: audio, outputPath: exported, sourceSize: { width: 32, height: 32 },
+    sourceDurationSeconds: 3, hasAudio: true, mode: "audio",
+    edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 0.5, endSeconds: 3 } } }, runner);
+  const exportProbe = await probeMedia(exported, runner) as { format: { duration: string } };
+  assert.ok(Math.abs(Number(exportProbe.format.duration) - 2.5) < 0.03, "audio exports pad a short track without shortening the selected range");
+  const legacyOutput = join(root, "legacy.mp4");
+  await renderVideo({ sourcePath: source, outputPath: legacyOutput, sourceSize: { width: 32, height: 32 },
+    sourceDurationSeconds: 3, hasAudio: true, mode: "combined",
+    edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 0.5, endSeconds: 2.5 } } }, runner);
+  const legacyProbe = await probeMedia(legacyOutput, runner) as { streams: { codec_type: string; duration: string; start_time: string }[] };
+  assert.deepEqual(legacyProbe.streams.map((stream) => stream.codec_type), ["video", "audio"]);
+  for (const stream of legacyProbe.streams) {
+    assert.ok(Math.abs(Number(stream.duration) - 2) < 0.03);
+    assert.ok(Math.abs(Number(stream.start_time)) < 0.03);
+  }
+  const silentTail = join(root, "tail.m4a");
+  await renderVideo({ audioPath: audio, outputPath: silentTail, sourceSize: { width: 32, height: 32 },
+    sourceDurationSeconds: 3, hasAudio: true, mode: "audio",
+    edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 2.7, endSeconds: 3 } } }, runner);
+  const tailProbe = await probeMedia(silentTail, runner) as { format: { duration: string } };
+  assert.ok(Math.abs(Number(tailProbe.format.duration) - 0.3) < 0.03, "a selection after the audio ends must export silence");
+  const silent = join(root, "silent.mp4");
+  await ffmpeg(["-f", "lavfi", "-i", "color=s=32x32:r=10:d=0.5", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo:d=0.5",
+    "-c:v", "libx264", "-c:a", "aac", silent]);
+  const silence = await prepareVideoAudio(silent, join(root, "silent.m4a"), runner);
+  assert.equal(silence.processing.integratedLufs, null);
+  assert.equal(silence.processing.truePeakDbfs, null);
+  assert.ok(Math.abs(silence.durationSeconds - 0.5) < 0.03);
+});
+
+test("waveform normalizes both channels without cancelling opposite phases", () => {
+  const pcm = Buffer.alloc(16);
+  for (const [index, sample] of [100, 200, 400, 800].entries()) {
+    pcm.writeInt16LE(sample, index * 4);
+    pcm.writeInt16LE(-sample, index * 4 + 2);
+  }
+  const waveform = new PcmWaveform(4, 4);
+  waveform.add(pcm.subarray(0, 5));
+  waveform.add(pcm.subarray(5, 11));
+  waveform.add(pcm.subarray(11));
+  assert.deepEqual(waveform.normalized(), [0.125, 0.25, 0.5, 1]);
+});
+
+test("waveform preserves silence and ignores audio beyond the video", () => {
+  const silent = new PcmWaveform(4, 4);
+  silent.add(Buffer.alloc(8));
+  assert.deepEqual(silent.normalized(), [0, 0, 0, 0]);
+  const clipped = new PcmWaveform(2, 2);
+  const pcm = Buffer.alloc(12);
+  pcm.writeInt16LE(100, 0);
+  pcm.writeInt16LE(200, 4);
+  pcm.writeInt16LE(30_000, 8);
+  clipped.add(pcm);
+  assert.deepEqual(clipped.normalized(), [0.5, 1]);
+  assert.throws(() => new PcmWaveform(0), /positive/);
 });
 
 test("landscape stills cross the full crop and dwell when the focus is centered", () => {

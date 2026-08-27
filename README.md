@@ -15,7 +15,7 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 - `packages/localization` — typed English, Russian, and Serbian Latin product copy shared by web and mobile
 - `packages/domain` — first small story model and lifecycle rules
 - `packages/schemas` — transport request contracts
-- `packages/renderer` — FFmpeg process boundary and the first concrete renderer for an animated still image
+- `packages/renderer` — FFmpeg process boundary, animated still images, video exports and audio processing
 - `packages/render-queue` — persistent render cache, worker leases, and object-deletion queue
 - `packages/storage` — shared local/S3 object-storage adapters for API and worker
 - `packages/publishers` — provider-neutral publication port; no adapters yet
@@ -44,6 +44,14 @@ Then open [http://localhost:3000](http://localhost:3000). The API runs at [http:
 Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mobile app, or `yarn dev:mobile` to start Expo separately. Individual commands remain available as `yarn dev:api`, `yarn dev:web`, `yarn dev:worker`, and `yarn dev:mcp`.
 
 Scene downloads require the worker and FFmpeg (`ffmpeg` and `ffprobe` on `PATH`). If API and web were started separately, also run `yarn dev:worker`; otherwise render jobs remain queued. When using local storage, API and worker must share the same `MEDIA_ROOT` (the default resolves to the repository's `.storyteller-media` directory).
+
+### Video tracks and downloads
+
+Video uploads also require FFmpeg in the API runtime. The uploaded original stays unchanged at `material.storageKey`. The API stores a video-only working copy at `videoTrack` (stream copy, without re-encoding) and, when sound exists, a separate `audioTrack` in AAC/M4A, stereo, 48 kHz. Audio is denoised with `afftdn=nr=12:nf=-35:tn=1` and normalized with two-pass `loudnorm=I=-16:LRA=11:TP=-1.5`, following the [spoken-video reference](https://github.com/sergeychernov/hermes-story-skills/blob/main/skills/media/photo-story-archive/references/spoken-video-audio-integrity.md). No silence removal or noise gate is used. Silent tracks bypass undefined loudness gain. The exact filter and measured encoded loudness/true peak are saved with the audio track.
+
+Video rotation, crop, and trim are saved as metadata, using the original timeline. Saving an edit does not rewrite either working track or the original. The editor synchronizes video and processed audio, and the waveform reads the separate audio track.
+
+For a scene containing one video, download offers video only (MP4), audio only (M4A), or video with audio (MP4), applying the selected range and spatial edits at export. The render request accepts `{ "mode": "video" | "audio" | "combined" }`; requests without a mode remain supported. Audio-only jobs do not download or decode the video working track. A video without sound cannot produce an audio-only export. Existing uploads remain readable and editable; their sound is processed during export when a separate track is absent. They are not bulk-migrated.
 
 Production deployment of the web studio, API, worker, and MCP boundary is prepared for Railway. See [`docs/deploy-railway.md`](docs/deploy-railway.md) for service setup, variables, domains, and watch paths. The Expo mobile app is distributed separately through native app stores or EAS.
 

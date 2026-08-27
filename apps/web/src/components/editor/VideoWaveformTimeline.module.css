@@ -1,0 +1,89 @@
+.timeline { min-width: 0; }
+
+.track {
+  position: relative;
+  height: 64px;
+  margin: 5px 24px 0;
+  border-radius: 3px;
+  background: #e3e1d8;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: crosshair;
+}
+
+.waveform { display: block; width: 100%; height: 100%; pointer-events: none; }
+.baseline { stroke: #b7b7aa; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.mutedWave { fill: #babcb0; }
+.selectedWave { fill: #647342; }
+
+.selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-block: 1px solid #64734266;
+  background: #7f91480b;
+  pointer-events: none;
+}
+
+.boundary,
+.playhead {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.boundary { z-index: 3; }
+.boundary svg { position: absolute; top: 0; display: block; width: 24px; height: 100%; overflow: visible; pointer-events: none; }
+.boundary[data-boundary="startSeconds"] svg { left: 12px; }
+.boundary[data-boundary="endSeconds"] svg { right: 12px; }
+.boundary path { fill: none; stroke: #414d2c; stroke-width: 3; stroke-linecap: square; stroke-linejoin: miter; }
+.playhead { z-index: 2; width: 24px; transform: translateX(-50%); }
+
+.playhead::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 7px;
+  border-inline: 5px solid transparent;
+  border-top: 7px solid #ad4e33;
+}
+
+.playhead::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 11px;
+  width: 2px;
+  background: #ad4e33;
+  box-shadow: 0 0 0 1px #f8f7f277;
+  pointer-events: none;
+}
+
+.boundary:focus-visible,
+.playhead:focus-visible { outline: 2px solid #88974e; outline-offset: 3px; border-radius: 2px; }
+[aria-disabled="true"].boundary,
+[aria-disabled="true"].playhead { cursor: default; opacity: 0.5; }
+
+.message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #6a6b60;
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.times {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+  color: #737269;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}

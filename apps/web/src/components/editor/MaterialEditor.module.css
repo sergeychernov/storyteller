@@ -3,40 +3,6 @@
   gap: 12px;
 }
 
-.toolbar,
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.toolGroup {
-  display: flex;
-  gap: 6px;
-}
-
-.toolbar button,
-.presets button {
-  padding: 8px 11px;
-  border: 1px solid #d0cdc4;
-  color: #41413a;
-  background: #eeece5;
-  font-size: 12px;
-}
-
-.toolGroup button {
-  width: 38px;
-  padding: 7px;
-  font-size: 20px;
-  line-height: 1;
-}
-
-.toolbar .reset {
-  color: #69685f;
-  background: transparent;
-}
-
 .stage {
   position: relative;
   margin: auto;
@@ -108,13 +74,6 @@
 .south-west { bottom: -10px; left: -10px; cursor: nesw-resize; }
 .south-east { right: -10px; bottom: -10px; cursor: nwse-resize; }
 
-.presets {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-}
-
 .result {
   margin: -2px 0 0;
   color: #737269;
@@ -130,7 +89,10 @@
 }
 
 .actions {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 2px;
 }
 
@@ -148,10 +110,4 @@
 .actions .apply {
   color: #fff;
   background: #20201b;
-}
-
-@media (max-width: 520px) {
-  .presets button {
-    flex: 1 1 42%;
-  }
 }

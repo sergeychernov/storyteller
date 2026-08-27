@@ -3,8 +3,8 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { sceneRenderStorageKey, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
-import { renderStillImage, type StillImageRenderSpec } from "@storyteller/renderer";
+import { sceneRenderFileType, sceneRenderStorageKey, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
+import { renderStillImage, renderVideo, type StillImageRenderSpec, type VideoRenderSpec } from "@storyteller/renderer";
 import type { ObjectStorage } from "@storyteller/storage";
 
 export type StillImageRender = (spec: StillImageRenderSpec) => Promise<unknown>;
@@ -22,6 +22,7 @@ export class SceneRenderWorker {
     private readonly render: StillImageRender = renderStillImage,
     private readonly leaseMilliseconds = 10 * 60 * 1_000,
     private readonly logger: SceneRenderWorkerLogger = console,
+    private readonly renderMotionVideo: (spec: VideoRenderSpec) => Promise<unknown> = renderVideo,
   ) {}
 
   async runOnce(): Promise<boolean> {
@@ -47,15 +48,29 @@ export class SceneRenderWorker {
   private async renderJob(job: SceneRenderJob): Promise<void> {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "storyteller-render-"));
     const sourcePath = join(temporaryDirectory, `source${safeExtension(job.input.material.name)}`);
-    const outputPath = join(temporaryDirectory, "scene.mp4");
+    const file = sceneRenderFileType(job.input);
+    const outputPath = join(temporaryDirectory, `scene.${file.extension}`);
     const storageKey = sceneRenderStorageKey(job);
     let uploaded = false;
     let stage: "download" | "render" | "upload" | "complete" = "download";
     this.logger.info("scene render started", renderLogDetails(job));
     try {
-      await pipeline(await this.storage.open(job.input.material.storageKey), createWriteStream(sourcePath, { flags: "wx" }));
+      const input = job.input;
+      const needsVideoSource = input.rendererId !== "video" || input.mode !== "audio" || !input.audio;
+      if (needsVideoSource) await pipeline(await this.storage.open(input.material.storageKey), createWriteStream(sourcePath, { flags: "wx" }));
+      const audioPath = input.rendererId === "video" && input.mode !== "video" && input.audio
+        ? join(temporaryDirectory, `audio${safeExtension(input.audio.name)}`) : undefined;
+      if (audioPath && input.rendererId === "video" && input.audio) {
+        await pipeline(await this.storage.open(input.audio.storageKey), createWriteStream(audioPath, { flags: "wx" }));
+      }
       stage = "render";
-      await this.render({
+      if (input.rendererId === "video") await this.renderMotionVideo({
+        ...(needsVideoSource ? { sourcePath } : {}), ...(audioPath ? { audioPath } : {}), outputPath,
+        sourceSize: { width: input.material.width, height: input.material.height },
+        ...(input.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: input.sourceDurationSeconds }),
+        hasAudio: input.hasAudio, mode: input.mode, edit: input.edit,
+      });
+      else await this.render({
         sourcePath,
         outputPath,
         sourceSize: { width: job.input.material.width, height: job.input.material.height },
@@ -71,7 +86,7 @@ export class SceneRenderWorker {
       const output = await stat(outputPath);
       stage = "upload";
       await this.storage.put(storageKey, {
-        body: createReadStream(outputPath), contentType: "video/mp4", contentLength: output.size,
+        body: createReadStream(outputPath), contentType: file.mimeType, contentLength: output.size,
       });
       uploaded = true;
       stage = "complete";

@@ -6,9 +6,11 @@ import { basename, extname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
 import { probeMedia, SpawnMediaProcessRunner, type MediaProcessRunner } from "@storyteller/renderer";
-import type { MaterialEdit, MaterialEditResult, MaterialOrientation, NewSceneMaterial, SceneMaterial } from "@storyteller/domain";
+import { materialStorageKeys, type ImageMaterial, type MaterialEdit, type MaterialEditResult, type MaterialOrientation, type NewSceneMaterial, type SceneMaterial, type VideoMaterial } from "@storyteller/domain";
 import sharp from "sharp";
 import { createConfiguredObjectStorage, ObjectStorageError, type DirectDownload, type ObjectStorage } from "./object-storage.js";
+import { readMaterialWaveform } from "./material-waveform.js";
+import { storeVideoTracks } from "./video-tracks.js";
 
 export interface UploadedFile {
   readonly filename: string;
@@ -26,6 +28,8 @@ export interface StoredMaterialEdit {
 }
 
 export class MediaStorage {
+  private readonly waveforms = new Map<string, Promise<number[]>>();
+
   constructor(
     private readonly objects: ObjectStorage = createConfiguredObjectStorage(),
     private readonly processRunner: MediaProcessRunner = new SpawnMediaProcessRunner(),
@@ -41,13 +45,18 @@ export class MediaStorage {
     await mkdir(temporaryRoot, { recursive: true });
     const temporaryDirectory = await mkdtemp(join(temporaryRoot, "storyteller-upload-"));
     const temporaryPath = join(temporaryDirectory, `source.${extension}`);
+    const storedKeys: string[] = [];
 
     try {
       await pipeline(file.file, createWriteStream(temporaryPath, { flags: "wx" }));
       if (file.file.truncated) throw new MediaUploadError("media file is too large", 413);
-      const detected = await inspectMedia(temporaryPath, kind);
+      const detected = await inspectMedia(temporaryPath, kind, this.processRunner);
+      if (kind === "video" && (!detected.sourceDurationSeconds || detected.width < 2 || detected.height < 2)) {
+        throw new MediaUploadError("video duration or dimensions are unavailable", 422);
+      }
       const { size } = await stat(temporaryPath);
       try {
+        storedKeys.push(storageKey);
         await this.objects.put(storageKey, { body: createReadStream(temporaryPath), contentType: mimeType, contentLength: size });
       } catch (error) {
         throw new ObjectStorageError("could not store media", 503, { cause: error });
@@ -60,10 +69,21 @@ export class MediaStorage {
         ? {
           ...common, kind, hasAudio: detected.hasAudio, audioTags: [],
           ...(detected.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: detected.sourceDurationSeconds }),
+          ...await storeVideoTracks({
+            sourcePath: temporaryPath, directory: temporaryDirectory,
+            keyPrefix: `${scope.profileId}/${scope.storyId}/${scope.sceneId}/${id}`, extension, mimeType,
+            hasAudio: detected.hasAudio, durationSeconds: detected.sourceDurationSeconds!,
+          }, this.objects, this.processRunner),
         }
         : { ...common, kind };
-      return { material, cleanup: () => this.objects.delete(storageKey) };
+      storedKeys.push(...materialStorageKeys({ ...material, id }));
+      return { material, cleanup: async () => {
+        const results = await Promise.allSettled([...new Set(storedKeys)].map((key) => this.objects.delete(key)));
+        const failed = results.find((result) => result.status === "rejected");
+        if (failed?.status === "rejected") throw failed.reason;
+      } };
     } catch (error) {
+      await Promise.allSettled([...new Set(storedKeys)].map((key) => this.objects.delete(key)));
       if (file.file.truncated) throw new MediaUploadError("media file is too large", 413);
       if (error instanceof MediaUploadError || error instanceof ObjectStorageError) throw error;
       throw new MediaUploadError(error instanceof Error ? `could not receive media: ${error.message}` : "could not receive media", 422);
@@ -78,12 +98,29 @@ export class MediaStorage {
     return this.objects.open(storageKey);
   }
 
+  waveform(material: SceneMaterial): Promise<number[]> {
+    if (material.kind !== "video") throw new MediaUploadError("waveforms are available only for video", 422);
+    const key = material.audioTrack?.storageKey ?? material.storageKey;
+    const cached = this.waveforms.get(key);
+    if (cached) return cached;
+    // Reopening an editor or changing its crop must not decode the original audio again.
+    if (this.waveforms.size >= 128) this.waveforms.delete(this.waveforms.keys().next().value!);
+    const pending = readMaterialWaveform(material, this.objects, this.processRunner).catch((error: unknown) => {
+      if (this.waveforms.get(key) === pending) this.waveforms.delete(key);
+      if (error instanceof ObjectStorageError) throw error;
+      throw new MediaUploadError("could not read the video's audio waveform", 422);
+    });
+    this.waveforms.set(key, pending);
+    return pending;
+  }
+
   async edit(
-    material: SceneMaterial,
+    material: ImageMaterial,
     edit: MaterialEdit,
     scope: { profileId: string; storyId: string; sceneId: string },
   ): Promise<StoredMaterialEdit> {
-    const output = material.kind === "image" ? imageOutput(material.mimeType) : { extension: "mp4", mimeType: "video/mp4" };
+    if (edit.trim) throw new MediaUploadError("only video can be trimmed", 422);
+    const output = imageOutput(material.mimeType);
     const storageKey = `${scope.profileId}/${scope.storyId}/${scope.sceneId}/${randomUUID()}.${output.extension}`;
     const temporaryRoot = resolve(process.env.MEDIA_TEMP_ROOT?.trim() || tmpdir());
     await mkdir(temporaryRoot, { recursive: true });
@@ -94,10 +131,8 @@ export class MediaStorage {
     try {
       await pipeline(await this.objects.open(material.storageKey), createWriteStream(sourcePath, { flags: "wx" }));
       const dimensions = rotatedDimensions(material.width, material.height, edit.rotation);
-      const crop = pixelCrop(dimensions.width, dimensions.height, edit, material.kind === "video");
-      const detected = material.kind === "image"
-        ? await editImage(sourcePath, outputPath, output.mimeType, edit, crop)
-        : await editVideo(sourcePath, outputPath, edit, crop, this.processRunner);
+      const crop = pixelCrop(dimensions.width, dimensions.height, edit);
+      const detected = await editImage(sourcePath, outputPath, output.mimeType, edit, crop);
       const { size } = await stat(outputPath);
       try {
         await this.objects.put(storageKey, {
@@ -124,11 +159,32 @@ export class MediaStorage {
     }
   }
 
+  async validateVideoEdit(material: VideoMaterial, edit: MaterialEdit): Promise<void> {
+    if (!edit.trim) return;
+    let duration = material.sourceDurationSeconds ?? material.videoTrack?.durationSeconds;
+    if (duration === undefined) {
+      const directory = await mkdtemp(join(tmpdir(), "storyteller-probe-"));
+      const source = join(directory, "source.media");
+      try {
+        await pipeline(await this.objects.open(material.storageKey), createWriteStream(source));
+        duration = detectMediaMetadata(await probeMedia(source, this.processRunner), "video").sourceDurationSeconds;
+      } finally {
+        await rm(directory, { recursive: true, force: true }).catch(() => undefined);
+      }
+    }
+    const { startSeconds, endSeconds } = edit.trim;
+    if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || startSeconds < 0
+      || endSeconds <= startSeconds || duration === undefined || endSeconds > duration) {
+      throw new MediaUploadError("video trim must be within the source duration", 422);
+    }
+  }
+
   createDownloadUrl(storageKey: string): Promise<DirectDownload | undefined> {
     return this.objects.createDownloadUrl?.(storageKey) ?? Promise.resolve(undefined);
   }
 
   delete(storageKey: string): Promise<void> {
+    this.waveforms.delete(storageKey);
     return this.objects.delete(storageKey);
   }
 }
@@ -156,42 +212,11 @@ async function editImage(
   };
 }
 
-async function editVideo(
-  sourcePath: string,
-  outputPath: string,
-  edit: MaterialEdit,
-  crop: PixelCrop,
-  runner: MediaProcessRunner,
-) {
-  const rotationFilter = edit.rotation === 90 ? ["transpose=clock"]
-    : edit.rotation === 180 ? ["hflip", "vflip"]
-      : edit.rotation === 270 ? ["transpose=cclock"] : [];
-  const filters = [...rotationFilter, `crop=${crop.width}:${crop.height}:${crop.left}:${crop.top}`].join(",");
-  const result = await runner.run("ffmpeg", [
-    "-y", "-v", "error", "-i", sourcePath,
-    "-map", "0:v:0", "-map", "0:a?", "-vf", filters,
-    "-map_metadata", "-1", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", outputPath,
-  ]);
-  if (result.exitCode !== 0) throw new Error(`ffmpeg failed (${result.exitCode}): ${result.stderr.trim()}`);
-  return detectMediaMetadata(await probeMedia(outputPath, runner), "video");
-}
-
 function rotatedDimensions(width: number, height: number, rotation: MaterialEdit["rotation"]) {
   return rotation === 90 || rotation === 270 ? { width: height, height: width } : { width, height };
 }
 
-function pixelCrop(width: number, height: number, edit: MaterialEdit, even: boolean): PixelCrop {
-  if (even) {
-    const usableWidth = width - width % 2;
-    const usableHeight = height - height % 2;
-    if (usableWidth < 2 || usableHeight < 2) throw new MediaUploadError("video is too small to crop", 422);
-    const left = Math.min(usableWidth - 2, Math.floor(edit.crop.x * width / 2) * 2);
-    const top = Math.min(usableHeight - 2, Math.floor(edit.crop.y * height / 2) * 2);
-    const right = Math.max(left + 2, Math.min(usableWidth, Math.ceil((edit.crop.x + edit.crop.width) * width / 2) * 2));
-    const bottom = Math.max(top + 2, Math.min(usableHeight, Math.ceil((edit.crop.y + edit.crop.height) * height / 2) * 2));
-    return { left, top, width: right - left, height: bottom - top };
-  }
+function pixelCrop(width: number, height: number, edit: MaterialEdit): PixelCrop {
   const left = Math.min(width - 1, Math.floor(edit.crop.x * width));
   const top = Math.min(height - 1, Math.floor(edit.crop.y * height));
   const right = Math.max(left + 1, Math.min(width, Math.ceil((edit.crop.x + edit.crop.width) * width)));
@@ -211,9 +236,9 @@ function safeExtension(name: string): string {
   return /^\.[a-z0-9]{1,8}$/.test(extension) ? extension : ".media";
 }
 
-async function inspectMedia(path: string, kind: "image" | "video") {
+async function inspectMedia(path: string, kind: "image" | "video", runner: MediaProcessRunner) {
   try {
-    return kind === "image" ? await detectImageMetadata(path) : detectMediaMetadata(await probeMedia(path), kind);
+    return kind === "image" ? await detectImageMetadata(path) : detectMediaMetadata(await probeMedia(path, runner), kind);
   } catch (error) {
     if (error instanceof MediaUploadError) throw error;
     throw new MediaUploadError(error instanceof Error ? `could not inspect media: ${error.message}` : "could not inspect media", 422);

@@ -1,4 +1,4 @@
-import type { MaterialCrop, MaterialEdit, MaterialRotation } from "../../api.js";
+import type { MaterialCrop, MaterialEdit, MaterialRotation, VideoTrim } from "../../api.js";
 
 export type CropDragMode = "move" | "north-west" | "north-east" | "south-west" | "south-east";
 
@@ -8,9 +8,11 @@ export const identityEdit: MaterialEdit = { rotation: 0, crop: fullCrop };
 export function rotateEdit(edit: MaterialEdit, clockwise: boolean): MaterialEdit {
   const crop = edit.crop;
   return clockwise ? {
+    ...edit,
     rotation: normalizeRotation(edit.rotation + 90),
     crop: normalizedCrop({ x: 1 - crop.y - crop.height, y: crop.x, width: crop.height, height: crop.width }),
   } : {
+    ...edit,
     rotation: normalizeRotation(edit.rotation - 90),
     crop: normalizedCrop({ x: crop.y, y: 1 - crop.x - crop.width, width: crop.height, height: crop.width }),
   };
@@ -48,13 +50,32 @@ export function rotatedDimensions(width: number, height: number, rotation: Mater
   return rotation === 90 || rotation === 270 ? { width: height, height: width } : { width, height };
 }
 
-export function cropPixelSize(sourceSize: number, start: number, size: number): number {
+export function cropPixelSize(sourceSize: number, start: number, size: number, even = false): number {
+  if (even) {
+    const usable = sourceSize - sourceSize % 2;
+    const left = Math.min(usable - 2, Math.floor(start * sourceSize / 2) * 2);
+    const right = Math.max(left + 2, Math.min(usable, Math.ceil((start + size) * sourceSize / 2) * 2));
+    return right - left;
+  }
   return Math.max(1, Math.min(sourceSize, Math.ceil((start + size) * sourceSize)) - Math.floor(start * sourceSize));
 }
 
 export function sameEdit(left: MaterialEdit, right: MaterialEdit): boolean {
   return left.rotation === right.rotation && (["x", "y", "width", "height"] as const)
-    .every((key) => Math.abs(left.crop[key] - right.crop[key]) < 0.000_001);
+    .every((key) => Math.abs(left.crop[key] - right.crop[key]) < 0.000_001)
+    && left.trim?.startSeconds === right.trim?.startSeconds && left.trim?.endSeconds === right.trim?.endSeconds;
+}
+
+export function updateTrimBoundary(range: VideoTrim, boundary: keyof VideoTrim, value: number, duration: number): VideoTrim {
+  if (!Number.isFinite(value) || !Number.isFinite(duration) || duration <= 0) return range;
+  return boundary === "startSeconds"
+    ? { ...range, startSeconds: clamp(value, 0, range.endSeconds - Math.min(0.1, range.endSeconds)) }
+    : { ...range, endSeconds: clamp(value, range.startSeconds + Math.min(0.1, duration - range.startSeconds), duration) };
+}
+
+export function withVideoTrim(edit: MaterialEdit, range: VideoTrim, duration: number): MaterialEdit {
+  const { trim: _previous, ...spatialEdit } = edit;
+  return range.startSeconds === 0 && range.endSeconds === duration ? spatialEdit : { ...spatialEdit, trim: range };
 }
 
 function normalizedCrop(crop: MaterialCrop): MaterialCrop {

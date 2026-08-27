@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
-  addMaterial, addScene, configureScene, createStory, removeMaterial, removeScene, reorderMaterials, replaceMaterial,
+  addMaterial, addScene, configureScene, createStory, materialStorageKeys, removeMaterial, removeScene, reorderMaterials, replaceMaterial,
   type FocusPoint, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
 } from "@storyteller/domain";
 
@@ -108,10 +108,7 @@ export class StoryApplication {
     const story = await this.getStory(profileId, storyId);
     const scene = story.scenes.find(({ id }) => id === sceneId);
     const changed = removeScene(story, sceneId);
-    await this.repository.deleteScene(changed, sceneId, scene?.materials.flatMap((material) => [
-      material.storageKey,
-      ...(material.edit ? [material.edit.result.storageKey] : []),
-    ]) ?? []);
+    await this.repository.deleteScene(changed, sceneId, scene?.materials.flatMap(materialStorageKeys) ?? []);
     return changed;
   }
   async addSceneMaterial(profileId: string, storyId: string, sceneId: string, material: NewSceneMaterial): Promise<Story> {

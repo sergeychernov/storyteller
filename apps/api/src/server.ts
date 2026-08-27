@@ -3,12 +3,12 @@ import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
-import { getMaterialPresentation, type MaterialEdit } from "@storyteller/domain";
-import type { SceneRenderQueue } from "@storyteller/render-queue";
+import { getMaterialPresentation, getMaterialSource, materialStorageKeys, type MaterialEdit } from "@storyteller/domain";
+import { sceneRenderFileType, type SceneRenderQueue } from "@storyteller/render-queue";
 import {
   authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, editMaterialSchema, errorSchema, healthSchema,
-  loginSchema, materialContentAccessSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
-  reorderSceneMaterialsSchema, sceneRenderSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
+  loginSchema, materialContentAccessSchema, materialWaveformSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
+  reorderSceneMaterialsSchema, sceneRenderRequestSchema, sceneRenderSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
 import type { ObjectStorage } from "@storyteller/storage";
 import Fastify, { type FastifyRequest } from "fastify";
@@ -128,7 +128,7 @@ export async function buildApi(application: StoryApplication, options: {
     const removed = await application.removeSceneMaterial(
       profile.id, request.params.storyId, request.params.sceneId, request.params.materialId,
     );
-    for (const storageKey of [removed.material.storageKey, removed.material.edit?.result.storageKey].filter((key): key is string => Boolean(key))) {
+    for (const storageKey of materialStorageKeys(removed.material)) {
       await deleteStoredObject(mediaStorage, storageKey, request, options.renderQueue);
     }
     return serializeStory(removed.story);
@@ -145,20 +145,34 @@ export async function buildApi(application: StoryApplication, options: {
     if (!scene) throw new ApplicationError(`scene not found: ${request.params.sceneId}`, 404);
     const material = scene.materials.find(({ id }) => id === request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
-    const oldIntermediateKey = material.edit?.result.storageKey;
-    if (isIdentityEdit(request.body)) {
+    const edit: MaterialEdit = {
+      rotation: request.body.rotation, crop: request.body.crop,
+      ...(request.body.trim ? { trim: request.body.trim } : {}),
+    };
+    const oldIntermediateKey = material.edit?.result?.storageKey;
+    if (material.kind === "video") {
+      await mediaStorage.validateVideoEdit(material, edit);
+      const { edit: _oldEdit, ...original } = material;
+      const changed = await application.replaceSceneMaterial(profile.id, story.id, scene.id,
+        isIdentityEdit(edit) ? original : { ...original, edit });
+      if (oldIntermediateKey && !materialStorageKeys(original).includes(oldIntermediateKey)) {
+        await deleteStoredObject(mediaStorage, oldIntermediateKey, request, options.renderQueue);
+      }
+      return serializeStory(changed);
+    }
+    if (isIdentityEdit(edit)) {
       const { edit: _oldEdit, ...original } = material;
       const changed = await application.replaceSceneMaterial(profile.id, story.id, scene.id, original);
       if (oldIntermediateKey) await deleteStoredObject(mediaStorage, oldIntermediateKey, request, options.renderQueue);
       return serializeStory(changed);
     }
-    const stored = await mediaStorage.edit(material, request.body, {
+    const stored = await mediaStorage.edit(material, edit, {
       profileId: profile.id, storyId: story.id, sceneId: scene.id,
     });
     try {
       const changed = await application.replaceSceneMaterial(profile.id, story.id, scene.id, {
         ...material,
-        edit: { ...request.body, result: stored.result },
+        edit: { ...edit, result: stored.result },
       });
       if (oldIntermediateKey && oldIntermediateKey !== stored.result.storageKey) {
         await deleteStoredObject(mediaStorage, oldIntermediateKey, request, options.renderQueue);
@@ -194,6 +208,16 @@ export async function buildApi(application: StoryApplication, options: {
       ? { url: direct.url, expiresAt: direct.expiresAt.toISOString() }
       : { url: null };
   });
+  app.get("/stories/:storyId/materials/:materialId/waveform", {
+    schema: { security: bearerSecurity, params: materialParams, response: { 200: materialWaveformSchema, 401: errorSchema, 404: errorSchema, 422: errorSchema } },
+  }, async (request, reply) => {
+    const profile = await authenticate(application, request);
+    const story = await application.getStory(profile.id, request.params.storyId);
+    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
+    const peaks = await mediaStorage.waveform(material);
+    return reply.header("cache-control", "private, no-store").send({ peaks });
+  });
   app.get("/stories/:storyId/materials/:materialId/source-content", {
     schema: { security: bearerSecurity, params: materialParams },
   }, async (request, reply) => {
@@ -201,9 +225,10 @@ export async function buildApi(application: StoryApplication, options: {
     const story = await application.getStory(profile.id, request.params.storyId);
     const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
-    const direct = await mediaStorage.createDownloadUrl(material.storageKey);
+    const source = getMaterialSource(material);
+    const direct = await mediaStorage.createDownloadUrl(source.storageKey);
     if (direct) return reply.header("cache-control", "private, no-store").redirect(direct.url);
-    return reply.type(material.mimeType).header("cache-control", "private, max-age=3600").send(await mediaStorage.open(material.storageKey));
+    return reply.type(source.mimeType).header("cache-control", "private, no-store").send(await mediaStorage.open(source.storageKey));
   });
   app.get("/stories/:storyId/materials/:materialId/source-content-access", {
     schema: { security: bearerSecurity, params: materialParams, response: { 200: materialContentAccessSchema, 401: errorSchema, 404: errorSchema } },
@@ -212,10 +237,26 @@ export async function buildApi(application: StoryApplication, options: {
     const story = await application.getStory(profile.id, request.params.storyId);
     const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
-    const direct = await mediaStorage.createDownloadUrl(material.storageKey);
+    const direct = await mediaStorage.createDownloadUrl(getMaterialSource(material).storageKey);
     reply.header("cache-control", "private, no-store");
     return direct ? { url: direct.url, expiresAt: direct.expiresAt.toISOString() } : { url: null };
   });
+  for (const accessOnly of [false, true]) {
+    app.get(`/stories/:storyId/materials/:materialId/audio-content${accessOnly ? "-access" : ""}`, {
+      schema: { security: bearerSecurity, params: materialParams },
+    }, async (request, reply) => {
+      const profile = await authenticate(application, request);
+      const story = await application.getStory(profile.id, request.params.storyId);
+      const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+      if (material?.kind !== "video" || !material.audioTrack) throw new ApplicationError("audio track not found", 404);
+      const track = material.audioTrack;
+      const direct = await mediaStorage.createDownloadUrl(track.storageKey);
+      reply.header("cache-control", "private, no-store");
+      if (accessOnly) return direct ? { url: direct.url, expiresAt: direct.expiresAt.toISOString() } : { url: null };
+      if (direct) return reply.redirect(direct.url);
+      return reply.type(track.mimeType).send(await mediaStorage.open(track.storageKey));
+    });
+  }
   app.put("/stories/:storyId/scenes/:sceneId/material-order", {
     schema: { security: bearerSecurity, params: sceneParams, body: reorderSceneMaterialsSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
   }, async (request) => serializeStory(await application.reorderSceneMaterials(
@@ -234,11 +275,11 @@ export async function buildApi(application: StoryApplication, options: {
 
   const renderParams = sceneParams.extend({ renderId: z.string().uuid() });
   app.post("/stories/:storyId/scenes/:sceneId/renders", {
-    schema: { security: bearerSecurity, params: sceneParams, response: { 202: sceneRenderSchema, 401: errorSchema, 404: errorSchema, 422: errorSchema, 503: errorSchema } },
+    schema: { security: bearerSecurity, params: sceneParams, body: sceneRenderRequestSchema, response: { 202: sceneRenderSchema, 401: errorSchema, 404: errorSchema, 422: errorSchema, 503: errorSchema } },
   }, async (request, reply) => {
     const service = requireRenderService(renderService);
     const profile = await authenticate(application, request);
-    return reply.status(202).send(serializeSceneRender(await service.request(profile.id, request.params.storyId, request.params.sceneId)));
+    return reply.status(202).send(serializeSceneRender(await service.request(profile.id, request.params.storyId, request.params.sceneId, request.body?.mode)));
   });
   app.get("/stories/:storyId/scenes/:sceneId/renders/:renderId", {
     schema: { security: bearerSecurity, params: renderParams, response: { 200: sceneRenderSchema, 401: errorSchema, 404: errorSchema, 503: errorSchema } },
@@ -256,9 +297,10 @@ export async function buildApi(application: StoryApplication, options: {
     const profile = await authenticate(application, request);
     const job = await service.get(profile.id, request.params.storyId, request.params.sceneId, request.params.renderId);
     if (job.status !== "ready" || !job.storageKey) throw new ApplicationError("scene render is not ready", 409);
-    return reply.type("video/mp4")
+    const file = sceneRenderFileType(job.input);
+    return reply.type(file.mimeType)
       .header("cache-control", "private, max-age=3600")
-      .header("content-disposition", `attachment; filename="scene-${request.params.sceneId}.mp4"`)
+      .header("content-disposition", `attachment; filename="scene-${request.params.sceneId}.${file.extension}"`)
       .send(await storage.open(job.storageKey));
   });
 
@@ -298,7 +340,7 @@ function requireRenderService(service: SceneRenderService | false | undefined): 
 }
 
 function isIdentityEdit(edit: MaterialEdit): boolean {
-  return edit.rotation === 0 && edit.crop.x === 0 && edit.crop.y === 0 && edit.crop.width === 1 && edit.crop.height === 1;
+  return !edit.trim && edit.rotation === 0 && edit.crop.x === 0 && edit.crop.y === 0 && edit.crop.width === 1 && edit.crop.height === 1;
 }
 
 async function deleteStoredObject(

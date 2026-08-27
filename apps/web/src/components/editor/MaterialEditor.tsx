@@ -1,12 +1,13 @@
-import { useMemo, useState } from "react";
 import type { AuthSession, MaterialEdit, SceneMaterial } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MaterialCropStage } from "./MaterialCropStage.js";
+import { MaterialEditorToolbar } from "./MaterialEditorToolbar.js";
+import { MiniDialog } from "./MiniDialog.js";
 import styles from "./MaterialEditor.module.css";
-import {
-  cropForAspect, cropPixelSize, fullCrop, identityEdit, rotateEdit, rotatedDimensions, sameEdit,
-} from "./material-editor-model.js";
+import { cropPixelSize, rotatedDimensions } from "./material-editor-model.js";
 import { useMaterialContentUrl } from "./use-material-content-url.js";
+import { useMaterialEditor } from "./use-material-editor.js";
+import { VideoMaterialEditor } from "./VideoMaterialEditor.js";
 
 interface MaterialEditorProps {
   readonly storyId: string;
@@ -14,49 +15,31 @@ interface MaterialEditorProps {
   readonly session: AuthSession;
   readonly copy: EditorCopy;
   readonly disabled: boolean;
-  readonly onCancel: () => void;
+  readonly onClose: () => void;
   readonly onSave: (edit: MaterialEdit) => Promise<void>;
 }
 
-export function MaterialEditor({ storyId, material, session, copy, disabled, onCancel, onSave }: MaterialEditorProps) {
-  const initial = useMemo<MaterialEdit>(() => material.edit
-    ? { rotation: material.edit.rotation, crop: material.edit.crop }
-    : identityEdit, [material.edit]);
-  const [edit, setEdit] = useState<MaterialEdit>(initial);
-  const [submitting, setSubmitting] = useState(false);
-  const [failed, setFailed] = useState(false);
+export function MaterialEditor({ storyId, material, session, copy, disabled, onClose, onSave }: MaterialEditorProps) {
+  const { edit, setEdit, changed, submitting, failed, submit, cancel } = useMaterialEditor({ material, disabled, onSave, onClose });
   const { url, loading, failed: sourceFailed } = useMaterialContentUrl({ storyId, material, session, source: true });
   const dimensions = rotatedDimensions(material.width, material.height, edit.rotation);
   const canvasScale = Math.min(1, 960 / Math.max(dimensions.width, dimensions.height));
   const canvasWidth = Math.max(1, Math.round(dimensions.width * canvasScale));
   const canvasHeight = Math.max(1, Math.round(dimensions.height * canvasScale));
-  const resultWidth = cropPixelSize(dimensions.width, edit.crop.x, edit.crop.width);
-  const resultHeight = cropPixelSize(dimensions.height, edit.crop.y, edit.crop.height);
-  const changed = !sameEdit(edit, initial);
+  const resultWidth = cropPixelSize(dimensions.width, edit.crop.x, edit.crop.width, material.kind === "video");
+  const resultHeight = cropPixelSize(dimensions.height, edit.crop.y, edit.crop.height, material.kind === "video");
+  return <MiniDialog
+    open title={copy.editMaterial} closeLabel={copy.close} width="wide" variant="editor"
+    closeDisabled={disabled || submitting} onClose={() => void submit()}
+  ><div className={styles.editor}>
+    <MaterialEditorToolbar edit={edit} dimensions={dimensions} copy={copy} disabled={disabled || submitting} onChange={setEdit} />
 
-  async function submit() {
-    setSubmitting(true);
-    setFailed(false);
-    try {
-      await onSave(edit);
-      onCancel();
-    } catch {
-      setFailed(true);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return <div className={styles.editor}>
-    <div className={styles.toolbar}>
-      <div className={styles.toolGroup} aria-label={copy.rotateMaterial}>
-        <button type="button" disabled={disabled || submitting} aria-label={copy.rotateLeft} title={copy.rotateLeft} onClick={() => setEdit(rotateEdit(edit, false))}>↶</button>
-        <button type="button" disabled={disabled || submitting} aria-label={copy.rotateRight} title={copy.rotateRight} onClick={() => setEdit(rotateEdit(edit, true))}>↷</button>
-      </div>
-      <button type="button" className={styles.reset} disabled={disabled || submitting || sameEdit(edit, identityEdit)} onClick={() => setEdit(identityEdit)}>{copy.resetEditing}</button>
-    </div>
-
-    <MaterialCropStage
+    {material.kind === "video" ? <VideoMaterialEditor
+      storyId={storyId} session={session}
+      material={material} url={url} loading={loading} sourceFailed={sourceFailed}
+      edit={edit} width={canvasWidth} height={canvasHeight} copy={copy}
+      disabled={disabled || submitting} onChange={setEdit}
+    /> : <MaterialCropStage
       material={material}
       url={url}
       loading={loading}
@@ -67,21 +50,15 @@ export function MaterialEditor({ storyId, material, session, copy, disabled, onC
       label={copy.cropArea}
       disabled={disabled || submitting}
       onCropChange={(crop) => setEdit((current) => ({ ...current, crop }))}
-    />
+    />}
 
-    <div className={styles.presets} aria-label={copy.cropMaterial}>
-      <button type="button" disabled={disabled || submitting} onClick={() => setEdit((current) => ({ ...current, crop: fullCrop }))}>{copy.originalFrame}</button>
-      <button type="button" disabled={disabled || submitting} onClick={() => setEdit((current) => ({ ...current, crop: cropForAspect(dimensions, 1) }))}>{copy.squareFrame}</button>
-      <button type="button" disabled={disabled || submitting} onClick={() => setEdit((current) => ({ ...current, crop: cropForAspect(dimensions, 9 / 16) }))}>{copy.verticalFrame}</button>
-      <button type="button" disabled={disabled || submitting} onClick={() => setEdit((current) => ({ ...current, crop: cropForAspect(dimensions, 16 / 9) }))}>{copy.horizontalFrame}</button>
-    </div>
     <p className={styles.result}>{copy.cropResult.replace("{{width}}", String(resultWidth)).replace("{{height}}", String(resultHeight))}</p>
     {(failed || sourceFailed) && <p className={styles.error} role="alert">{copy.materialEditError}</p>}
     <div className={styles.actions}>
-      <button type="button" className={styles.cancel} disabled={submitting} onClick={onCancel}>{copy.cancel}</button>
+      <button type="button" className={styles.cancel} disabled={submitting} onClick={cancel}>{copy.cancel}</button>
       <button type="button" className={styles.apply} disabled={disabled || submitting || !changed || !url} onClick={() => void submit()}>
         {submitting ? copy.applyingChanges : copy.applyChanges}
       </button>
     </div>
-  </div>;
+  </div></MiniDialog>;
 }

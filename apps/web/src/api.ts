@@ -1,3 +1,7 @@
+import type { AudioTrack, VideoTrack, VideoExportMode } from "@storyteller/domain";
+export { getMaterialPresentation, getMaterialSource } from "@storyteller/domain";
+export type { AudioTrack, VideoTrack, VideoExportMode } from "@storyteller/domain";
+
 const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 export interface Profile { id: string; name: string; email: string }
 export interface AuthSession { accessToken: string; expiresAt: string; profile: Profile }
@@ -11,11 +15,13 @@ export type SceneMotion = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-ri
 export interface FocusPoint { x: number; y: number }
 export type MaterialRotation = 0 | 90 | 180 | 270;
 export interface MaterialCrop { x: number; y: number; width: number; height: number }
-export interface MaterialEdit { rotation: MaterialRotation; crop: MaterialCrop }
+export interface VideoTrim { startSeconds: number; endSeconds: number }
+export interface MaterialEdit { rotation: MaterialRotation; crop: MaterialCrop; trim?: VideoTrim }
 export interface MaterialEditResult {
   storageKey: string; mimeType: string; sizeBytes: number; width: number; height: number; orientation: MaterialOrientation;
+  durationSeconds?: number;
 }
-export interface AppliedMaterialEdit extends MaterialEdit { result: MaterialEditResult }
+export interface AppliedMaterialEdit extends MaterialEdit { result?: MaterialEditResult }
 export type ImageMaterial = {
   id: string; kind: "image"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
   sizeBytes: number; width: number; height: number; edit?: AppliedMaterialEdit;
@@ -24,6 +30,7 @@ export type VideoMaterial = {
   id: string; kind: "video"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
   sizeBytes: number; width: number; height: number; edit?: AppliedMaterialEdit;
   hasAudio: boolean; sourceDurationSeconds?: number; audioTags: VideoAudioTag[];
+  videoTrack?: VideoTrack; audioTrack?: AudioTrack;
 };
 export type SceneMaterial = ImageMaterial | VideoMaterial;
 export interface Scene {
@@ -93,8 +100,18 @@ export async function getMaterialSourceContent(token: string, storyId: string, m
 export function getMaterialSourceContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
   return request(`/stories/${storyId}/materials/${materialId}/source-content-access`, {}, token);
 }
-export function getMaterialPresentation(material: SceneMaterial): MaterialEditResult {
-  return material.edit?.result ?? material;
+export function getMaterialWaveform(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<{ peaks: number[] }> {
+  return request(`/stories/${storyId}/materials/${materialId}/waveform`, signal ? { signal } : {}, token);
+}
+export function getMaterialAudioContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
+  return request(`/stories/${storyId}/materials/${materialId}/audio-content-access`, {}, token);
+}
+export async function getMaterialAudioContent(token: string, storyId: string, materialId: string): Promise<Blob> {
+  const response = await fetch(`${apiUrl}/stories/${storyId}/materials/${materialId}/audio-content`, {
+    cache: "no-store", headers: { authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) await throwResponseError(response);
+  return response.blob();
 }
 export function reorderSceneMaterials(token: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}/material-order`, { method: "PUT", body: JSON.stringify({ materialIds }) }, token);
@@ -104,8 +121,8 @@ export function configureStoryScene(token: string, storyId: string, sceneId: str
 }): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}`, { method: "PATCH", body: JSON.stringify(settings) }, token);
 }
-export function requestSceneRender(token: string, storyId: string, sceneId: string, signal?: AbortSignal): Promise<SceneRender> {
-  return request(`/stories/${storyId}/scenes/${sceneId}/renders`, { method: "POST", ...(signal ? { signal } : {}) }, token);
+export function requestSceneRender(token: string, storyId: string, sceneId: string, mode: VideoExportMode, signal?: AbortSignal): Promise<SceneRender> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/renders`, { method: "POST", body: JSON.stringify({ mode }), ...(signal ? { signal } : {}) }, token);
 }
 export function getSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<SceneRender> {
   return request(`/stories/${storyId}/scenes/${sceneId}/renders/${renderId}`, signal ? { signal } : {}, token);

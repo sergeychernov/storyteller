@@ -3,6 +3,32 @@
   display: inline-flex;
 }
 
+.options {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.options button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #cbcbbf;
+  border-radius: 8px;
+  color: #42483a;
+  background: #f5f4ee;
+  cursor: pointer;
+}
+
+.options button:disabled { opacity: 0.45; cursor: default; }
+.options p { margin: 4px 0; }
+.options small { opacity: 0.6; }
+
 .error {
   position: absolute;
   z-index: 50;

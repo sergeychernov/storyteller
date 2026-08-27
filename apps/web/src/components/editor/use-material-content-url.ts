@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
-  getMaterialContent, getMaterialContentAccess, getMaterialSourceContent, getMaterialSourceContentAccess,
+  getMaterialAudioContent, getMaterialAudioContentAccess, getMaterialContent, getMaterialContentAccess,
+  getMaterialPresentation, getMaterialSource, getMaterialSourceContent, getMaterialSourceContentAccess,
   type AuthSession, type SceneMaterial,
 } from "../../api.js";
 
@@ -10,18 +11,21 @@ interface UseMaterialContentUrlOptions {
   readonly material: SceneMaterial;
   readonly session: AuthSession;
   readonly source?: boolean;
+  readonly audio?: boolean;
 }
 
-export function useMaterialContentUrl({ storyId, material, session, source = false }: UseMaterialContentUrlOptions) {
+export function useMaterialContentUrl({ storyId, material, session, source = false, audio = false }: UseMaterialContentUrlOptions) {
   const [objectUrl, setObjectUrl] = useState<{ readonly blob: Blob; readonly url: string }>();
-  const storageKey = source ? material.storageKey : material.edit?.result.storageKey ?? material.storageKey;
+  const storageKey = audio ? material.kind === "video" ? material.audioTrack?.storageKey : undefined
+    : (source ? getMaterialSource(material) : getMaterialPresentation(material)).storageKey;
   const content = useQuery({
-    queryKey: [source ? "material-source-content" : "material-content", storyId, material.id, storageKey],
+    queryKey: [audio ? "material-audio-content" : source ? "material-source-content" : "material-content", session.profile.id, storyId, material.id, storageKey],
+    enabled: Boolean(storageKey),
     queryFn: async () => {
-      const access = source
+      const access = audio ? await getMaterialAudioContentAccess(session.accessToken, storyId, material.id) : source
         ? await getMaterialSourceContentAccess(session.accessToken, storyId, material.id)
         : await getMaterialContentAccess(session.accessToken, storyId, material.id);
-      return access.url ?? (source
+      return access.url ?? (audio ? getMaterialAudioContent(session.accessToken, storyId, material.id) : source
         ? getMaterialSourceContent(session.accessToken, storyId, material.id)
         : getMaterialContent(session.accessToken, storyId, material.id));
     },

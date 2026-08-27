@@ -59,7 +59,7 @@ test("an applied material edit drives layout and motion without replacing source
   };
   const edited = replaceMaterial(landscape, "scene-1", editedMaterial);
   assert.equal(edited.scenes[0]?.materials[0]?.storageKey, source.storageKey);
-  assert.equal(edited.scenes[0]?.materials[0]?.edit?.result.storageKey, "photo-edited.jpg");
+  assert.equal(edited.scenes[0]?.materials[0]?.edit?.result?.storageKey, "photo-edited.jpg");
   assert.equal(edited.scenes[0]?.motion, "zoom-in");
 });
 
