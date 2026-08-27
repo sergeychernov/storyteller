@@ -50,51 +50,13 @@
   text-transform: uppercase;
 }
 
-.layoutOptions {
-  display: flex;
-  gap: 6px;
-  padding-bottom: 3px;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-}
-
-.layoutOptions button {
-  display: flex;
-  flex-direction: column;
-  align-items: start;
-  gap: 5px;
-  min-width: 116px;
-  min-height: 100px;
-  padding: 9px;
-  border: 1px solid transparent;
-  color: #4c4c44;
-  background: #eceae3;
-  text-align: left;
-  scroll-snap-align: start;
-}
-
-.layoutOptions button.active {
-  border-color: #8fa05a;
-  background: #f8faef;
-  box-shadow: inset 0 0 0 1px #d6e0b8;
-}
-
-.layoutOptions strong {
-  font-size: 9px;
-}
-
-.layoutOptions small {
-  font-size: 8px;
-  line-height: 1.25;
-}
-
-.rendererOptions {
+.optionGroup {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.rendererOption {
+.optionButton {
   position: relative;
   display: grid;
   place-items: center;
@@ -107,7 +69,7 @@
   background: #eceae3;
 }
 
-.rendererOption svg {
+.optionButton svg {
   width: 25px;
   height: 25px;
   fill: none;
@@ -117,66 +79,21 @@
   stroke-width: 1.7;
 }
 
-.rendererOption:focus-visible {
+.optionButton:focus-visible {
   outline: 2px solid #788a43;
   outline-offset: 2px;
 }
 
-.activeRenderer {
+.activeOption {
   border-color: #8fa05a;
   color: #3f4b23;
   background: #f8faef;
   box-shadow: inset 0 0 0 1px #d6e0b8;
 }
 
-.pendingRenderer {
+.pendingOption {
   color: #77766e;
   background: #e5e3dc;
-}
-
-.layoutGlyph {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-  width: 42px;
-  height: 47px;
-  padding: 3px;
-  border-radius: 4px;
-  background: #282823;
-}
-
-.layoutGlyph i {
-  background: #c5d296;
-}
-
-.glyphStack {
-  grid-template-columns: 1fr;
-}
-
-.glyphTwoOne i:last-child,
-.glyphTwoOneTwo i:nth-child(3),
-.glyphTwoTwoOne i:last-child {
-  grid-column: 1 / -1;
-}
-
-.glyphOverlap {
-  position: relative;
-  display: block;
-}
-
-.glyphOverlap i {
-  position: absolute;
-  top: 5px;
-  left: 7px;
-  width: 25px;
-  height: 25px;
-  border: 1px solid #fff;
-  transform: rotate(-5deg);
-}
-
-.glyphOverlap i:nth-child(2) {
-  top: 12px;
-  transform: rotate(4deg);
 }
 
 .motionOptions {
@@ -241,19 +158,6 @@
 .desktop {
   gap: 12px;
   padding: 12px 14px 20px;
-}
-
-.desktop .layoutOptions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  padding: 0;
-  overflow: visible;
-}
-
-.desktop .layoutOptions button {
-  min-width: 0;
-  min-height: 106px;
 }
 
 @media (min-width: 1380px) {

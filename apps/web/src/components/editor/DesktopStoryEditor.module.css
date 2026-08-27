@@ -21,7 +21,7 @@
   overflow: hidden;
 }
 
-.body.empty {
+.body.withoutInspector {
   grid-template-columns: 190px minmax(0, 1fr);
 }
 
@@ -30,7 +30,7 @@
   grid-template-columns: 160px minmax(0, 1fr) 48px;
 }
 
-.body.compact.empty {
+.body.compact.withoutInspector {
   grid-template-columns: 160px minmax(0, 1fr);
 }
 
@@ -84,7 +84,7 @@
     grid-template-columns: 220px minmax(420px, 1fr) 330px;
   }
 
-  .body.empty:not(.compact) {
+  .body.withoutInspector:not(.compact) {
     grid-template-columns: 220px minmax(0, 1fr);
   }
 }

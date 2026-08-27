@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type { AuthSession, MaterialEdit, Scene } from "../../api.js";
+import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneInspector } from "./SceneInspector.js";
+import { isSingleVideoScene } from "./scene-renderer-model.js";
 import styles from "./SceneEditorTabs.module.css";
 import type { SceneChange } from "./story-editor-view.js";
 
@@ -28,26 +30,35 @@ export function SceneEditorTabs({
   onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange,
 }: SceneEditorTabsProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>("materials");
+  const singleVideo = isSingleVideoScene(scene);
+  const visibleTab = singleVideo ? "materials" : activeTab;
   const tabs: readonly { id: EditorTab; label: string }[] = [
     { id: "materials", label: `${copy.materials} · ${scene.materials.length}` },
     { id: "composition", label: copy.layout },
   ];
   return (
-    <section className={styles.shell}>
+    <section className={classNames(styles.shell, singleVideo && styles.materialsOnly)}>
       <div className={styles.grabber} />
-      <div className={styles.tabs} role="tablist" aria-label={copy.sceneTools}>
+      {singleVideo ? <h2 className={styles.materialsHeading} id="scene-materials-heading">
+        {copy.materials} · {scene.materials.length}
+      </h2> : <div className={styles.tabs} role="tablist" aria-label={copy.sceneTools}>
         {tabs.map((tab) => <button
           type="button"
           role="tab"
           id={`scene-tab-${tab.id}`}
           aria-controls={`scene-panel-${tab.id}`}
-          aria-selected={activeTab === tab.id}
+          aria-selected={visibleTab === tab.id}
           key={tab.id}
           onClick={() => setActiveTab(tab.id)}
         >{tab.label}</button>)}
-      </div>
-      <div className={styles.content} role="tabpanel" id={`scene-panel-${activeTab}`} aria-labelledby={`scene-tab-${activeTab}`}>
-        {activeTab === "materials" && <MaterialTimeline
+      </div>}
+      <div
+        className={styles.content}
+        role={singleVideo ? "region" : "tabpanel"}
+        id={`scene-panel-${visibleTab}`}
+        aria-labelledby={singleVideo ? "scene-materials-heading" : `scene-tab-${visibleTab}`}
+      >
+        {visibleTab === "materials" && <MaterialTimeline
           scene={scene}
           copy={copy}
           saving={saving}
@@ -61,7 +72,7 @@ export function SceneEditorTabs({
           onEditMaterial={onEditMaterial}
           onReorder={onReorder}
         />}
-        {activeTab === "composition" && <SceneInspector scene={scene} copy={copy} saving={saving} storyId={storyId} session={session} onChange={onChange} />}
+        {visibleTab === "composition" && <SceneInspector scene={scene} copy={copy} saving={saving} storyId={storyId} session={session} onChange={onChange} />}
       </div>
     </section>
   );

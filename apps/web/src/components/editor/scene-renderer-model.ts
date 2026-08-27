@@ -6,6 +6,10 @@ export function isSingleImageScene(scene: Scene): boolean {
   return scene.materials.length === 1 && scene.materials[0]?.kind === "image";
 }
 
+export function isSingleVideoScene(scene: Scene): boolean {
+  return scene.materials.length === 1 && scene.materials[0]?.kind === "video";
+}
+
 export function resolveEditorRenderer(scene: Scene): EditorRendererKind {
   return (scene.rendererId === undefined || scene.rendererId === "still-image") && isSingleImageScene(scene)
     ? "still-image"

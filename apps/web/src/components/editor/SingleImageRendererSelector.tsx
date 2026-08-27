@@ -7,10 +7,10 @@ interface SingleImageRendererSelectorProps {
 
 export function SingleImageRendererSelector({ copy }: SingleImageRendererSelectorProps) {
   return <section>
-    <div className={styles.rendererOptions} role="group" aria-label={copy.animationType}>
+    <div className={styles.optionGroup} role="group" aria-label={copy.animationType}>
       <button
         type="button"
-        className={`${styles.rendererOption} ${styles.activeRenderer}`}
+        className={`${styles.optionButton} ${styles.activeOption}`}
         aria-label={copy.zoom}
         aria-pressed="true"
         title={`${copy.zoom} — ${copy.zoomRendererHint}`}
@@ -22,7 +22,7 @@ export function SingleImageRendererSelector({ copy }: SingleImageRendererSelecto
       </button>
       <button
         type="button"
-        className={`${styles.rendererOption} ${styles.pendingRenderer}`}
+        className={`${styles.optionButton} ${styles.pendingOption}`}
         aria-label={`${copy.aiAnimation} — ${copy.comingSoon}`}
         title={`${copy.aiAnimation} — ${copy.aiAnimationHint}`}
         disabled

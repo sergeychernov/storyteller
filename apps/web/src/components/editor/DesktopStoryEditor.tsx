@@ -7,6 +7,7 @@ import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneEdgeActions } from "./SceneEdgeActions.js";
 import { ScenePreview } from "./ScenePreview.js";
 import { SceneRail } from "./SceneRail.js";
+import { isSingleVideoScene } from "./scene-renderer-model.js";
 import styles from "./DesktopStoryEditor.module.css";
 
 interface DesktopStoryEditorProps extends StoryEditorViewProps {
@@ -18,12 +19,13 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
     story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage,
     onSelect, onAdd, onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange,
   } = props;
+  const showInspector = !!selected && !isSingleVideoScene(selected);
 
   return (
     <div className={styles.editor}>
       <DesktopEditorHeader storyTitle={story.title} scenes={story.scenes} selected={selected} copy={copy} saving={saving} compact={props.compact} />
       {operationErrorMessage && <div className={classNames(sharedStyles.operationError, styles.operationError)} role="alert">{operationErrorMessage}</div>}
-      <div className={classNames(styles.body, props.compact && styles.compact, !selected && styles.empty)}>
+      <div className={classNames(styles.body, props.compact && styles.compact, !showInspector && styles.withoutInspector)}>
         <SceneRail scenes={story.scenes} selectedId={selected?.id ?? ""} copy={copy} adding={adding} onSelect={onSelect} onAdd={onAdd} variant="desktop" />
         {selected ? <>
           <main className={styles.workspace}>
@@ -57,7 +59,7 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
               />
             </section>
           </main>
-          <DesktopSceneInspector
+          {showInspector && <DesktopSceneInspector
             scene={selected}
             copy={copy}
             saving={saving}
@@ -65,7 +67,7 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
             storyId={story.id}
             session={session}
             onChange={onChange}
-          />
+          />}
         </> : <main className={styles.emptyEditor}>
           <SceneEdgeActions copy={copy} adding={adding} active onAdd={onAdd} variant="desktopEmpty" />
         </main>}

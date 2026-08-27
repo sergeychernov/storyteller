@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ImageMaterial, Scene } from "../../api.js";
-import { isSingleImageScene, resolveEditorRenderer } from "./scene-renderer-model.js";
+import { isSingleImageScene, isSingleVideoScene, resolveEditorRenderer } from "./scene-renderer-model.js";
 
 const image: ImageMaterial = {
   id: "image", kind: "image", name: "image.jpg", orientation: "landscape", storageKey: "image.jpg",
@@ -15,6 +15,15 @@ test("still-image renderer owns only a scene with exactly one image", () => {
   assert.equal(resolveEditorRenderer(scene({ rendererId: "ai-animation", materials: [image] })), "layout");
   assert.equal(resolveEditorRenderer(scene({ rendererId: "still-image", materials: [image, { ...image, id: "second" }] })), "layout");
   assert.equal(isSingleImageScene(scene({ materials: [{ ...image, kind: "video", hasAudio: false, audioTags: [] }] })), false);
+});
+
+test("only a single video omits scene composition controls", () => {
+  const video = { ...image, kind: "video" as const, hasAudio: false, audioTags: [] };
+  assert.equal(isSingleVideoScene(scene({ materials: [video] })), true);
+  assert.equal(isSingleVideoScene(scene({ materials: [image] })), false);
+  assert.equal(isSingleVideoScene(scene({ materials: [video, image] })), false);
+  assert.equal(isSingleVideoScene(scene({ materials: [video, { ...video, id: "second" }] })), false);
+  assert.equal(isSingleVideoScene(scene({ materials: [] })), false);
 });
 
 function scene(change: Partial<Scene>): Scene {
