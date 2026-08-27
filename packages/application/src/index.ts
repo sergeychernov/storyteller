@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
-  addMaterial, addScene, configureScene, createStory, removeMaterial, removeScene, reorderMaterials,
+  addMaterial, addScene, configureScene, createStory, removeMaterial, removeScene, reorderMaterials, replaceMaterial,
   type FocusPoint, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
 } from "@storyteller/domain";
 
@@ -108,7 +108,10 @@ export class StoryApplication {
     const story = await this.getStory(profileId, storyId);
     const scene = story.scenes.find(({ id }) => id === sceneId);
     const changed = removeScene(story, sceneId);
-    await this.repository.deleteScene(changed, sceneId, scene?.materials.map(({ storageKey }) => storageKey) ?? []);
+    await this.repository.deleteScene(changed, sceneId, scene?.materials.flatMap((material) => [
+      material.storageKey,
+      ...(material.edit ? [material.edit.result.storageKey] : []),
+    ]) ?? []);
     return changed;
   }
   async addSceneMaterial(profileId: string, storyId: string, sceneId: string, material: NewSceneMaterial): Promise<Story> {
@@ -126,6 +129,9 @@ export class StoryApplication {
     const changed = removeMaterial(story, sceneId, materialId);
     await this.repository.updateStory(changed);
     return { story: changed, material };
+  }
+  async replaceSceneMaterial(profileId: string, storyId: string, sceneId: string, material: SceneMaterial): Promise<Story> {
+    return this.changeStory(profileId, storyId, (story) => replaceMaterial(story, sceneId, material));
   }
   async reorderSceneMaterials(profileId: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => reorderMaterials(story, sceneId, materialIds));

@@ -3,8 +3,10 @@ import {
   configureStoryScene,
   createScene,
   deleteSceneMaterial,
+  editSceneMaterial,
   uploadSceneMaterial,
   type AuthSession,
+  type MaterialEdit,
   type Story,
 } from "../../api.js";
 import { useLocalization } from "../../localization.js";
@@ -51,15 +53,21 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     ),
     onSuccess: update,
   });
+  const editMaterialMutation = useMutation({
+    mutationFn: ({ sceneId, materialId, edit }: {
+      sceneId: string; materialId: string; edit: MaterialEdit;
+    }) => editSceneMaterial(session.accessToken, story.id, sceneId, materialId, edit),
+    onSuccess: update,
+  });
   const configureMutation = useMutation({
     mutationFn: ({ sceneId, change }: { sceneId: string; change: SceneChange }) => configureStoryScene(session.accessToken, story.id, sceneId, change),
     onSuccess: update,
   });
   const selected = story.scenes.find(({ id }) => id === selectedId) ?? story.scenes[0];
   const saving = addSceneMutation.isPending || uploadMaterialsMutation.isPending || deleteMaterialMutation.isPending
-    || reorderMutation.isPending || configureMutation.isPending;
+    || editMaterialMutation.isPending || reorderMutation.isPending || configureMutation.isPending;
   const operationError = addSceneMutation.error ?? uploadMaterialsMutation.error ?? deleteMaterialMutation.error
-    ?? reorderMutation.error ?? configureMutation.error;
+    ?? editMaterialMutation.error ?? reorderMutation.error ?? configureMutation.error;
 
   function addScene() {
     addSceneMutation.reset();
@@ -85,6 +93,10 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     },
     onDeleteMaterial: (materialId) => {
       if (selected) deleteMaterialMutation.mutate({ sceneId: selected.id, materialId });
+    },
+    onEditMaterial: async (materialId, edit) => {
+      if (!selected) return;
+      await editMaterialMutation.mutateAsync({ sceneId: selected.id, materialId, edit });
     },
     onReorder: (ids) => {
       if (selected) reorderMutation.mutate({ sceneId: selected.id, ids });

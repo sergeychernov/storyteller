@@ -1,4 +1,5 @@
 import { classNames } from "../../class-names.js";
+import { getMaterialPresentation } from "../../api.js";
 import type { SceneRendererPreviewProps } from "./SceneRenderer.js";
 import styles from "./SceneCanvas.module.css";
 import { SingleImageMaterial } from "./SingleImageMaterial.js";
@@ -6,7 +7,7 @@ import { SingleImageMaterial } from "./SingleImageMaterial.js";
 export function StillImageRendererPreview({ scene, copy, storyId, session, active, saving, onChange }: SceneRendererPreviewProps) {
   const material = scene.materials[0];
   if (material?.kind !== "image") return null;
-  return <div className={classNames(styles.material, styles[material.orientation])}>
+  return <div className={classNames(styles.material, styles[getMaterialPresentation(material).orientation])}>
     <SingleImageMaterial
       scene={scene}
       material={material}

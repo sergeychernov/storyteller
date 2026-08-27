@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   addMaterial, addNarration, addScene, configureScene, createStillImageMotionPlan, createStory, evaluateStillImageMotion,
-  focusDwellProgress, getLayoutOptions, mergeMaterialOrder, removeMaterial, removeScene, reorderMaterials, selectRenderer, setSceneTitle,
+  focusDwellProgress, getLayoutOptions, mergeMaterialOrder, removeMaterial, removeScene, reorderMaterials, replaceMaterial, selectRenderer, setSceneTitle,
   transitionStory, verticalStoryFrame,
 } from "./index.js";
 
@@ -40,6 +40,27 @@ test("one image gets orientation-aware motion, centered focus and the still-imag
 
   const portrait = addMaterial(empty, "scene-1", imageMaterial("portrait", "portrait"));
   assert.equal(portrait.scenes[0]?.motion, "zoom-in");
+});
+
+test("an applied material edit drives layout and motion without replacing source metadata", () => {
+  const empty = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  const source = imageMaterial("photo", "landscape");
+  const landscape = addMaterial(empty, "scene-1", source);
+  const editedMaterial = {
+    ...source,
+    edit: {
+      rotation: 90 as const,
+      crop: { x: 0, y: 0, width: 1, height: 1 },
+      result: {
+        storageKey: "photo-edited.jpg", mimeType: "image/jpeg", sizeBytes: 90,
+        width: 100, height: 200, orientation: "portrait" as const,
+      },
+    },
+  };
+  const edited = replaceMaterial(landscape, "scene-1", editedMaterial);
+  assert.equal(edited.scenes[0]?.materials[0]?.storageKey, source.storageKey);
+  assert.equal(edited.scenes[0]?.materials[0]?.edit?.result.storageKey, "photo-edited.jpg");
+  assert.equal(edited.scenes[0]?.motion, "zoom-in");
 });
 
 test("focus belongs only to the single-image renderer", () => {

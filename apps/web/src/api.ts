@@ -9,13 +9,21 @@ export type MaterialOrientation = "portrait" | "landscape";
 export type VideoAudioTag = "voice" | "music" | "ambient";
 export type SceneMotion = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right";
 export interface FocusPoint { x: number; y: number }
+export type MaterialRotation = 0 | 90 | 180 | 270;
+export interface MaterialCrop { x: number; y: number; width: number; height: number }
+export interface MaterialEdit { rotation: MaterialRotation; crop: MaterialCrop }
+export interface MaterialEditResult {
+  storageKey: string; mimeType: string; sizeBytes: number; width: number; height: number; orientation: MaterialOrientation;
+}
+export interface AppliedMaterialEdit extends MaterialEdit { result: MaterialEditResult }
 export type ImageMaterial = {
   id: string; kind: "image"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
-  sizeBytes: number; width: number; height: number;
+  sizeBytes: number; width: number; height: number; edit?: AppliedMaterialEdit;
 };
 export type VideoMaterial = {
   id: string; kind: "video"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
-  sizeBytes: number; width: number; height: number; hasAudio: boolean; sourceDurationSeconds?: number; audioTags: VideoAudioTag[];
+  sizeBytes: number; width: number; height: number; edit?: AppliedMaterialEdit;
+  hasAudio: boolean; sourceDurationSeconds?: number; audioTags: VideoAudioTag[];
 };
 export type SceneMaterial = ImageMaterial | VideoMaterial;
 export interface Scene {
@@ -61,13 +69,32 @@ export function uploadSceneMaterial(token: string, storyId: string, sceneId: str
 export function deleteSceneMaterial(token: string, storyId: string, sceneId: string, materialId: string): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}/materials/${materialId}`, { method: "DELETE" }, token);
 }
+export function editSceneMaterial(token: string, storyId: string, sceneId: string, materialId: string, edit: MaterialEdit): Promise<Story> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/materials/${materialId}`, {
+    method: "PATCH", body: JSON.stringify(edit),
+  }, token);
+}
 export async function getMaterialContent(token: string, storyId: string, materialId: string): Promise<Blob> {
-  const response = await fetch(`${apiUrl}/stories/${storyId}/materials/${materialId}/content`, { headers: { authorization: `Bearer ${token}` } });
+  // This URL follows the current edit, not an immutable storage object.
+  const response = await fetch(`${apiUrl}/stories/${storyId}/materials/${materialId}/content`, {
+    cache: "no-store", headers: { authorization: `Bearer ${token}` },
+  });
   if (!response.ok) await throwResponseError(response);
   return response.blob();
 }
 export function getMaterialContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
   return request(`/stories/${storyId}/materials/${materialId}/content-access`, {}, token);
+}
+export async function getMaterialSourceContent(token: string, storyId: string, materialId: string): Promise<Blob> {
+  const response = await fetch(`${apiUrl}/stories/${storyId}/materials/${materialId}/source-content`, { headers: { authorization: `Bearer ${token}` } });
+  if (!response.ok) await throwResponseError(response);
+  return response.blob();
+}
+export function getMaterialSourceContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
+  return request(`/stories/${storyId}/materials/${materialId}/source-content-access`, {}, token);
+}
+export function getMaterialPresentation(material: SceneMaterial): MaterialEditResult {
+  return material.edit?.result ?? material;
 }
 export function reorderSceneMaterials(token: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}/material-order`, { method: "PUT", body: JSON.stringify({ materialIds }) }, token);

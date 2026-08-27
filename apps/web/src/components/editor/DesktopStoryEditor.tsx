@@ -14,7 +14,10 @@ interface DesktopStoryEditorProps extends StoryEditorViewProps {
 }
 
 export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
-  const { story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, onSelect, onAdd, onUpload, onDeleteMaterial, onReorder, onChange } = props;
+  const {
+    story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage,
+    onSelect, onAdd, onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange,
+  } = props;
 
   return (
     <div className={styles.editor}>
@@ -49,6 +52,7 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
                 variant="desktopPanel"
                 onUpload={onUpload}
                 onDeleteMaterial={onDeleteMaterial}
+                onEditMaterial={onEditMaterial}
                 onReorder={onReorder}
               />
             </section>

@@ -1,4 +1,4 @@
-import type { SceneMaterial } from "./model.js";
+import { getMaterialPresentation, type SceneMaterial } from "./model.js";
 
 export interface LayoutOption {
   readonly id: string;
@@ -24,7 +24,7 @@ const portraitSix = [
 ] as const;
 
 export function materialOrientationSequence(materials: readonly SceneMaterial[]): string {
-  return materials.map(({ orientation }) => orientation === "portrait" ? "p" : "l").join("");
+  return materials.map((material) => getMaterialPresentation(material).orientation === "portrait" ? "p" : "l").join("");
 }
 
 export function getLayoutOptions(materials: readonly SceneMaterial[]): readonly LayoutOption[] {

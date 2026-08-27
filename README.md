@@ -43,6 +43,8 @@ Then open [http://localhost:3000](http://localhost:3000). The API runs at [http:
 
 Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mobile app, or `yarn dev:mobile` to start Expo separately. Individual commands remain available as `yarn dev:api`, `yarn dev:web`, `yarn dev:worker`, and `yarn dev:mcp`.
 
+Scene downloads require the worker and FFmpeg (`ffmpeg` and `ffprobe` on `PATH`). If API and web were started separately, also run `yarn dev:worker`; otherwise render jobs remain queued. When using local storage, API and worker must share the same `MEDIA_ROOT` (the default resolves to the repository's `.storyteller-media` directory).
+
 Production deployment of the web studio, API, worker, and MCP boundary is prepared for Railway. See [`docs/deploy-railway.md`](docs/deploy-railway.md) for service setup, variables, domains, and watch paths. The Expo mobile app is distributed separately through native app stores or EAS.
 
 The API persists profiles, sessions, stories, render jobs, cached artifact keys, and encrypted platform credentials in PostgreSQL. Set `DATABASE_URL` and a base64-encoded 32-byte `PLATFORM_CREDENTIALS_KEY`; the API applies versioned migrations on startup. The worker uses the same `DATABASE_URL` and object-storage configuration.

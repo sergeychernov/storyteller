@@ -1,4 +1,4 @@
-import type { AuthSession, Scene } from "../../api.js";
+import { getMaterialPresentation, type AuthSession, type MaterialEdit, type Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MaterialActions } from "./MaterialActions.js";
@@ -14,20 +14,26 @@ interface MaterialTimelineProps {
   readonly variant: "default" | "mobilePanel" | "desktopPanel";
   readonly onUpload: (files: readonly File[]) => void; readonly onDeleteMaterial: (materialId: string) => void;
   readonly onReorder: (ids: readonly string[]) => void;
+  readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
 }
 
-export function MaterialTimeline({ scene, copy, saving, uploading, uploadCount, storyId, session, variant, onUpload, onDeleteMaterial, onReorder }: MaterialTimelineProps) {
+export function MaterialTimeline({
+  scene, copy, saving, uploading, uploadCount, storyId, session, variant,
+  onUpload, onDeleteMaterial, onReorder, onEditMaterial,
+}: MaterialTimelineProps) {
   const materials = scene.materials;
   const { orderedMaterials, draggingId, dragVisual, stripRef, startDrag, moveWithKeyboard } = useMaterialDrag({ materials, saving, onReorder });
 
   return (
     <section className={classNames(styles.section, variant !== "default" && styles[variant])}>
       <div className={styles.strip} ref={stripRef}>
-        {orderedMaterials.map((material, index) => (
+        {orderedMaterials.map((material, index) => {
+          const orientation = getMaterialPresentation(material).orientation;
+          return (
           <article
             className={classNames(
               styles.card,
-              styles[material.orientation],
+              styles[orientation],
               draggingId === material.id && styles.dragging,
               saving && styles.disabled,
             )}
@@ -44,12 +50,21 @@ export function MaterialTimeline({ scene, copy, saving, uploading, uploadCount, 
               moveWithKeyboard(material.id, event.key === "ArrowLeft" ? -1 : 1);
             }}
           >
-            <div className={classNames(styles.thumb, styles[material.orientation])}>
+            <div className={classNames(styles.thumb, styles[orientation])}>
               <MaterialThumbnail storyId={storyId} material={material} session={session} presentation="timeline" />
-              <MaterialActions material={material} copy={copy} disabled={saving} onDelete={() => onDeleteMaterial(material.id)} />
+              <MaterialActions
+                material={material}
+                copy={copy}
+                disabled={saving}
+                storyId={storyId}
+                session={session}
+                onEdit={(edit) => onEditMaterial(material.id, edit)}
+                onDelete={() => onDeleteMaterial(material.id)}
+              />
             </div>
           </article>
-        ))}
+          );
+        })}
         <MaterialUploader copy={copy} disabled={saving} uploading={uploading} uploadCount={uploadCount} onUpload={onUpload} />
       </div>
       {dragVisual && <MaterialDragGhost {...dragVisual} storyId={storyId} session={session} />}

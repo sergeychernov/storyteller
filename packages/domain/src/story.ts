@@ -46,6 +46,16 @@ export function removeMaterial(story: Story, sceneId: string, materialId: string
   });
 }
 
+export function replaceMaterial(story: Story, sceneId: string, material: SceneMaterial): Story {
+  return updateScene(story, sceneId, (scene) => {
+    if (!scene.materials.some(({ id }) => id === material.id)) throw new DomainError(`unknown material: ${material.id}`);
+    return resetMaterialPresentation({
+      ...scene,
+      materials: scene.materials.map((current) => current.id === material.id ? material : current),
+    });
+  });
+}
+
 export function reorderMaterials(story: Story, sceneId: string, materialIds: readonly string[]): Story {
   return updateScene(story, sceneId, (scene) => {
     if (materialIds.length !== scene.materials.length || new Set(materialIds).size !== materialIds.length) {

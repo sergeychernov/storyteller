@@ -3,6 +3,7 @@ import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneCanvas } from "./SceneCanvas.js";
 import { SceneDownloadButton } from "./SceneDownloadButton.js";
+import { SceneDebugButton } from "./SceneDebugButton.js";
 import styles from "./ScenePreview.module.css";
 import type { SceneChange } from "./story-editor-view.js";
 
@@ -22,6 +23,7 @@ export function ScenePreview({ scene, copy, storyId, session, compact, saving, o
       <div className={styles.label}><span>{copy.preview}</span><span className={styles.labelActions}>
         <span>9:16 · {scene.durationSeconds} {copy.seconds}</span>
         <SceneDownloadButton scene={scene} storyId={storyId} session={session} copy={copy} />
+        <SceneDebugButton scene={scene} copy={copy} />
       </span></div>
       <SceneCanvas
         scene={scene}

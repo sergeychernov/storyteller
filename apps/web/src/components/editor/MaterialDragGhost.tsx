@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import type { AuthSession, SceneMaterial } from "../../api.js";
+import { getMaterialPresentation, type AuthSession, type SceneMaterial } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import { MaterialThumbnail } from "./MaterialThumbnail.js";
 import styles from "./MaterialDragGhost.module.css";
@@ -25,7 +25,7 @@ export function MaterialDragGhost({ material, storyId, session, x, y, offsetX, o
       className={classNames(styles.ghost, dropping && styles.dropping)}
       style={{ width, height, transform: `translate3d(${x - offsetX}px, ${y - offsetY}px, 0) scale(${dropping ? 1 : 1.03})` }}
     >
-      <div className={classNames(timelineStyles.thumb, timelineStyles[material.orientation], styles.thumb)}>
+      <div className={classNames(timelineStyles.thumb, timelineStyles[getMaterialPresentation(material).orientation], styles.thumb)}>
         <MaterialThumbnail storyId={storyId} material={material} session={session} presentation="timeline" />
       </div>
     </article>,

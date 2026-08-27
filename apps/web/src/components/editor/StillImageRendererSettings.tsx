@@ -1,5 +1,5 @@
 import { getSceneMotionOptions } from "@storyteller/domain";
-import type { SceneMotion } from "../../api.js";
+import { getMaterialPresentation, type SceneMotion } from "../../api.js";
 import type { SceneRendererSettingsProps } from "./SceneRenderer.js";
 import { SceneDurationControl } from "./SceneDurationControl.js";
 import styles from "./SceneInspector.module.css";
@@ -7,6 +7,7 @@ import styles from "./SceneInspector.module.css";
 export function StillImageRendererSettings({ scene, copy, saving, onChange }: SceneRendererSettingsProps) {
   const material = scene.materials[0];
   if (material?.kind !== "image") return null;
+  const orientation = getMaterialPresentation(material).orientation;
   const labels: Readonly<Record<SceneMotion, string>> = {
     none: copy.noMotion, "pan-left": copy.panLeft, "pan-right": copy.panRight,
     "zoom-in": copy.zoomIn, "zoom-out": copy.zoomOut,
@@ -17,7 +18,7 @@ export function StillImageRendererSettings({ scene, copy, saving, onChange }: Sc
       <div
         className={styles.motionOptions}
         role="group"
-        aria-label={material.orientation === "portrait" ? copy.zoomDirectionHint : copy.panDirectionHint}
+        aria-label={orientation === "portrait" ? copy.zoomDirectionHint : copy.panDirectionHint}
       >{motions.map((motion) => <button
         type="button"
         className={scene.motion === motion.id ? styles.active : undefined}

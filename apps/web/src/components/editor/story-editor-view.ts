@@ -1,4 +1,4 @@
-import type { AuthSession, FocusPoint, Scene, SceneMotion, Story } from "../../api.js";
+import type { AuthSession, FocusPoint, MaterialEdit, Scene, SceneMotion, Story } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 
 export interface SceneChange {
@@ -22,6 +22,7 @@ export interface StoryEditorViewProps {
   readonly onAdd: () => void;
   readonly onUpload: (files: readonly File[]) => void;
   readonly onDeleteMaterial: (materialId: string) => void;
+  readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onChange: (change: SceneChange) => void;
 }

@@ -1,4 +1,4 @@
-import type { MaterialOrientation, SceneMaterial, SceneMotion } from "./model.js";
+import { getMaterialPresentation, type MaterialOrientation, type SceneMaterial, type SceneMotion } from "./model.js";
 
 const landscapeMotions = ["none", "pan-left", "pan-right"] as const satisfies readonly SceneMotion[];
 const portraitMotions = ["none", "zoom-in", "zoom-out"] as const satisfies readonly SceneMotion[];
@@ -6,7 +6,7 @@ const portraitMotions = ["none", "zoom-in", "zoom-out"] as const satisfies reado
 export function getSceneMotionOptions(materials: readonly SceneMaterial[]): readonly SceneMotion[] {
   const material = materials[0];
   if (!material || material.kind !== "image") return ["none"];
-  return getSingleImageMotionOptions(material.orientation);
+  return getSingleImageMotionOptions(getMaterialPresentation(material).orientation);
 }
 
 export function getSingleImageMotionOptions(orientation: MaterialOrientation): readonly SceneMotion[] {
@@ -15,5 +15,5 @@ export function getSingleImageMotionOptions(orientation: MaterialOrientation): r
 
 export function defaultSingleImageMotion(material: SceneMaterial): SceneMotion {
   if (material.kind !== "image") return "none";
-  return material.orientation === "landscape" ? "pan-right" : "zoom-in";
+  return getMaterialPresentation(material).orientation === "landscape" ? "pan-right" : "zoom-in";
 }

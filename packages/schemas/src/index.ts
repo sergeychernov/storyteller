@@ -21,9 +21,24 @@ export const materialOrientationSchema = z.enum(["portrait", "landscape"]);
 export const videoAudioTagSchema = z.enum(["voice", "music", "ambient"]);
 export const sceneMotionSchema = z.enum(["none", "zoom-in", "zoom-out", "pan-left", "pan-right"]);
 export const focusPointSchema = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
+const materialRotationSchema = z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]);
+const materialCropSchema = z.object({
+  x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+  width: z.number().positive().max(1), height: z.number().positive().max(1),
+}).refine(({ x, width }) => x + width <= 1.000_001, { message: "crop exceeds image width" })
+  .refine(({ y, height }) => y + height <= 1.000_001, { message: "crop exceeds image height" });
+export const editMaterialSchema = z.object({ rotation: materialRotationSchema, crop: materialCropSchema });
 const materialFileShape = {
   id: z.string().uuid(), name: z.string(), orientation: materialOrientationSchema, storageKey: z.string(), mimeType: z.string(),
   sizeBytes: z.number().int().nonnegative(), width: z.number().int().positive(), height: z.number().int().positive(),
+  edit: z.object({
+    rotation: materialRotationSchema,
+    crop: materialCropSchema,
+    result: z.object({
+      storageKey: z.string(), mimeType: z.string(), sizeBytes: z.number().int().nonnegative(),
+      width: z.number().int().positive(), height: z.number().int().positive(), orientation: materialOrientationSchema,
+    }),
+  }).optional(),
 };
 export const sceneMaterialSchema = z.discriminatedUnion("kind", [
   z.object({ ...materialFileShape, kind: z.literal("image") }),

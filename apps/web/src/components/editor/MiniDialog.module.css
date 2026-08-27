@@ -21,6 +21,11 @@
   box-shadow: 0 24px 70px #17171455;
 }
 
+.dialog.wide {
+  width: min(680px, 100%);
+  max-height: min(760px, 92vh);
+}
+
 .dialog > header {
   display: flex;
   align-items: center;

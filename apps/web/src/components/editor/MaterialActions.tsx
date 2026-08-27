@@ -1,6 +1,7 @@
 import { useState } from "react";
-import type { SceneMaterial } from "../../api.js";
+import { getMaterialPresentation, type AuthSession, type MaterialEdit, type SceneMaterial } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
+import { MaterialEditor } from "./MaterialEditor.js";
 import { MiniDialog } from "./MiniDialog.js";
 import { PopupMenuButton, type PopupMenuItem } from "./PopupMenuButton.js";
 import styles from "./MaterialActions.module.css";
@@ -9,13 +10,17 @@ interface MaterialActionsProps {
   readonly material: SceneMaterial;
   readonly copy: EditorCopy;
   readonly disabled: boolean;
+  readonly storyId: string;
+  readonly session: AuthSession;
+  readonly onEdit: (edit: MaterialEdit) => Promise<void>;
   readonly onDelete: () => void;
 }
 
 type MaterialDialog = "info" | "edit" | "delete";
 
-export function MaterialActions({ material, copy, disabled, onDelete }: MaterialActionsProps) {
+export function MaterialActions({ material, copy, disabled, storyId, session, onEdit, onDelete }: MaterialActionsProps) {
   const [dialog, setDialog] = useState<MaterialDialog>();
+  const presentation = getMaterialPresentation(material);
   const audio = material.kind === "video"
     ? material.audioTags.length ? material.audioTags.map((tag) => copy[tag]).join(", ") : material.hasAudio ? copy.audioUnclassified : copy.silent
     : undefined;
@@ -30,19 +35,23 @@ export function MaterialActions({ material, copy, disabled, onDelete }: Material
     <MiniDialog open={dialog === "info"} title={copy.fileInfo} closeLabel={copy.close} onClose={() => setDialog(undefined)}>
       <dl className={styles.fileDetails}>
         <div><dt>{copy.fileName}</dt><dd>{material.name}</dd></div>
-        <div><dt>{copy.fileSize}</dt><dd>{formatFileSize(material.sizeBytes)}</dd></div>
-        <div><dt>{copy.fileFormat}</dt><dd>{material.mimeType}</dd></div>
-        <div><dt>{copy.fileDimensions}</dt><dd>{material.width} × {material.height}</dd></div>
+        <div><dt>{copy.fileSize}</dt><dd>{formatFileSize(presentation.sizeBytes)}</dd></div>
+        <div><dt>{copy.fileFormat}</dt><dd>{presentation.mimeType}</dd></div>
+        <div><dt>{copy.fileDimensions}</dt><dd>{presentation.width} × {presentation.height}</dd></div>
         {material.kind === "video" && <div><dt>{copy.fileDuration}</dt><dd>{material.sourceDurationSeconds === undefined ? "—" : formatDuration(material.sourceDurationSeconds)}</dd></div>}
         {audio && <div><dt>{copy.sourceAudio}</dt><dd>{audio}</dd></div>}
       </dl>
     </MiniDialog>
-    <MiniDialog open={dialog === "edit"} title={copy.editMaterial} closeLabel={copy.close} onClose={() => setDialog(undefined)}>
-      <div className={styles.futureTools}>
-        <button type="button" disabled>{copy.cropMaterial}</button>
-        {material.kind === "video" && <button type="button" disabled>{copy.trimMaterial}</button>}
-        <small>{copy.materialEditorHint}</small>
-      </div>
+    <MiniDialog open={dialog === "edit"} title={copy.editMaterial} closeLabel={copy.close} width="wide" onClose={() => setDialog(undefined)}>
+      <MaterialEditor
+        storyId={storyId}
+        material={material}
+        session={session}
+        copy={copy}
+        disabled={disabled}
+        onCancel={() => setDialog(undefined)}
+        onSave={onEdit}
+      />
     </MiniDialog>
     <MiniDialog open={dialog === "delete"} title={copy.deleteMaterial} closeLabel={copy.close} onClose={() => setDialog(undefined)}>
       <p className={styles.deleteConfirmation}>{copy.deleteMaterialConfirmation.replace("{{name}}", material.name)}</p>

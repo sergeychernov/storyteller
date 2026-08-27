@@ -29,23 +29,6 @@
   font-size: 12px;
 }
 
-.futureTools {
-  display: grid;
-  gap: 8px;
-}
-
-.futureTools button {
-  color: #4c4c44;
-  background: #eceae3;
-  text-align: left;
-}
-
-.futureTools small {
-  margin-top: 4px;
-  color: #85847a;
-  line-height: 1.5;
-}
-
 .deleteConfirmation {
   margin: 0;
   color: #55554d;

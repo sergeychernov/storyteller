@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AuthSession, Scene } from "../../api.js";
+import type { AuthSession, MaterialEdit, Scene } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneInspector } from "./SceneInspector.js";
@@ -16,13 +16,17 @@ interface SceneEditorTabsProps {
   readonly session: AuthSession;
   readonly onUpload: (files: readonly File[]) => void;
   readonly onDeleteMaterial: (materialId: string) => void;
+  readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onChange: (change: SceneChange) => void;
 }
 
 type EditorTab = "materials" | "composition";
 
-export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, storyId, session, onUpload, onDeleteMaterial, onReorder, onChange }: SceneEditorTabsProps) {
+export function SceneEditorTabs({
+  scene, copy, saving, uploading, uploadCount, storyId, session,
+  onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange,
+}: SceneEditorTabsProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>("materials");
   const tabs: readonly { id: EditorTab; label: string }[] = [
     { id: "materials", label: `${copy.materials} · ${scene.materials.length}` },
@@ -54,6 +58,7 @@ export function SceneEditorTabs({ scene, copy, saving, uploading, uploadCount, s
           variant="mobilePanel"
           onUpload={onUpload}
           onDeleteMaterial={onDeleteMaterial}
+          onEditMaterial={onEditMaterial}
           onReorder={onReorder}
         />}
         {activeTab === "composition" && <SceneInspector scene={scene} copy={copy} saving={saving} storyId={storyId} session={session} onChange={onChange} />}

@@ -6,6 +6,7 @@ import test from "node:test";
 import { StoryApplication, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
 import type { PlatformCredential, PlatformProvider, Profile, Story } from "@storyteller/domain";
 import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue } from "@storyteller/render-queue";
+import sharp from "sharp";
 import { normalizeStoredStory } from "./database.js";
 import { buildApi } from "./server.js";
 import { detectMediaMetadata, MediaStorage } from "./media-storage.js";
@@ -69,6 +70,7 @@ test("protects a profile, uploads media and stores its stories", async (context)
   assert.equal(uploaded.height, 1);
   const content = await api.inject({ method: "GET", url: `/stories/${story.id}/materials/${uploaded.id}/content`, headers });
   assert.equal(content.statusCode, 200);
+  assert.equal(content.headers["cache-control"], "private, no-store");
   assert.deepEqual(content.rawPayload, png);
   const contentAccess = await api.inject({
     method: "GET", url: `/stories/${story.id}/materials/${uploaded.id}/content-access`, headers,
@@ -76,6 +78,34 @@ test("protects a profile, uploads media and stores its stories", async (context)
   assert.equal(contentAccess.statusCode, 200);
   assert.equal(contentAccess.headers["cache-control"], "private, no-store");
   assert.deepEqual(contentAccess.json(), { url: null });
+  const firstEdit = await api.inject({
+    method: "PATCH", url: `/stories/${story.id}/scenes/${sceneId}/materials/${uploaded.id}`, headers,
+    payload: { rotation: 90, crop: { x: 0, y: 0, width: 1, height: 1 } },
+  });
+  assert.equal(firstEdit.statusCode, 200);
+  const firstEditedMaterial = firstEdit.json<{
+    scenes: { materials: { storageKey: string; width: number; height: number; edit: { rotation: number; result: { storageKey: string } } }[] }[];
+  }>().scenes[0]!.materials[0]!;
+  assert.equal(firstEditedMaterial.storageKey, uploaded.storageKey);
+  assert.equal(firstEditedMaterial.width, uploaded.width);
+  assert.equal(firstEditedMaterial.height, uploaded.height);
+  assert.equal(firstEditedMaterial.edit.rotation, 90);
+  assert.notEqual(firstEditedMaterial.edit.result.storageKey, uploaded.storageKey);
+  await access(join(mediaRoot, uploaded.storageKey));
+  await access(join(mediaRoot, firstEditedMaterial.edit.result.storageKey));
+  const sourceContent = await api.inject({ method: "GET", url: `/stories/${story.id}/materials/${uploaded.id}/source-content`, headers });
+  assert.deepEqual(sourceContent.rawPayload, png);
+  const secondEdit = await api.inject({
+    method: "PATCH", url: `/stories/${story.id}/scenes/${sceneId}/materials/${uploaded.id}`, headers,
+    payload: { rotation: 180, crop: { x: 0, y: 0, width: 1, height: 1 } },
+  });
+  const latestEditStorageKey = secondEdit.json<{
+    scenes: { materials: { edit: { result: { storageKey: string } } }[] }[];
+  }>().scenes[0]!.materials[0]!.edit.result.storageKey;
+  assert.notEqual(latestEditStorageKey, firstEditedMaterial.edit.result.storageKey);
+  await assert.rejects(access(join(mediaRoot, firstEditedMaterial.edit.result.storageKey)), { code: "ENOENT" });
+  await access(join(mediaRoot, uploaded.storageKey));
+  await access(join(mediaRoot, latestEditStorageKey));
   const configured = await api.inject({
     method: "PATCH", url: `/stories/${story.id}/scenes/${sceneId}`, headers,
     payload: { durationSeconds: 8, layoutId: "full-frame", motion: "pan-left", focusPoint: { x: 0.2, y: 0.65 } },
@@ -117,10 +147,90 @@ test("protects a profile, uploads media and stores its stories", async (context)
     method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}/materials/${uploaded.id}`, headers,
   })).statusCode, 404);
   await assert.rejects(access(join(mediaRoot, uploaded.storageKey)), { code: "ENOENT" });
+  await assert.rejects(access(join(mediaRoot, latestEditStorageKey)), { code: "ENOENT" });
+  const editedSecond = await api.inject({
+    method: "PATCH", url: `/stories/${story.id}/scenes/${sceneId}/materials/${secondMaterial.id}`, headers,
+    payload: { rotation: 90, crop: { x: 0, y: 0, width: 1, height: 1 } },
+  });
+  const secondIntermediateKey = editedSecond.json<{
+    scenes: { materials: { id: string; edit?: { result: { storageKey: string } } }[] }[];
+  }>().scenes[0]!.materials.find(({ id }) => id === secondMaterial.id)!.edit!.result.storageKey;
   const removedScene = await api.inject({ method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}`, headers });
   assert.equal(removedScene.statusCode, 200);
-  assert.deepEqual(repository.deletedSceneStorageKeys, [secondMaterial.storageKey]);
+  assert.deepEqual(repository.deletedSceneStorageKeys, [secondMaterial.storageKey, secondIntermediateKey]);
   await api.close();
+});
+
+test("serves each crop/rotation result without caching old pixels and renders the edited dimensions", async (context) => {
+  const mediaRoot = await mkdtemp(join(tmpdir(), "storyteller-edit-test-"));
+  context.after(() => rm(mediaRoot, { recursive: true, force: true }));
+  const objectStorage = new LocalObjectStorage(mediaRoot);
+  const renderQueue = new MemoryRenderQueue();
+  const api = await buildApi(new StoryApplication(new MemoryRepository()), {
+    mediaStorage: new MediaStorage(objectStorage), objectStorage, renderQueue,
+  });
+  context.after(() => api.close());
+  const registration = await api.inject({
+    method: "POST", url: "/auth/sign-in", payload: { name: "Editor test", email: "editor@example.com", password: "long-test-password" },
+  });
+  const headers = { authorization: `Bearer ${registration.json<{ accessToken: string }>().accessToken}` };
+  const storyResponse = await api.inject({ method: "POST", url: "/stories", headers, payload: { title: "Edited pixels" } });
+  const storyId = storyResponse.json<{ id: string }>().id;
+  const withScene = await api.inject({ method: "POST", url: `/stories/${storyId}/scenes`, headers });
+  const sceneId = withScene.json<Story>().scenes[0]!.id;
+  const red = [255, 0, 0], green = [0, 255, 0], blue = [0, 0, 255], white = [255, 255, 255];
+  const cyan = [0, 255, 255], magenta = [255, 0, 255], yellow = [255, 255, 0], black = [0, 0, 0];
+  const png = await sharp(Buffer.from([red, green, blue, white, cyan, magenta, yellow, black].flat()), {
+    raw: { width: 4, height: 2, channels: 3 },
+  }).png().toBuffer();
+  const multipart = multipartFile("color-grid.png", "image/png", png);
+  const uploaded = await api.inject({
+    method: "POST", url: `/stories/${storyId}/scenes/${sceneId}/materials`,
+    payload: multipart.body, headers: { ...headers, "content-type": multipart.contentType },
+  });
+  const original = uploaded.json<Story>().scenes[0]!.materials[0]!;
+  let previousKey: string | undefined;
+  for (const [edit, size, pixels] of [
+    [{ rotation: 90, crop: { x: 0, y: 0, width: 1, height: 1 } }, [2, 4], [cyan, red, magenta, green, yellow, blue, black, white]],
+    [{ rotation: 270, crop: { x: 0, y: 0, width: 0.5, height: 0.5 } }, [1, 2], [white, blue]],
+  ] as const) {
+    const response = await api.inject({
+      method: "PATCH", url: `/stories/${storyId}/scenes/${sceneId}/materials/${original.id}`, headers, payload: edit,
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    const material = response.json<Story>().scenes[0]!.materials[0]!;
+    const result = material.edit!.result;
+    assert.equal(material.storageKey, original.storageKey);
+    assert.deepEqual([material.width, material.height], [4, 2]);
+    assert.deepEqual([result.width, result.height], size);
+    assert.equal(result.orientation, "portrait");
+    assert.deepEqual({ rotation: material.edit!.rotation, crop: material.edit!.crop }, edit);
+    if (previousKey) await assert.rejects(access(join(mediaRoot, previousKey)), { code: "ENOENT" });
+    previousKey = result.storageKey;
+    const content = await api.inject({ method: "GET", url: `/stories/${storyId}/materials/${original.id}/content`, headers });
+    assert.equal(content.headers["cache-control"], "private, no-store");
+    const decoded = await sharp(content.rawPayload).raw().toBuffer({ resolveWithObject: true });
+    assert.deepEqual([decoded.info.width, decoded.info.height], size);
+    assert.deepEqual(decoded.data, Buffer.from(pixels.flat()));
+    const source = await api.inject({ method: "GET", url: `/stories/${storyId}/materials/${original.id}/source-content`, headers });
+    assert.deepEqual(source.rawPayload, png);
+    const render = await api.inject({ method: "POST", url: `/stories/${storyId}/scenes/${sceneId}/renders`, headers });
+    assert.equal(render.statusCode, 202);
+    const job = [...renderQueue.jobs.values()].find(({ id }) => id === render.json<{ id: string }>().id)!;
+    assert.equal(job.input.material.storageKey, result.storageKey);
+    assert.deepEqual([job.input.material.width, job.input.material.height], size);
+    assert.equal(job.input.material.orientation, "portrait");
+  }
+  assert.equal(renderQueue.jobs.size, 2);
+  const reset = await api.inject({
+    method: "PATCH", url: `/stories/${storyId}/scenes/${sceneId}/materials/${original.id}`, headers,
+    payload: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } },
+  });
+  assert.equal(reset.json<Story>().scenes[0]!.materials[0]!.edit, undefined);
+  await assert.rejects(access(join(mediaRoot, previousKey!)), { code: "ENOENT" });
+  const restored = await api.inject({ method: "GET", url: `/stories/${storyId}/materials/${original.id}/content`, headers });
+  assert.equal(restored.headers["cache-control"], "private, no-store");
+  assert.deepEqual(restored.rawPayload, png);
 });
 
 test("detects displayed orientation, rotation and an audio stream from probe data", () => {

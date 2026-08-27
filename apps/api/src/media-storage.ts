@@ -5,8 +5,8 @@ import { tmpdir } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
-import { probeMedia } from "@storyteller/renderer";
-import type { MaterialOrientation, NewSceneMaterial } from "@storyteller/domain";
+import { probeMedia, SpawnMediaProcessRunner, type MediaProcessRunner } from "@storyteller/renderer";
+import type { MaterialEdit, MaterialEditResult, MaterialOrientation, NewSceneMaterial, SceneMaterial } from "@storyteller/domain";
 import sharp from "sharp";
 import { createConfiguredObjectStorage, ObjectStorageError, type DirectDownload, type ObjectStorage } from "./object-storage.js";
 
@@ -21,8 +21,15 @@ export interface StoredUpload {
   cleanup(): Promise<void>;
 }
 
+export interface StoredMaterialEdit {
+  readonly result: MaterialEditResult;
+}
+
 export class MediaStorage {
-  constructor(private readonly objects: ObjectStorage = createConfiguredObjectStorage()) {}
+  constructor(
+    private readonly objects: ObjectStorage = createConfiguredObjectStorage(),
+    private readonly processRunner: MediaProcessRunner = new SpawnMediaProcessRunner(),
+  ) {}
 
   async store(file: UploadedFile, scope: { profileId: string; storyId: string; sceneId: string }): Promise<StoredUpload> {
     const mimeType = normalizedMimeType(file.mimetype, file.filename);
@@ -71,6 +78,52 @@ export class MediaStorage {
     return this.objects.open(storageKey);
   }
 
+  async edit(
+    material: SceneMaterial,
+    edit: MaterialEdit,
+    scope: { profileId: string; storyId: string; sceneId: string },
+  ): Promise<StoredMaterialEdit> {
+    const output = material.kind === "image" ? imageOutput(material.mimeType) : { extension: "mp4", mimeType: "video/mp4" };
+    const storageKey = `${scope.profileId}/${scope.storyId}/${scope.sceneId}/${randomUUID()}.${output.extension}`;
+    const temporaryRoot = resolve(process.env.MEDIA_TEMP_ROOT?.trim() || tmpdir());
+    await mkdir(temporaryRoot, { recursive: true });
+    const temporaryDirectory = await mkdtemp(join(temporaryRoot, "storyteller-edit-"));
+    const sourcePath = join(temporaryDirectory, `source${safeExtension(material.name)}`);
+    const outputPath = join(temporaryDirectory, `edited.${output.extension}`);
+
+    try {
+      await pipeline(await this.objects.open(material.storageKey), createWriteStream(sourcePath, { flags: "wx" }));
+      const dimensions = rotatedDimensions(material.width, material.height, edit.rotation);
+      const crop = pixelCrop(dimensions.width, dimensions.height, edit, material.kind === "video");
+      const detected = material.kind === "image"
+        ? await editImage(sourcePath, outputPath, output.mimeType, edit, crop)
+        : await editVideo(sourcePath, outputPath, edit, crop, this.processRunner);
+      const { size } = await stat(outputPath);
+      try {
+        await this.objects.put(storageKey, {
+          body: createReadStream(outputPath), contentType: output.mimeType, contentLength: size,
+        });
+      } catch (error) {
+        throw new ObjectStorageError("could not store edited media", 503, { cause: error });
+      }
+      return {
+        result: {
+          storageKey,
+          mimeType: output.mimeType,
+          sizeBytes: size,
+          width: detected.width,
+          height: detected.height,
+          orientation: detected.orientation,
+        },
+      };
+    } catch (error) {
+      if (error instanceof MediaUploadError || error instanceof ObjectStorageError) throw error;
+      throw new MediaUploadError(error instanceof Error ? `could not edit media: ${error.message}` : "could not edit media", 422);
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+
   createDownloadUrl(storageKey: string): Promise<DirectDownload | undefined> {
     return this.objects.createDownloadUrl?.(storageKey) ?? Promise.resolve(undefined);
   }
@@ -78,6 +131,84 @@ export class MediaStorage {
   delete(storageKey: string): Promise<void> {
     return this.objects.delete(storageKey);
   }
+}
+
+interface PixelCrop { readonly left: number; readonly top: number; readonly width: number; readonly height: number }
+
+async function editImage(
+  sourcePath: string,
+  outputPath: string,
+  mimeType: string,
+  edit: MaterialEdit,
+  crop: PixelCrop,
+) {
+  let image = sharp(sourcePath).autoOrient().rotate(edit.rotation).extract(crop);
+  if (mimeType === "image/png") image = image.png();
+  else if (mimeType === "image/webp") image = image.webp({ quality: 92 });
+  else if (mimeType === "image/avif") image = image.avif({ quality: 72 });
+  else image = image.jpeg({ quality: 92, mozjpeg: true });
+  const info = await image.toFile(outputPath);
+  return {
+    width: info.width,
+    height: info.height,
+    orientation: info.width < info.height ? "portrait" as const : "landscape" as const,
+    hasAudio: false,
+  };
+}
+
+async function editVideo(
+  sourcePath: string,
+  outputPath: string,
+  edit: MaterialEdit,
+  crop: PixelCrop,
+  runner: MediaProcessRunner,
+) {
+  const rotationFilter = edit.rotation === 90 ? ["transpose=clock"]
+    : edit.rotation === 180 ? ["hflip", "vflip"]
+      : edit.rotation === 270 ? ["transpose=cclock"] : [];
+  const filters = [...rotationFilter, `crop=${crop.width}:${crop.height}:${crop.left}:${crop.top}`].join(",");
+  const result = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-i", sourcePath,
+    "-map", "0:v:0", "-map", "0:a?", "-vf", filters,
+    "-map_metadata", "-1", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", outputPath,
+  ]);
+  if (result.exitCode !== 0) throw new Error(`ffmpeg failed (${result.exitCode}): ${result.stderr.trim()}`);
+  return detectMediaMetadata(await probeMedia(outputPath, runner), "video");
+}
+
+function rotatedDimensions(width: number, height: number, rotation: MaterialEdit["rotation"]) {
+  return rotation === 90 || rotation === 270 ? { width: height, height: width } : { width, height };
+}
+
+function pixelCrop(width: number, height: number, edit: MaterialEdit, even: boolean): PixelCrop {
+  if (even) {
+    const usableWidth = width - width % 2;
+    const usableHeight = height - height % 2;
+    if (usableWidth < 2 || usableHeight < 2) throw new MediaUploadError("video is too small to crop", 422);
+    const left = Math.min(usableWidth - 2, Math.floor(edit.crop.x * width / 2) * 2);
+    const top = Math.min(usableHeight - 2, Math.floor(edit.crop.y * height / 2) * 2);
+    const right = Math.max(left + 2, Math.min(usableWidth, Math.ceil((edit.crop.x + edit.crop.width) * width / 2) * 2));
+    const bottom = Math.max(top + 2, Math.min(usableHeight, Math.ceil((edit.crop.y + edit.crop.height) * height / 2) * 2));
+    return { left, top, width: right - left, height: bottom - top };
+  }
+  const left = Math.min(width - 1, Math.floor(edit.crop.x * width));
+  const top = Math.min(height - 1, Math.floor(edit.crop.y * height));
+  const right = Math.max(left + 1, Math.min(width, Math.ceil((edit.crop.x + edit.crop.width) * width)));
+  const bottom = Math.max(top + 1, Math.min(height, Math.ceil((edit.crop.y + edit.crop.height) * height)));
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+function imageOutput(mimeType: string): { extension: string; mimeType: string } {
+  if (mimeType === "image/png") return { extension: "png", mimeType };
+  if (mimeType === "image/webp") return { extension: "webp", mimeType };
+  if (mimeType === "image/avif") return { extension: "avif", mimeType };
+  return { extension: "jpg", mimeType: "image/jpeg" };
+}
+
+function safeExtension(name: string): string {
+  const extension = extname(name).toLowerCase();
+  return /^\.[a-z0-9]{1,8}$/.test(extension) ? extension : ".media";
 }
 
 async function inspectMedia(path: string, kind: "image" | "video") {

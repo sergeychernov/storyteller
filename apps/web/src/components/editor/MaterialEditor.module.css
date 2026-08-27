@@ -1,0 +1,157 @@
+.editor {
+  display: grid;
+  gap: 12px;
+}
+
+.toolbar,
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.toolGroup {
+  display: flex;
+  gap: 6px;
+}
+
+.toolbar button,
+.presets button {
+  padding: 8px 11px;
+  border: 1px solid #d0cdc4;
+  color: #41413a;
+  background: #eeece5;
+  font-size: 12px;
+}
+
+.toolGroup button {
+  width: 38px;
+  padding: 7px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.toolbar .reset {
+  color: #69685f;
+  background: transparent;
+}
+
+.stage {
+  position: relative;
+  margin: auto;
+  overflow: hidden;
+  border-radius: 7px;
+  background: #23231f;
+  touch-action: none;
+  user-select: none;
+}
+
+.stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sourceState {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #2d2d28;
+  font-size: 24px;
+}
+
+.cropBox {
+  position: absolute;
+  cursor: move;
+  border: 2px solid #fff;
+  outline: 1px solid #26262088;
+  box-shadow: 0 0 0 9999px #11110e99;
+}
+
+.cropBox::before,
+.cropBox::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+}
+
+.cropBox::before {
+  inset: 33.333% 0;
+  border-block: 1px solid #ffffff70;
+}
+
+.cropBox::after {
+  inset: 0 33.333%;
+  border-inline: 1px solid #ffffff70;
+}
+
+.cropBox:focus-visible {
+  outline: 3px solid #dcec9e;
+  outline-offset: 2px;
+}
+
+.cropBox > span {
+  position: absolute;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #fff;
+  background: #7f9148;
+  border-radius: 50%;
+}
+
+.north-west { top: -10px; left: -10px; cursor: nwse-resize; }
+.north-east { top: -10px; right: -10px; cursor: nesw-resize; }
+.south-west { bottom: -10px; left: -10px; cursor: nesw-resize; }
+.south-east { right: -10px; bottom: -10px; cursor: nwse-resize; }
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.result {
+  margin: -2px 0 0;
+  color: #737269;
+  font-size: 11px;
+  text-align: center;
+}
+
+.error {
+  margin: 0;
+  color: #9c362c;
+  font-size: 12px;
+  text-align: center;
+}
+
+.actions {
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.actions button {
+  padding: 10px 14px;
+  font-size: 12px;
+}
+
+.actions .cancel {
+  border: 1px solid #cac7bd;
+  color: #47473f;
+  background: transparent;
+}
+
+.actions .apply {
+  color: #fff;
+  background: #20201b;
+}
+
+@media (max-width: 520px) {
+  .presets button {
+    flex: 1 1 42%;
+  }
+}

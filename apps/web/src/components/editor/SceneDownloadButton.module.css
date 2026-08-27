@@ -1,3 +1,27 @@
+.control {
+  position: relative;
+  display: inline-flex;
+}
+
+.error {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(260px, 65vw);
+  padding: 10px;
+  border: 1px solid #e2b6aa;
+  border-radius: 8px;
+  color: #8a362c;
+  background: #fff5f0;
+  box-shadow: 0 4px 14px #29291f26;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
 .button {
   display: grid;
   flex: 0 0 auto;

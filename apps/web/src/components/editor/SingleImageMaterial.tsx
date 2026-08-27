@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { centeredFocusPoint, createStillImageMotionPlan, verticalStoryFrame } from "@storyteller/domain";
-import type { AuthSession, FocusPoint, ImageMaterial, Scene } from "../../api.js";
+import { getMaterialPresentation, type AuthSession, type FocusPoint, type ImageMaterial, type Scene } from "../../api.js";
 import { FocusPointEditor } from "./FocusPointEditor.js";
 import { MaterialThumbnail } from "./MaterialThumbnail.js";
 import { buildSingleImageMotionFrames } from "./single-image-motion.js";
@@ -22,14 +22,15 @@ export function SingleImageMaterial({
   scene, material, storyId, session, active, focusLabel, focusEditable, saving, onFocusChange,
 }: SingleImageMaterialProps) {
   const media = useRef<HTMLDivElement>(null);
+  const presentation = getMaterialPresentation(material);
   const focusPoint = scene.focusPoint ?? centeredFocusPoint;
   const motionPlan = useMemo(() => createStillImageMotionPlan({
-    sourceSize: { width: material.width, height: material.height },
+    sourceSize: { width: presentation.width, height: presentation.height },
     frameSize: verticalStoryFrame,
-    orientation: material.orientation,
+    orientation: presentation.orientation,
     motion: scene.motion,
     focusPoint,
-  }), [focusPoint, material.height, material.orientation, material.width, scene.motion]);
+  }), [focusPoint, presentation.height, presentation.orientation, presentation.width, scene.motion]);
   const frames = useMemo(
     () => buildSingleImageMotionFrames(motionPlan),
     [motionPlan],

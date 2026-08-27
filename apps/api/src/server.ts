@@ -3,9 +3,10 @@ import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
+import { getMaterialPresentation, type MaterialEdit } from "@storyteller/domain";
 import type { SceneRenderQueue } from "@storyteller/render-queue";
 import {
-  authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, errorSchema, healthSchema,
+  authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, editMaterialSchema, errorSchema, healthSchema,
   loginSchema, materialContentAccessSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
   reorderSceneMaterialsSchema, sceneRenderSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
@@ -127,14 +128,73 @@ export async function buildApi(application: StoryApplication, options: {
     const removed = await application.removeSceneMaterial(
       profile.id, request.params.storyId, request.params.sceneId, request.params.materialId,
     );
-    try {
-      await mediaStorage.delete(removed.material.storageKey);
-    } catch (error) {
-      request.log.error({ err: error, storageKey: removed.material.storageKey }, "could not delete removed material from object storage");
+    for (const storageKey of [removed.material.storageKey, removed.material.edit?.result.storageKey].filter((key): key is string => Boolean(key))) {
+      await deleteStoredObject(mediaStorage, storageKey, request, options.renderQueue);
     }
     return serializeStory(removed.story);
   });
+  app.patch("/stories/:storyId/scenes/:sceneId/materials/:materialId", {
+    schema: {
+      security: bearerSecurity, params: sceneMaterialParams, body: editMaterialSchema,
+      response: { 200: storySchema, 401: errorSchema, 404: errorSchema, 422: errorSchema, 503: errorSchema },
+    },
+  }, async (request) => {
+    const profile = await authenticate(application, request);
+    const story = await application.getStory(profile.id, request.params.storyId);
+    const scene = story.scenes.find(({ id }) => id === request.params.sceneId);
+    if (!scene) throw new ApplicationError(`scene not found: ${request.params.sceneId}`, 404);
+    const material = scene.materials.find(({ id }) => id === request.params.materialId);
+    if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
+    const oldIntermediateKey = material.edit?.result.storageKey;
+    if (isIdentityEdit(request.body)) {
+      const { edit: _oldEdit, ...original } = material;
+      const changed = await application.replaceSceneMaterial(profile.id, story.id, scene.id, original);
+      if (oldIntermediateKey) await deleteStoredObject(mediaStorage, oldIntermediateKey, request, options.renderQueue);
+      return serializeStory(changed);
+    }
+    const stored = await mediaStorage.edit(material, request.body, {
+      profileId: profile.id, storyId: story.id, sceneId: scene.id,
+    });
+    try {
+      const changed = await application.replaceSceneMaterial(profile.id, story.id, scene.id, {
+        ...material,
+        edit: { ...request.body, result: stored.result },
+      });
+      if (oldIntermediateKey && oldIntermediateKey !== stored.result.storageKey) {
+        await deleteStoredObject(mediaStorage, oldIntermediateKey, request, options.renderQueue);
+      }
+      return serializeStory(changed);
+    } catch (error) {
+      await deleteStoredObject(mediaStorage, stored.result.storageKey, request, options.renderQueue);
+      throw error;
+    }
+  });
   app.get("/stories/:storyId/materials/:materialId/content", {
+    schema: { security: bearerSecurity, params: materialParams },
+  }, async (request, reply) => {
+    const profile = await authenticate(application, request);
+    const story = await application.getStory(profile.id, request.params.storyId);
+    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
+    const presentation = getMaterialPresentation(material);
+    const direct = await mediaStorage.createDownloadUrl(presentation.storageKey);
+    if (direct) return reply.header("cache-control", "private, no-store").redirect(direct.url);
+    return reply.type(presentation.mimeType).header("cache-control", "private, no-store").send(await mediaStorage.open(presentation.storageKey));
+  });
+  app.get("/stories/:storyId/materials/:materialId/content-access", {
+    schema: { security: bearerSecurity, params: materialParams, response: { 200: materialContentAccessSchema, 401: errorSchema, 404: errorSchema } },
+  }, async (request, reply) => {
+    const profile = await authenticate(application, request);
+    const story = await application.getStory(profile.id, request.params.storyId);
+    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
+    const direct = await mediaStorage.createDownloadUrl(getMaterialPresentation(material).storageKey);
+    reply.header("cache-control", "private, no-store");
+    return direct
+      ? { url: direct.url, expiresAt: direct.expiresAt.toISOString() }
+      : { url: null };
+  });
+  app.get("/stories/:storyId/materials/:materialId/source-content", {
     schema: { security: bearerSecurity, params: materialParams },
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
@@ -145,7 +205,7 @@ export async function buildApi(application: StoryApplication, options: {
     if (direct) return reply.header("cache-control", "private, no-store").redirect(direct.url);
     return reply.type(material.mimeType).header("cache-control", "private, max-age=3600").send(await mediaStorage.open(material.storageKey));
   });
-  app.get("/stories/:storyId/materials/:materialId/content-access", {
+  app.get("/stories/:storyId/materials/:materialId/source-content-access", {
     schema: { security: bearerSecurity, params: materialParams, response: { 200: materialContentAccessSchema, 401: errorSchema, 404: errorSchema } },
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
@@ -154,9 +214,7 @@ export async function buildApi(application: StoryApplication, options: {
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
     const direct = await mediaStorage.createDownloadUrl(material.storageKey);
     reply.header("cache-control", "private, no-store");
-    return direct
-      ? { url: direct.url, expiresAt: direct.expiresAt.toISOString() }
-      : { url: null };
+    return direct ? { url: direct.url, expiresAt: direct.expiresAt.toISOString() } : { url: null };
   });
   app.put("/stories/:storyId/scenes/:sceneId/material-order", {
     schema: { security: bearerSecurity, params: sceneParams, body: reorderSceneMaterialsSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
@@ -237,4 +295,28 @@ function serializeStory(story: unknown) {
 function requireRenderService(service: SceneRenderService | false | undefined): SceneRenderService {
   if (!service) throw new ApplicationError("scene rendering is unavailable", 503);
   return service;
+}
+
+function isIdentityEdit(edit: MaterialEdit): boolean {
+  return edit.rotation === 0 && edit.crop.x === 0 && edit.crop.y === 0 && edit.crop.width === 1 && edit.crop.height === 1;
+}
+
+async function deleteStoredObject(
+  mediaStorage: MediaStorage,
+  storageKey: string,
+  request: FastifyRequest,
+  renderQueue: SceneRenderQueue | undefined,
+): Promise<void> {
+  try {
+    await mediaStorage.delete(storageKey);
+  } catch (error) {
+    request.log.error({ err: error, storageKey }, "could not delete material object; scheduling retry");
+    if (renderQueue) {
+      try {
+        await renderQueue.scheduleDeletion(storageKey);
+      } catch (scheduleError) {
+        request.log.error({ err: scheduleError, storageKey }, "could not schedule material object deletion");
+      }
+    }
+  }
 }

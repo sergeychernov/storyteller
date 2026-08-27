@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
-import { centeredFocusPoint } from "@storyteller/domain";
+import { centeredFocusPoint, getMaterialPresentation } from "@storyteller/domain";
 import { hashSceneRenderInput, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
 import { stillImageRendererVersion } from "@storyteller/renderer";
 
@@ -15,16 +15,17 @@ export class SceneRenderService {
     if (scene.rendererId !== "still-image" || scene.materials.length !== 1 || material?.kind !== "image") {
       throw new ApplicationError("scene rendering is currently available only for one image", 422, "unsupported_scene_renderer");
     }
+    const presentation = getMaterialPresentation(material);
     const input = {
       rendererId: "still-image" as const,
       rendererVersion: stillImageRendererVersion,
       material: {
-        storageKey: material.storageKey,
-        name: material.name,
-        mimeType: material.mimeType,
-        width: material.width,
-        height: material.height,
-        orientation: material.orientation,
+        storageKey: presentation.storageKey,
+        name: material.edit ? presentation.storageKey : material.name,
+        mimeType: presentation.mimeType,
+        width: presentation.width,
+        height: presentation.height,
+        orientation: presentation.orientation,
       },
       durationSeconds: scene.durationSeconds,
       motion: scene.motion,
