@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -286,15 +286,19 @@ test("render requests return 404 if the scene disappears before enqueue", async 
   const application = new StoryApplication(repository);
   const renderQueue: SceneRenderQueue = new MemoryRenderQueue();
   let enqueueCalls = 0;
-  renderQueue.enqueue = async () => { enqueueCalls++; return undefined; };
   const api = await buildApi(application, { renderQueue });
   context.after(() => api.close());
   const auth = await application.register({ name: "Test", email: "race@example.com", password: "long-test-password" });
   const created = await application.createStory(auth.profile.id, { title: "Render race" });
   const story = await application.createScene(auth.profile.id, created.id);
   const scene = story.scenes[0]!;
+  renderQueue.enqueue = async () => {
+    enqueueCalls++;
+    await application.deleteScene(auth.profile.id, story.id, scene.id);
+    return undefined;
+  };
   await application.addSceneMaterial(auth.profile.id, story.id, scene.id, {
-    kind: "image", name: "image.png", storageKey: "image.png", mimeType: "image/png",
+    kind: "image", name: "image.png", storageKey: "image.png", mimeType: "image/png", contentHash: "a".repeat(64),
     orientation: "landscape", width: 100, height: 100, sizeBytes: 200,
   });
   const response = await api.inject({
@@ -371,6 +375,7 @@ test("serves each crop/rotation result without caching old pixels and renders th
     previousKey = result.storageKey;
     const content = await api.inject({ method: "GET", url: `/stories/${storyId}/materials/${original.id}/content`, headers });
     assert.equal(content.headers["cache-control"], "private, no-store");
+    assert.equal(result.contentHash, createHash("sha256").update(content.rawPayload).digest("hex"));
     const decoded = await sharp(content.rawPayload).raw().toBuffer({ resolveWithObject: true });
     assert.deepEqual([decoded.info.width, decoded.info.height], size);
     assert.deepEqual(decoded.data, Buffer.from(pixels.flat()));
@@ -465,6 +470,8 @@ test("stores separate processed tracks, saves video edits as metadata, and expor
     assert.equal(Boolean(original.audioTrack), hasAudio);
     assert.deepEqual(await readFile(join(objectsRoot, original.storageKey)), originalBytes);
     const videoBytes = await readFile(join(objectsRoot, original.videoTrack.storageKey));
+    assert.equal(original.contentHash, createHash("sha256").update(originalBytes).digest("hex"));
+    assert.equal(original.videoTrack.contentHash, createHash("sha256").update(videoBytes).digest("hex"));
     const tracks = await probeMedia(join(objectsRoot, original.videoTrack.storageKey)) as { streams: { codec_type: string }[] };
     assert.deepEqual(tracks.streams.map((stream) => stream.codec_type), ["video"]);
     const audioUrl = `/stories/${storyId}/materials/${original.id}/audio-content`;
@@ -473,6 +480,7 @@ test("stores separate processed tracks, saves video edits as metadata, and expor
     assert.equal((await api.inject({ method: "GET", url: audioUrl, headers })).statusCode, hasAudio ? 200 : 404);
     if (original.audioTrack) {
       const track = original.audioTrack;
+      assert.equal(track.contentHash, createHash("sha256").update(await readFile(join(objectsRoot, track.storageKey))).digest("hex"));
       assert.equal(track.sampleRate, 48_000);
       assert.equal(track.channels, 2);
       assert.ok(Math.abs(track.durationSeconds - 6) < 0.05);
@@ -553,7 +561,7 @@ test("stores separate processed tracks, saves video edits as metadata, and expor
         const bytes = await readFile(outputPath);
         const key = sceneRenderStorageKey(job);
         await objectStorage.put(key, { body: Readable.from(bytes), contentType: file.mimeType, contentLength: bytes.length });
-        await renderQueue.complete(job.id, "test", key, bytes.length);
+        await renderQueue.complete(job.id, "test", key, bytes.length, createHash("sha256").update(bytes).digest("hex"));
         const downloadUrl = `${renderUrl}/${job.id}/content`;
         assert.equal((await api.inject({ method: "GET", url: downloadUrl, headers: otherHeaders })).statusCode, 404);
         const downloaded = await api.inject({ method: "GET", url: downloadUrl, headers });
@@ -673,6 +681,145 @@ test("never exposes a stored platform secret", async () => {
   await api.close();
 });
 
+test("render versions invalidate locally, reject stale downloads, survive reopening and reuse an exact revert", async (context) => {
+  const { api, application, queue, storage, repository, storyId, profileId, headers, sceneId, otherSceneId } = await versionFixture(context);
+  const sceneUrl = `/stories/${storyId}/scenes/${sceneId}`;
+  const rendersUrl = `${sceneUrl}/renders`;
+  const request = async (id: string) => {
+    const response = await api.inject({ method: "POST", url: `/stories/${storyId}/scenes/${id}/renders`, headers });
+    assert.equal(response.statusCode, 202, response.body);
+    return response.json<{ id: string; current: boolean; inputHash: string; dependencies: { contentHash: string }[] }>();
+  };
+  const first = await request(sceneId);
+  const unaffected = await request(otherSceneId);
+  assert.equal(first.current, true);
+  assert.match(first.dependencies[0]!.contentHash, /^[a-f0-9]{64}$/);
+  const list = async () => {
+    const response = await api.inject({ method: "GET", url: rendersUrl, headers });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.headers["cache-control"], "private, no-store");
+    return response.json<{ id: string; current: boolean; contentHash?: string }[]>();
+  };
+  await application.configureScene(profileId, storyId, sceneId, { durationSeconds: 8 });
+  // A worker finishes the old snapshot after the edit. It must remain obsolete.
+  const bytes = Buffer.from("versioned-result");
+  const contentHash = createHash("sha256").update(bytes).digest("hex");
+  await storage.put("finished.mp4", { body: Readable.from(bytes), contentType: "video/mp4", contentLength: bytes.length });
+  await queue.complete(first.id, "worker", "finished.mp4", bytes.length, contentHash);
+  assert.deepEqual((await list()).map(({ id, current, contentHash }) => ({ id, current, contentHash })),
+    [{ id: first.id, current: false, contentHash }]);
+  const stale = await api.inject({ method: "GET", url: `${rendersUrl}/${first.id}/content`, headers });
+  assert.equal(stale.statusCode, 409);
+  assert.equal(stale.json<{ code: string }>().code, "scene_render_stale");
+  assert.equal((await request(otherSceneId)).id, unaffected.id);
+  const changed = await request(sceneId);
+  assert.notEqual(changed.id, first.id);
+  assert.equal(queue.jobs.size, 3);
+  assert.deepEqual((await list()).map(({ current }) => current), [true, false]);
+
+  await application.configureScene(profileId, storyId, sceneId, { durationSeconds: 5 });
+  assert.equal((await request(sceneId)).id, first.id);
+  assert.equal(queue.jobs.size, 3);
+  const reopened = await buildApi(new StoryApplication(repository), { mediaStorage: new MediaStorage(storage), objectStorage: storage, renderQueue: queue });
+  context.after(() => reopened.close());
+  const download = await reopened.inject({ method: "GET", url: `${rendersUrl}/${first.id}/content`, headers });
+  assert.equal(download.statusCode, 200, download.body);
+  assert.equal(download.headers["cache-control"], "private, no-store");
+  assert.deepEqual(download.rawPayload, bytes);
+  assert.equal((await api.inject({ method: "GET", url: rendersUrl })).statusCode, 401);
+  const other = await application.register({ name: "Other", email: "other-version@example.com", password: "long-test-password" });
+  assert.equal((await api.inject({ method: "GET", url: rendersUrl, headers: { authorization: `Bearer ${other.accessToken}` } })).statusCode, 404);
+  await application.deleteScene(profileId, storyId, sceneId);
+  assert.equal((await api.inject({ method: "GET", url: `${rendersUrl}/${first.id}/content`, headers })).statusCode, 404);
+});
+
+test("legacy material hashes come from bytes and match new uploads; legacy renders are not current", async (context) => {
+  const { api, application, queue, storage, storyId, profileId, headers, sceneId } = await versionFixture(context);
+  const url = `/stories/${storyId}/scenes/${sceneId}/renders`;
+  const first = (await api.inject({ method: "POST", url, headers })).json<{ id: string }>();
+  const material = (await application.getStory(profileId, storyId)).scenes[0]!.materials[0]!;
+  const { contentHash, ...legacyMaterial } = material;
+  assert.match(contentHash!, /^[a-f0-9]{64}$/);
+  await application.replaceSceneMaterial(profileId, storyId, sceneId, legacyMaterial);
+  assert.equal((await api.inject({ method: "POST", url, headers })).json<{ id: string }>().id, first.id);
+  await storage.put(material.storageKey, { body: Readable.from("different bytes"), contentType: "image/png", contentLength: 15 });
+  assert.equal((await api.inject({ method: "GET", url: `${url}/${first.id}`, headers })).json<{ current: boolean }>().current, false);
+  const entry = [...queue.jobs.entries()][0]!;
+  const { dependencies: _dependencies, ...oldInput } = entry[1].input;
+  queue.jobs.set(entry[0], { ...entry[1], input: oldInput, status: "ready" });
+  const legacy = await api.inject({ method: "GET", url: `${url}/${first.id}`, headers });
+  assert.equal(legacy.statusCode, 200);
+  assert.equal(legacy.json<{ current: boolean }>().current, false);
+  await storage.delete(material.storageKey);
+  assert.equal((await api.inject({ method: "GET", url: `${url}/${first.id}`, headers })).statusCode, 503);
+  assert.equal((await api.inject({ method: "POST", url, headers })).statusCode, 503);
+  assert.equal(queue.jobs.size, 1);
+});
+
+test("video dependencies preserve audio after visual edits and invalidate every affected export after trim", async (context) => {
+  const { api, application, storyId, profileId, headers, otherSceneId: sceneId } = await versionFixture(context);
+  const scene = (await application.getStory(profileId, storyId)).scenes.find(({ id }) => id === sceneId)!;
+  await application.removeSceneMaterial(profileId, storyId, sceneId, scene.materials[0]!.id);
+  const story = await application.addSceneMaterial(profileId, storyId, sceneId, {
+    kind: "video", name: "clip.mp4", storageKey: "clip.mp4", contentHash: "a".repeat(64), mimeType: "video/mp4",
+    sizeBytes: 100, width: 100, height: 100, orientation: "landscape", sourceDurationSeconds: 10, hasAudio: true, audioTags: [],
+    videoTrack: { storageKey: "video.mp4", contentHash: "b".repeat(64), mimeType: "video/mp4", sizeBytes: 80, durationSeconds: 10 },
+    audioTrack: { storageKey: "audio.m4a", contentHash: "c".repeat(64), mimeType: "audio/mp4", sizeBytes: 20, durationSeconds: 10,
+      sampleRate: 48000, channels: 2, processing: { version: 1, filter: "anull", integratedLufs: -16, truePeakDbfs: -1 } },
+  });
+  const material = story.scenes.find(({ id }) => id === sceneId)!.materials[0]!;
+  const url = `/stories/${storyId}/scenes/${sceneId}/renders`;
+  const modes = ["audio", "video", "combined"] as const;
+  const ids = new Map<string, string>();
+  for (const mode of modes) {
+    const response = await api.inject({ method: "POST", url, headers, payload: { mode } });
+    assert.equal(response.statusCode, 202, response.body);
+    const result = response.json<{ id: string; dependencies: { role: string }[] }>();
+    ids.set(mode, result.id);
+    assert.deepEqual(result.dependencies.map(({ role }) => role), mode === "audio" ? ["original", "audio-track"]
+      : mode === "video" ? ["original", "video-track"] : ["original", "video-track", "audio-track"]);
+  }
+  const editUrl = `/stories/${storyId}/scenes/${sceneId}/materials/${material.id}`;
+  const visualEdit = { rotation: 90, crop: { x: 0, y: 0, width: 0.5, height: 1 } };
+  assert.equal((await api.inject({ method: "PATCH", url: editUrl, headers, payload: visualEdit })).statusCode, 200);
+  for (const mode of modes) {
+    const status = (await api.inject({ method: "GET", url: `${url}/${ids.get(mode)}`, headers })).json<{ current: boolean }>();
+    assert.equal(status.current, mode === "audio");
+  }
+  assert.equal((await api.inject({ method: "POST", url, headers, payload: { mode: "audio" } })).json<{ id: string }>().id, ids.get("audio"));
+  await api.inject({ method: "PATCH", url: editUrl, headers, payload: { ...visualEdit, trim: { startSeconds: 1, endSeconds: 9 } } });
+  for (const id of ids.values()) assert.equal((await api.inject({ method: "GET", url: `${url}/${id}`, headers })).json<{ current: boolean }>().current, false);
+});
+
+async function versionFixture(context: TestContext) {
+  process.env.NODE_ENV = "test";
+  const root = await mkdtemp(join(tmpdir(), "storyteller-versions-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  const repository = new MemoryRepository();
+  const application = new StoryApplication(repository);
+  const queue = new MemoryRenderQueue();
+  const api = await buildApi(application, { mediaStorage: new MediaStorage(storage), objectStorage: storage, renderQueue: queue });
+  context.after(() => api.close());
+  const auth = await application.register({ name: "Test", email: "versions@example.com", password: "long-test-password" });
+  const profileId = auth.profile.id;
+  const headers = { authorization: `Bearer ${auth.accessToken}` };
+  const storyId = (await application.createStory(profileId, { title: "Versions" })).id;
+  const ids: string[] = [];
+  const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: "red" } }).png().toBuffer();
+  for (let index = 0; index < 2; index++) {
+    const id = (await application.createScene(profileId, storyId)).scenes.at(-1)!.id;
+    const multipart = multipartFile(`photo-${index}.png`, "image/png", png);
+    const response = await api.inject({ method: "POST", url: `/stories/${storyId}/scenes/${id}/materials`,
+      headers: { ...headers, "content-type": multipart.contentType }, payload: multipart.body });
+    assert.equal(response.statusCode, 201, response.body);
+    assert.equal(response.json<Story>().scenes.find(({ id: sceneId }) => sceneId === id)!.materials[0]!.contentHash,
+      createHash("sha256").update(png).digest("hex"));
+    ids.push(id);
+  }
+  return { api, application, queue, storage, repository, storyId, profileId, headers, sceneId: ids[0]!, otherSceneId: ids[1]! };
+}
+
 class MemoryRepository implements StoryRepository {
   readonly profiles = new Map<string, ProfileAuthentication>();
   readonly sessions = new Map<string, SessionRecord>();
@@ -725,11 +872,14 @@ class MemoryRenderQueue implements SceneRenderQueue {
     return Promise.resolve([...this.jobs.values()].find((job) => job.profileId === profileId && job.storyId === storyId
       && job.sceneId === sceneId && job.id === renderId));
   }
+  async listAuthorized(profileId: string, storyId: string, sceneId: string): Promise<readonly SceneRenderJob[]> {
+    return [...this.jobs.values()].filter((job) => job.profileId === profileId && job.storyId === storyId && job.sceneId === sceneId).reverse();
+  }
   claim(): Promise<SceneRenderJob | undefined> { return Promise.resolve(undefined); }
-  async complete(renderId: string, _workerId: string, storageKey: string, sizeBytes: number): Promise<boolean> {
+  async complete(renderId: string, _workerId: string, storageKey: string, sizeBytes: number, contentHash: string): Promise<boolean> {
     const entry = [...this.jobs.entries()].find(([, job]) => job.id === renderId);
     if (!entry) return false;
-    this.jobs.set(entry[0], { ...entry[1], status: "ready", storageKey, sizeBytes });
+    this.jobs.set(entry[0], { ...entry[1], status: "ready", storageKey, sizeBytes, contentHash });
     return true;
   }
   fail(): Promise<void> { return Promise.resolve(); }

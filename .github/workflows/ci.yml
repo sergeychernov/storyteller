@@ -8,11 +8,37 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: storyteller
+          POSTGRES_PASSWORD: storyteller_ci
+          POSTGRES_DB: storyteller_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U storyteller -d storyteller_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://storyteller:storyteller_ci@127.0.0.1:5432/storyteller_ci
+      STORYTELLER_TEST_DATABASE_URL: postgresql://storyteller:storyteller_ci@127.0.0.1:5432/storyteller_ci
+      PGSSLMODE: disable
+      # A disposable CI-only key, never a production secret.
+      PLATFORM_CREDENTIALS_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      MEDIA_STORAGE_DRIVER: local
+      MEDIA_ROOT: /tmp/storyteller-ci-media
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install media tools used by integration tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
       - run: corepack enable
       - run: corepack prepare yarn@4.18.0 --activate
       - run: yarn install --immutable
@@ -21,6 +47,14 @@ jobs:
       - run: yarn test:roadmap
       - run: yarn check
       - run: yarn test
+      - name: Verify database upgrades and backward compatibility
+        run: yarn test:api:postgres
+      - name: Apply database migrations with the release command
+        env:
+          PLATFORM_CREDENTIALS_KEY: ""
+        run: |
+          yarn db:migrate
+          yarn db:migrate
       - name: Smoke-test API development runtime
         run: |
           yarn workspace @storyteller/api exec tsx src/index.ts > /tmp/storyteller-api.log 2>&1 &
@@ -38,5 +72,24 @@ jobs:
           done
           cat /tmp/storyteller-api.log
           exit 1
+      - name: Smoke-test compiled API after migrations
+        run: |
+          node apps/api/dist/index.js > /tmp/storyteller-api-release.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent http://localhost:3002/health > /dev/null; then
+              exit 0
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat /tmp/storyteller-api-release.log
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat /tmp/storyteller-api-release.log
+          exit 1
+        env:
+          PORT: 3002
       - run: yarn workspace @storyteller/web vite build
       - run: yarn workspace @storyteller/mobile exec expo export --platform web --output-dir /tmp/storyteller-mobile-export

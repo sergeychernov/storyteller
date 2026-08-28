@@ -13,6 +13,7 @@ interface RenderPollingOptions {
 export class SceneRenderTimeoutError extends Error {
   constructor(readonly phase: "queue" | "render") { super(`scene render ${phase} timed out`); }
 }
+export class SceneRenderStaleError extends Error {}
 
 export async function waitForSceneRender(initial: SceneRender, {
   signal, load, now = Date.now, wait = abortableDelay, intervalMs = 800,
@@ -22,6 +23,7 @@ export async function waitForSceneRender(initial: SceneRender, {
   let render = initial;
   let hasStarted = render.status === "running";
   signal.throwIfAborted();
+  if (!render.current) throw new SceneRenderStaleError("scene render is outdated");
   while (render.status === "queued" || render.status === "running") {
     hasStarted ||= render.status === "running";
     const timeout = hasStarted ? renderTimeoutMs : queueTimeoutMs;
@@ -31,6 +33,7 @@ export async function waitForSceneRender(initial: SceneRender, {
     signal.throwIfAborted();
     render = await load(render.id, signal);
     signal.throwIfAborted();
+    if (!render.current) throw new SceneRenderStaleError("scene render is outdated");
   }
   if (render.status !== "ready") throw new Error(render.error || "scene render failed");
   return render;

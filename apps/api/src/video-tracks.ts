@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { AudioTrack, VideoTrack } from "@storyteller/domain";
 import { prepareVideoAudio, type MediaProcessRunner } from "@storyteller/renderer";
-import { ObjectStorageError, type ObjectStorage } from "@storyteller/storage";
+import { hashFileContent, ObjectStorageError, type ObjectStorage } from "@storyteller/storage";
 
 export async function storeVideoTracks(options: {
   sourcePath: string; directory: string; keyPrefix: string; extension: string; mimeType: string;
@@ -18,8 +18,9 @@ export async function storeVideoTracks(options: {
   ]);
   if (result.exitCode !== 0) throw new Error(`could not separate video (${result.exitCode}): ${result.stderr.trim()}`);
   const audioMetadata = hasAudio ? await prepareVideoAudio(sourcePath, audioPath, runner) : undefined;
-  const videoTrack = { storageKey: `${keyPrefix}/video.${extension}`, mimeType, sizeBytes: (await stat(videoPath)).size, durationSeconds };
+  const videoTrack = { storageKey: `${keyPrefix}/video.${extension}`, contentHash: await hashFileContent(videoPath), mimeType, sizeBytes: (await stat(videoPath)).size, durationSeconds };
   const audioTrack = audioMetadata ? {
+    contentHash: await hashFileContent(audioPath),
     ...audioMetadata, storageKey: `${keyPrefix}/audio.m4a`, mimeType: "audio/mp4", sizeBytes: (await stat(audioPath)).size,
   } : undefined;
   const attempted: string[] = [];

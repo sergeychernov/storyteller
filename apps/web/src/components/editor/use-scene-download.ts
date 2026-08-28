@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  downloadSceneRender, getSceneRender, requestSceneRender, type AuthSession, type Scene, type VideoExportMode,
+  ApiError, downloadSceneRender, getSceneRender, requestSceneRender, type AuthSession, type Scene, type VideoExportMode,
 } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
-import { SceneRenderTimeoutError, waitForSceneRender } from "./scene-render-polling.js";
+import { SceneRenderStaleError, SceneRenderTimeoutError, waitForSceneRender } from "./scene-render-polling.js";
 
-interface DownloadFile { readonly url: string; readonly filename: string; readonly sceneVersion: string; readonly mode: VideoExportMode }
+interface DownloadFile { readonly url: string; readonly filename: string }
 
 export function useSceneDownload(scene: Scene, storyId: string, session: AuthSession, copy: EditorCopy) {
   const controller = useRef<AbortController | undefined>(undefined);
   const [state, setState] = useState<"idle" | "rendering" | "error">("idle");
   const [error, setError] = useState<string>();
-  const [file, setFile] = useState<DownloadFile>();
   const supported = scene.materials.length === 1 && (scene.materials[0]?.kind === "video"
     || scene.rendererId === "still-image" && scene.materials[0]?.kind === "image");
   const sceneVersion = JSON.stringify([storyId, scene]);
@@ -19,15 +18,11 @@ export function useSceneDownload(scene: Scene, storyId: string, session: AuthSes
   useEffect(() => {
     setState("idle");
     setError(undefined);
-    setFile(undefined);
     return () => controller.current?.abort();
   }, [sceneVersion, storyId, session.accessToken]);
 
-  useEffect(() => () => { if (file) URL.revokeObjectURL(file.url); }, [file]);
-
   async function download(mode: VideoExportMode = "video") {
     if (!supported || controller.current && !controller.current.signal.aborted) return;
-    if (file?.sceneVersion === sceneVersion && file.mode === mode) { saveFile(file); return; }
     const requestController = new AbortController();
     controller.current = requestController;
     const signal = requestController.signal;
@@ -44,14 +39,17 @@ export function useSceneDownload(scene: Scene, storyId: string, session: AuthSes
       const prepared = {
         url: URL.createObjectURL(blob),
         filename: `${safeFileName(scene.title) || `scene-${scene.id}`}-${mode}.${mode === "audio" ? "m4a" : "mp4"}`,
-        sceneVersion, mode,
       };
-      setFile(prepared);
       saveFile(prepared);
+      // Allow the browser to start saving before releasing the object URL. Every next
+      // download goes through the API again, including edits made in another tab.
+      setTimeout(() => URL.revokeObjectURL(prepared.url), 1_000);
       setState("idle");
     } catch (caught) {
       if (signal.aborted) return;
-      setError(caught instanceof SceneRenderTimeoutError
+      setError(caught instanceof SceneRenderStaleError || caught instanceof ApiError
+        && (caught.code === "scene_render_stale" || caught.code === "story_revision_conflict")
+        ? copy.renderVersionChanged : caught instanceof SceneRenderTimeoutError
         ? caught.phase === "queue" ? copy.renderQueueTimeout : copy.renderSceneTimeout
         : caught instanceof Error && caught.message ? caught.message : copy.renderSceneError);
       setState("error");
@@ -60,8 +58,7 @@ export function useSceneDownload(scene: Scene, storyId: string, session: AuthSes
     }
   }
 
-  // Keep a real download link available if the browser blocks the asynchronous automatic save.
-  return { supported, state, error, download, file: file?.sceneVersion === sceneVersion ? file : undefined };
+  return { supported, state, error, download };
 }
 
 function saveFile({ url, filename }: DownloadFile): void {

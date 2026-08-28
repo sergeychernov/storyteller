@@ -13,7 +13,7 @@ interface SceneDownloadButtonProps {
 }
 
 export function SceneDownloadButton({ scene, storyId, session, copy }: SceneDownloadButtonProps) {
-  const { supported, state, error, download, file } = useSceneDownload(scene, storyId, session, copy);
+  const { supported, state, error, download } = useSceneDownload(scene, storyId, session, copy);
   const [choosing, setChoosing] = useState(false);
   const video = scene.materials.length === 1 && scene.materials[0]?.kind === "video" ? scene.materials[0] : undefined;
   const errorId = useId();
@@ -22,22 +22,20 @@ export function SceneDownloadButton({ scene, storyId, session, copy }: SceneDown
     <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" />
   </svg>;
   return <span className={styles.control}>
-    {file && !video ? <a className={styles.button} href={file.url} download={file.filename} aria-label={label} title={label}>
-      {icon}
-    </a> : <button
+    <button
       type="button"
       className={styles.button}
-      disabled={!supported || state === "rendering"}
+      disabled={state === "rendering"}
       aria-label={label}
       aria-describedby={error ? errorId : undefined}
       title={error ?? label}
-      onClick={() => video ? setChoosing(true) : void download()}
+      onClick={() => setChoosing(true)}
     >
       {icon}
-    </button>}
-    {error && <span className={styles.error} id={errorId} role="alert">{error}</span>}
-    {choosing && video && <SceneDownloadOptions copy={copy} hasAudio={video.hasAudio}
-      rendering={state === "rendering"} error={error} file={file}
+    </button>
+    {error && !choosing && <span className={styles.error} id={errorId} role="alert">{error}</span>}
+    {choosing && <SceneDownloadOptions copy={copy} supported={supported} isVideo={Boolean(video)} hasAudio={video?.hasAudio ?? false}
+      scene={scene} storyId={storyId} session={session} rendering={state === "rendering"} error={error}
       onClose={() => setChoosing(false)} onDownload={(mode) => void download(mode)} />}
   </span>;
 }

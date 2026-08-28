@@ -39,6 +39,8 @@ yarn dev
 
 The local API dev and migration commands automatically load the repository-root `.env`. Existing process variables take precedence, so Railway continues to use its service variables.
 
+To apply database migrations explicitly, run `yarn build:backend` followed by `yarn db:migrate`. The migration command needs only `DATABASE_URL`; Railway runs it before deploying either backend service. CI verifies upgrades and compatibility on disposable PostgreSQL. Run those tests locally with `STORYTELLER_TEST_DATABASE_URL=postgresql://... yarn test:api:postgres` against a disposable database, never production. See the [CI/CD guide](docs/deploy-railway.md#database-migrations-in-cicd) for the first F05.1 rollout order and Railway settings.
+
 Then open [http://localhost:3000](http://localhost:3000). The API runs at [http://localhost:3001](http://localhost:3001), and its interactive documentation is at [http://localhost:3001/docs](http://localhost:3001/docs).
 
 Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mobile app, or `yarn dev:mobile` to start Expo separately. Individual commands remain available as `yarn dev:api`, `yarn dev:web`, `yarn dev:worker`, and `yarn dev:mcp`.

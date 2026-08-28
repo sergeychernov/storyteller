@@ -1,11 +1,12 @@
 import { createReadStream, createWriteStream } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { sceneRenderFileType, sceneRenderStorageKey, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
 import { renderStillImage, renderVideo, type StillImageRenderSpec, type VideoRenderSpec } from "@storyteller/renderer";
-import type { ObjectStorage } from "@storyteller/storage";
+import { hashFileContent, type ObjectStorage } from "@storyteller/storage";
 
 export type StillImageRender = (spec: StillImageRenderSpec) => Promise<unknown>;
 
@@ -50,7 +51,8 @@ export class SceneRenderWorker {
     const sourcePath = join(temporaryDirectory, `source${safeExtension(job.input.material.name)}`);
     const file = sceneRenderFileType(job.input);
     const outputPath = join(temporaryDirectory, `scene.${file.extension}`);
-    const storageKey = sceneRenderStorageKey(job);
+    // A worker whose lease expires must never overwrite/delete another attempt's result.
+    const storageKey = sceneRenderStorageKey(job, randomUUID());
     let uploaded = false;
     let stage: "download" | "render" | "upload" | "complete" = "download";
     this.logger.info("scene render started", renderLogDetails(job));
@@ -58,10 +60,12 @@ export class SceneRenderWorker {
       const input = job.input;
       const needsVideoSource = input.rendererId !== "video" || input.mode !== "audio" || !input.audio;
       if (needsVideoSource) await pipeline(await this.storage.open(input.material.storageKey), createWriteStream(sourcePath, { flags: "wx" }));
+      if (needsVideoSource) await verifySource(sourcePath, input.material.contentHash);
       const audioPath = input.rendererId === "video" && input.mode !== "video" && input.audio
         ? join(temporaryDirectory, `audio${safeExtension(input.audio.name)}`) : undefined;
       if (audioPath && input.rendererId === "video" && input.audio) {
         await pipeline(await this.storage.open(input.audio.storageKey), createWriteStream(audioPath, { flags: "wx" }));
+        await verifySource(audioPath, input.audio.contentHash);
       }
       stage = "render";
       if (input.rendererId === "video") await this.renderMotionVideo({
@@ -84,13 +88,14 @@ export class SceneRenderWorker {
         overwrite: true,
       });
       const output = await stat(outputPath);
+      const contentHash = await hashFileContent(outputPath);
       stage = "upload";
       await this.storage.put(storageKey, {
         body: createReadStream(outputPath), contentType: file.mimeType, contentLength: output.size,
       });
       uploaded = true;
       stage = "complete";
-      if (!await this.queue.complete(job.id, this.workerId, storageKey, output.size)) {
+      if (!await this.queue.complete(job.id, this.workerId, storageKey, output.size, contentHash)) {
         await this.queue.scheduleDeletion(storageKey);
         uploaded = false;
       } else {
@@ -129,4 +134,10 @@ function safeExtension(name: string): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "unknown render error";
+}
+
+async function verifySource(path: string, expectedHash: string | undefined): Promise<void> {
+  if (expectedHash && await hashFileContent(path) !== expectedHash) {
+    throw new Error("source content does not match the saved render version");
+  }
 }

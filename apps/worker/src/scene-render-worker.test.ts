@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,7 +22,8 @@ test("worker renders a claimed scene and stores the reusable artifact", async (c
   });
 
   assert.equal(await worker.runOnce(), true);
-  assert.equal(queue.ready?.storageKey, sceneRenderStorageKey(renderJob()));
+  assert.ok(queue.ready?.storageKey.startsWith(sceneRenderStorageKey(renderJob()).slice(0, -4)));
+  assert.equal(queue.ready?.contentHash, createHash("sha256").update("rendered-mp4").digest("hex"));
   assert.equal((await readFile(join(root, queue.ready!.storageKey))).toString(), "rendered-mp4");
 });
 
@@ -73,9 +75,9 @@ test("worker schedules cleanup when a scene disappears during rendering", async 
   const worker = new SceneRenderWorker("worker-1", queue, storage, async (spec) => writeFile(spec.outputPath, "orphan"));
 
   await worker.runOnce();
-  assert.equal(queue.scheduled, sceneRenderStorageKey(renderJob()));
+  assert.ok(queue.scheduled?.startsWith(sceneRenderStorageKey(renderJob()).slice(0, -4)));
   await worker.runOnce();
-  await assert.rejects(readFile(join(root, sceneRenderStorageKey(renderJob()))), { code: "ENOENT" });
+  await assert.rejects(readFile(join(root, queue.scheduled!)), { code: "ENOENT" });
 });
 
 test("worker downloads only the tracks required by the export mode", async (context) => {
@@ -106,13 +108,42 @@ test("worker downloads only the tracks required by the export mode", async (cont
     assert.deepEqual(opened, mode === "audio" ? ["source/audio.m4a"]
       : mode === "video" ? ["source/photo.jpg"] : ["source/photo.jpg", "source/audio.m4a"]);
     assert.equal(contentType, mode === "audio" ? "audio/mp4" : "video/mp4");
-    assert.equal(queue.ready?.storageKey, sceneRenderStorageKey(job));
+    assert.ok(queue.ready?.storageKey.startsWith(sceneRenderStorageKey(job).slice(0, -4)));
     assert.equal(queue.failed, undefined);
   }
 });
 
+test("worker refuses source bytes that differ from the saved version", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-hash-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/photo.jpg", { body: Readable.from("changed"), contentType: "image/jpeg", contentLength: 7 });
+  const job = renderJob();
+  const queue = new MemoryQueue({ ...job, input: { ...job.input, material: { ...job.input.material, contentHash: "a".repeat(64) } } });
+  let renders = 0;
+  await new SceneRenderWorker("worker", queue, storage, async () => { renders++; }).runOnce();
+  assert.equal(renders, 0);
+  assert.equal(queue.ready, undefined);
+  assert.match(queue.failed!, /source content does not match/);
+});
+
+test("cleanup from a superseded worker cannot delete another attempt's accepted file", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-attempt-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/photo.jpg", { body: Readable.from("photo"), contentType: "image/jpeg", contentLength: 5 });
+  const accepted = new MemoryQueue(renderJob());
+  const superseded = new MemoryQueue(renderJob(), undefined, false);
+  const lateWorker = new SceneRenderWorker("late", superseded, storage, async (spec) => writeFile(spec.outputPath, "late"));
+  await new SceneRenderWorker("winner", accepted, storage, async (spec) => writeFile(spec.outputPath, "winner")).runOnce();
+  await lateWorker.runOnce();
+  assert.notEqual(accepted.ready!.storageKey, superseded.scheduled);
+  await lateWorker.runOnce();
+  assert.equal(await readFile(join(root, accepted.ready!.storageKey), "utf8"), "winner");
+});
+
 class MemoryQueue implements SceneRenderQueue {
-  ready?: { storageKey: string; sizeBytes: number };
+  ready?: { storageKey: string; sizeBytes: number; contentHash: string };
   failed?: string;
   deleted?: string;
   scheduled?: string;
@@ -122,14 +153,15 @@ class MemoryQueue implements SceneRenderQueue {
   constructor(private readonly job?: SceneRenderJob, private deletion?: ObjectDeletionJob, private readonly completeAccepted = true) {}
   enqueue(): Promise<SceneRenderJob> { throw new Error("not used"); }
   findAuthorized(): Promise<SceneRenderJob | undefined> { return Promise.resolve(undefined); }
+  async listAuthorized(): Promise<readonly SceneRenderJob[]> { return []; }
   claim(): Promise<SceneRenderJob | undefined> {
     if (this.claimed) return Promise.resolve(undefined);
     this.claimed = true;
     return Promise.resolve(this.job);
   }
-  complete(_renderId: string, _workerId: string, storageKey: string, sizeBytes: number): Promise<boolean> {
+  complete(_renderId: string, _workerId: string, storageKey: string, sizeBytes: number, contentHash: string): Promise<boolean> {
     if (!this.completeAccepted) return Promise.resolve(false);
-    this.ready = { storageKey, sizeBytes };
+    this.ready = { storageKey, sizeBytes, contentHash };
     return Promise.resolve(true);
   }
   fail(_renderId: string, _workerId: string, error: string): Promise<void> { this.failed = error; return Promise.resolve(); }
