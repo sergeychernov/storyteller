@@ -14,7 +14,7 @@ export function ScenePreviewActions({ scene, storyId, session, copy, deleteDisab
 }) {
   return <span className={styles.actions}>
     <SceneDownloadButton scene={scene} storyId={storyId} session={session} copy={copy} />
-    <SceneDebugButton scene={scene} copy={copy} />
+    <SceneDebugButton scene={scene} storyId={storyId} session={session} copy={copy} />
     <button type="button" className={styles.deleteButton} disabled={deleteDisabled}
       aria-label={copy.deleteScene} title={copy.deleteScene} aria-haspopup="dialog" onClick={() => onDeleteScene(scene.id)}>
       <svg viewBox="0 0 24 24" aria-hidden="true">

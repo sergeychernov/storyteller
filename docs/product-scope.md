@@ -28,4 +28,4 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 
 Preview, music generation and publication endpoints create asynchronous jobs. Their status/resource endpoints will be designed with the first vertical slice so idempotency and persistence are not guessed prematurely.
 
-The implemented scene-deletion contract, current file-cleanup semantics and Web integration are documented in [B05 — scene deletion](b05-scene-deletion.md). Deleting a scene is not archive preservation; that remains part of F10.1 in the product roadmap.
+The implemented scene-deletion contract, current file-cleanup semantics and Web integration are documented in [B05 — scene deletion](b05-scene-deletion.md). Deleting a scene is not archive preservation; F10.1 and its dependent editorial journal F10.2 are planned after MVP in milestone P3 for Web, Mobile and MCP. MVP allows re-uploading source files from the user's device; scene deletion can clean up server files without affecting those local originals.

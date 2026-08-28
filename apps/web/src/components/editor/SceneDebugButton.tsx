@@ -1,10 +1,12 @@
-import type { Scene } from "../../api.js";
+import type { AuthSession, Scene } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MiniDialogButton } from "./MiniDialogButton.js";
-import styles from "./SceneDebugButton.module.css";
+import { SceneDebugData } from "./SceneDebugData.js";
 
-export function SceneDebugButton({ scene, copy }: { readonly scene: Scene; readonly copy: EditorCopy }) {
+interface Props { readonly scene: Scene; readonly storyId: string; readonly session: AuthSession; readonly copy: EditorCopy }
+
+export function SceneDebugButton({ scene, storyId, session, copy }: Props) {
   return <MiniDialogButton code="{}" label={copy.sceneDebug} title={copy.sceneDebug} closeLabel={copy.close}>
-    <pre className={styles.json}>{JSON.stringify(scene, null, 2)}</pre>
+    <SceneDebugData scene={scene} storyId={storyId} session={session} copy={copy} />
   </MiniDialogButton>;
 }

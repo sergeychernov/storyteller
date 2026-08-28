@@ -1,16 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
-import { listSceneRenderVersions, type AuthSession, type Scene } from "../../api.js";
+import type { AuthSession, Scene } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 import styles from "./SceneRenderVersions.module.css";
+import { useSceneRenderVersions } from "./use-scene-render-versions.js";
 
 interface Props { readonly scene: Scene; readonly storyId: string; readonly session: AuthSession; readonly copy: EditorCopy }
 
 export function SceneRenderVersions({ scene, storyId, session, copy }: Props) {
-  const versions = useQuery({
-    queryKey: ["scene-render-versions", session.profile.id, storyId, scene.id, scene],
-    queryFn: ({ signal }) => listSceneRenderVersions(session.accessToken, storyId, scene.id, signal),
-    refetchInterval: 2_000,
-  });
+  const versions = useSceneRenderVersions(scene, storyId, session);
   const statuses = { queued: copy.versionQueued, running: copy.renderingScene, ready: copy.versionReady, failed: copy.versionFailed, canceled: copy.versionFailed };
   const modes = { video: "MP4", audio: "M4A", combined: copy.downloadCombined };
   return <section className={styles.versions} aria-label={copy.renderVersions}>
