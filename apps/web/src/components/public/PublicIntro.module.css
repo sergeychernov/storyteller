@@ -1,0 +1,65 @@
+.intro {
+  padding: 56px 0 44px;
+}
+
+.eyebrow {
+  margin: 0 0 20px;
+  color: #59613e;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.intro h1 {
+  margin: 0;
+  font-size: clamp(42px, 6vw, 76px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1.06;
+}
+
+.intro h1 em {
+  color: #697c37;
+  font-family: "Playfair Display", serif;
+}
+
+.description {
+  max-width: 620px;
+  margin: 24px 0;
+  color: #626258;
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 22px;
+  padding: 14px 20px;
+  border-radius: 9px;
+  background: #20201b;
+  color: white;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.action:hover {
+  background: #3a4329;
+}
+
+.action:focus-visible {
+  outline: 3px solid #697c37;
+  outline-offset: 4px;
+}
+
+.note {
+  margin: 12px 0 0;
+  color: #6a6a61;
+  font-size: 11px;
+}
+
+@media (max-width: 600px) {
+  .intro { padding: 36px 0; }
+  .description { font-size: 15px; }
+}

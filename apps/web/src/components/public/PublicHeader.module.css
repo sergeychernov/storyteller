@@ -1,0 +1,29 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  min-height: 70px;
+  padding: 16px max(24px, calc((100vw - 1040px) / 2));
+  color: #fff;
+  background: #12120f;
+}
+
+.brand {
+  color: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.brand span {
+  color: #d9fb76;
+  font-weight: 400;
+}
+
+.brand:focus-visible {
+  outline: 2px solid #d9fb76;
+  outline-offset: 5px;
+}

@@ -1,0 +1,78 @@
+.milestone {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e2e1d8;
+  border-radius: 12px;
+  background: #f8f8f3;
+  --progress-color: #93998a;
+}
+
+.milestone[data-state="current"] {
+  border-color: #d8a46f;
+  background: #fff6ea;
+  --progress-color: #b56b29;
+}
+
+.milestone[data-state="complete"] {
+  border-color: #aac6a0;
+  background: #eff6e9;
+  --progress-color: #5d7e42;
+}
+
+.topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.id {
+  color: #515b45;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.state {
+  color: #63665a;
+  font-size: 10px;
+}
+
+[data-state="current"] .state { color: #884d1b; }
+[data-state="complete"] .state { color: #42622f; }
+
+.title {
+  min-height: 36px;
+  margin: 12px 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  appearance: none;
+  background: #e4e5dc;
+  color: var(--progress-color);
+}
+
+.progress::-webkit-progress-bar { background: #e4e5dc; }
+.progress::-webkit-progress-value { background: var(--progress-color); }
+.progress::-moz-progress-bar { background: var(--progress-color); }
+
+.count {
+  margin: 9px 0 0;
+  color: #62665a;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .milestone { padding: 12px 14px; }
+  .title { min-height: 0; margin: 8px 0; }
+}

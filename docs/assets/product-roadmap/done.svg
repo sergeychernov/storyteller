@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="56" height="24" viewBox="0 0 56 24" role="img" aria-label="done">
+  <title>done</title>
+  <rect x="0.5" y="0.5" width="55" height="23" rx="5" fill="#dcfce7" stroke="#22c55e"/>
+  <text x="28" y="16" fill="#14532d" font-family="Arial, sans-serif" font-size="13" font-weight="700" text-anchor="middle">done</text>
+</svg>

@@ -8,7 +8,7 @@ Create one Railway project from the GitHub repository and keep these detected se
 
 | Service | Workspace | Public domain | Notes |
 | --- | --- | --- | --- |
-| `web` | `@storyteller/web` | yes | React/Vite studio |
+| `web` | `@storyteller/web` | yes | Public homepage and React/Vite studio |
 | `api` | `@storyteller/api` | yes | Fastify API; attach PostgreSQL; healthcheck is `/health` |
 | `worker` | `@storyteller/worker` | no | FFmpeg scene renderer and object cleanup |
 | `mcp` | `@storyteller/mcp` | only when external MCP clients need it | Placeholder process; it does not expose HTTP yet |
@@ -44,6 +44,10 @@ VITE_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 
 `VITE_API_URL` is compiled into the browser bundle, so changing it triggers a new web deployment. No `PORT` variable needs to be created: Railway injects it for public services.
 
+The public homepage at `/` includes a roadmap widget. Every web build (including a direct `vite build`) reads `docs/product-roadmap.md` through the [Vite plugin](../scripts/vite-public-roadmap.mjs) and embeds a validated public summary in the content-hashed bundle. There is no manually maintained JSON snapshot or runtime API dependency. Invalid milestone definitions/statuses fail the build. Completed task cells retain their original milestone as `done (Pn)` / the generated badge tooltip.
+
+This refreshes the widget on **site deployment**, not on YouTube story publication. The existing static server serves `index.html` with `no-cache`; new page loads receive the new hashed bundle. An already-open production page needs a reload. Update the web service's watch paths below so a document-only commit triggers deployment as well; editing this guide does not change existing Railway service settings.
+
 Attach a Railway PostgreSQL service to both the API and worker so both receive the same `DATABASE_URL`. Configure `PLATFORM_CREDENTIALS_KEY` on the API with the output of `openssl rand -base64 32`, and set `WEB_ORIGIN` to the public web URL (multiple origins may be comma-separated). The API applies migrations during startup; the worker safely retries while it is waiting for those tables.
 
 Create a private Railway Storage Bucket in the same region as the API and worker. Reference the same credentials from both services using these variables:
@@ -76,6 +80,10 @@ Railway's automatic monorepo import may initially watch only the application dir
 ```text
 /apps/web/**
 /packages/localization/**
+/docs/product-roadmap.md
+/scripts/public-roadmap.mjs
+/scripts/sync-product-roadmap.mjs
+/scripts/vite-public-roadmap.mjs
 /package.json
 /yarn.lock
 /.yarnrc.yml
@@ -130,5 +138,7 @@ After deployment:
 curl --fail "https://<api-domain>/health"
 curl --fail "https://<web-domain>/"
 ```
+
+Open the web root without signing in and verify that the roadmap position and counts match the deployed document. As a deployment smoke test, update one task's status while retaining its milestone, deploy again, and verify the new count after a page reload. Run `yarn test:roadmap` before deployment; it also checks two independent Vite builds against changed document fixtures.
 
 Registration, sessions, stories, and encrypted platform credentials persist in PostgreSQL and can be shared safely by multiple API replicas.

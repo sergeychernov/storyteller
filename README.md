@@ -62,3 +62,7 @@ Generate the credentials encryption key with `openssl rand -base64 32`. It must 
 Web and mobile initially follow the system language and expose an in-app selector for English, Russian, and Serbian Latin. The chosen language is persisted locally on each client.
 
 See [`docs/product-scope.md`](docs/product-scope.md) for the first API surface and [`docs/migration-plan.md`](docs/migration-plan.md) for the incremental plan.
+
+See [`docs/product-roadmap.md`](docs/product-roadmap.md) for the product roadmap with milestones, independent Web, Mobile, and MCP task statuses, and completion criteria for functional parity with Hermes Story Skills.
+
+The public homepage at `/` shows milestone progress computed from that document on every web build. Run `yarn test:roadmap` to check progress calculation and build-time refresh. For document-only redeploys, include the roadmap and its generators in the web service's [Railway watch paths](docs/deploy-railway.md#web).
