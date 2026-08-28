@@ -44,7 +44,9 @@ VITE_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 
 `VITE_API_URL` is compiled into the browser bundle, so changing it triggers a new web deployment. No `PORT` variable needs to be created: Railway injects it for public services.
 
-The public homepage at `/` includes a roadmap widget. Every web build (including a direct `vite build`) reads `docs/product-roadmap.md` through the [Vite plugin](../scripts/vite-public-roadmap.mjs) and embeds a validated public summary in the content-hashed bundle. There is no manually maintained JSON snapshot or runtime API dependency. Invalid milestone definitions/statuses fail the build. Completed task cells retain their original milestone as `done (Pn)` / the generated badge tooltip.
+The public English homepage lives at `/`; Russian and Serbian use `/ru` and `/sr`. Scenario and feature pages follow the same localized URL structure. The web build generates route-specific HTML, canonical and hreflang links, structured metadata, `robots.txt`, and `sitemap.xml` for `https://makeitastory.app`. Studio routes remain `noindex`. Point the Railway custom domain at the `web` service before submitting that sitemap to search engines.
+
+The public homepage and features page include a roadmap widget. Every web build reads `docs/product-roadmap.md` through the [Vite plugin](../scripts/vite-public-roadmap.mjs) and embeds a validated public summary in the content-hashed bundle. There is no manually maintained JSON snapshot or runtime API dependency. Invalid milestone definitions/statuses fail the build. Completed task cells retain their original milestone as `done (Pn)` / the generated badge tooltip.
 
 This refreshes the widget on **site deployment**, not on YouTube story publication. The existing static server serves `index.html` with `no-cache`; new page loads receive the new hashed bundle. An already-open production page needs a reload. Update the web service's watch paths below so a document-only commit triggers deployment as well; editing this guide does not change existing Railway service settings.
 
@@ -82,8 +84,11 @@ Railway's automatic monorepo import may initially watch only the application dir
 /packages/localization/**
 /docs/product-roadmap.md
 /scripts/public-roadmap.mjs
+/scripts/public-site.mjs
+/scripts/prerender-public-site.mjs
 /scripts/sync-product-roadmap.mjs
 /scripts/vite-public-roadmap.mjs
+/scripts/vite-public-site.mjs
 /package.json
 /yarn.lock
 /.yarnrc.yml

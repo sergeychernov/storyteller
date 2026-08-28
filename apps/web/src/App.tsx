@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppHeader } from "./components/AppHeader.js";
 import { SignIn } from "./components/SignIn.js";
+import { isPublicSitePath, publicPages } from "./components/public/public-site-model.js";
 import { AuthenticatedLayout } from "./layouts/AuthenticatedLayout.js";
 import { PublicPage } from "./pages/PublicPage.js";
 import { StoriesPage } from "./pages/StoriesPage.js";
@@ -12,12 +13,15 @@ export function App() {
   const { pathname } = useLocation();
   const defaultPath = session ? "/stories" : "/sign-in";
   const editingStory = /^\/stories\/[^/]+(?:\/scenes\/[^/]+)?\/?$/.test(pathname);
+  const publicPath = pathname === "/" || isPublicSitePath(pathname);
 
   return (
     <div>
-      {!editingStory && pathname !== "/" && <AppHeader />}
+      {!editingStory && !publicPath && <AppHeader />}
       <Routes>
-        <Route path="/" element={<PublicPage studioPath={defaultPath} />} />
+        {publicPages.map((resolvedPage) => (
+          <Route key={resolvedPage.page.path} path={resolvedPage.page.path} element={<PublicPage resolvedPage={resolvedPage} studioPath={defaultPath} />} />
+        ))}
         <Route path="/sign-in" element={session ? <Navigate to="/stories" replace /> : <main><SignIn onAuthenticated={authenticate} /></main>} />
         <Route element={session ? <AuthenticatedLayout /> : <Navigate to="/sign-in" replace />}>
           <Route path="/stories" element={<StoriesPage session={session!} />} />

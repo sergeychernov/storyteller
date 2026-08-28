@@ -8,6 +8,7 @@ import "./styles/global.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("root element not found");
+root.replaceChildren();
 
 createRoot(root).render(
   <StrictMode>

@@ -1,5 +1,6 @@
 import { localeOptions, normalizeLocale, translate, type Locale, type TranslationKey } from "@storyteller/localization";
 import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import styles from "./localization.module.css";
 
 const storageKey = "storyteller.locale";
@@ -32,12 +33,24 @@ export function useLocalization(): LocalizationContextValue {
   return context;
 }
 
-export function LanguageSwitcher() {
+interface LanguageSwitcherProps {
+  readonly destinations?: Readonly<Partial<Record<Locale, string>>>;
+}
+
+export function LanguageSwitcher({ destinations }: LanguageSwitcherProps) {
   const { locale, setLocale, t } = useLocalization();
+  const navigate = useNavigate();
+
+  function changeLocale(nextLocale: Locale) {
+    setLocale(nextLocale);
+    const destination = destinations?.[nextLocale];
+    if (destination) navigate(destination);
+  }
+
   return (
     <label className={styles.languageSwitcher}>
       <span>{t("language.label")}</span>
-      <select aria-label={t("language.label")} value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
+      <select aria-label={t("language.label")} value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}>
         {localeOptions.map((option) => <option key={option.locale} value={option.locale}>{option.label}</option>)}
       </select>
     </label>

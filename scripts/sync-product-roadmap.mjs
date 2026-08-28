@@ -19,7 +19,7 @@ export function readRoadmapStatus(cell) {
     throw new Error(`Invalid product-roadmap status: ${value}`);
   }
   if (status === "done") {
-    const milestone = completed?.[1] ?? badge?.[3] ?? badge?.[2].match(/\/next-(P(?:0|[1-9]\d*))\.svg$/)?.[1];
+    const milestone = completed?.[1] ?? badge?.[3] ?? badge?.[2]?.match(/\/next-(P(?:0|[1-9]\d*))\.svg$/)?.[1];
     if (!milestone) throw new Error(`Completed status must retain its milestone: use done (Pn), not ${value}`);
     return { status, milestone };
   }

@@ -1,0 +1,135 @@
+.section {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.78fr) minmax(0, 1.6fr);
+  gap: clamp(36px, 7vw, 96px);
+  padding: clamp(72px, 10vw, 128px) 0;
+  border-top: 1px solid rgba(34, 34, 29, 0.14);
+}
+
+.section[data-tone="soft"] {
+  position: relative;
+}
+
+.section[data-tone="soft"]::before {
+  position: absolute;
+  z-index: -1;
+  inset: 24px -48px;
+  border-radius: 36px;
+  background: rgba(230, 236, 211, 0.62);
+  content: "";
+}
+
+.heading {
+  align-self: start;
+  position: sticky;
+  top: 32px;
+}
+
+.eyebrow {
+  margin: 0 0 16px;
+  color: #5d6b38;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.heading h2 {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 52px);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+}
+
+.intro {
+  margin: 24px 0 0;
+  color: #626258;
+  line-height: 1.7;
+}
+
+.disclosure {
+  margin: 20px 0 0;
+  padding-left: 13px;
+  border-left: 2px solid #7a8f3d;
+  color: #737365;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cards[data-count="3"] {
+  grid-template-columns: 1fr;
+}
+
+.card {
+  min-height: 220px;
+  padding: 25px;
+  border: 1px solid rgba(34, 34, 29, 0.13);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.card > span {
+  color: #82924f;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.card h3 {
+  margin: 48px 0 12px;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.card p {
+  margin: 0;
+  color: #66665d;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.related {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 20px 0 104px;
+}
+
+.related a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 82px;
+  padding: 20px 22px;
+  border: 1px solid rgba(34, 34, 29, 0.16);
+  border-radius: 15px;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.related a:hover {
+  background: #fff;
+  transform: translateY(-2px);
+}
+
+@media (max-width: 760px) {
+  .section { grid-template-columns: 1fr; }
+  .heading { position: static; }
+  .section[data-tone="soft"]::before { inset: 20px -20px; border-radius: 24px; }
+  .related { grid-template-columns: 1fr; padding-bottom: 72px; }
+}
+
+@media (max-width: 520px) {
+  .cards { grid-template-columns: 1fr; }
+  .card { min-height: 190px; }
+}

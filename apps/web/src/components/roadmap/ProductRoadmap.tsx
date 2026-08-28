@@ -1,11 +1,12 @@
 import publicRoadmap from "virtual:product-roadmap";
-import { useLocalization } from "../../localization.js";
+import type { Locale } from "@storyteller/localization";
 import { getPublicSiteCopy } from "../public/public-site-copy.js";
 import { RoadmapMilestone } from "./RoadmapMilestone.js";
 import styles from "./ProductRoadmap.module.css";
 
-export function ProductRoadmap() {
-  const { locale } = useLocalization();
+interface ProductRoadmapProps { readonly locale: Locale }
+
+export function ProductRoadmap({ locale }: ProductRoadmapProps) {
   const copy = getPublicSiteCopy(locale);
   const current = publicRoadmap.milestones.find((milestone) => milestone.id === publicRoadmap.currentMilestoneId);
 
