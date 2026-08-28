@@ -11,6 +11,7 @@ import sharp from "sharp";
 import { createConfiguredObjectStorage, ObjectStorageError, type DirectDownload, type ObjectStorage } from "./object-storage.js";
 import { readMaterialWaveform } from "./material-waveform.js";
 import { storeVideoTracks } from "./video-tracks.js";
+import { hashContent, hashFileContent } from "@storyteller/storage";
 
 export interface UploadedFile {
   readonly filename: string;
@@ -62,6 +63,7 @@ export class MediaStorage {
         throw new ObjectStorageError("could not store media", 503, { cause: error });
       }
       const common = {
+        contentHash: await hashFileContent(temporaryPath),
         kind, name: safeDisplayName(file.filename), orientation: detected.orientation, storageKey,
         mimeType, sizeBytes: size, width: detected.width, height: detected.height,
       } as const;
@@ -143,6 +145,7 @@ export class MediaStorage {
       }
       return {
         result: {
+          contentHash: await hashFileContent(outputPath),
           storageKey,
           mimeType: output.mimeType,
           sizeBytes: size,
@@ -181,6 +184,13 @@ export class MediaStorage {
 
   createDownloadUrl(storageKey: string): Promise<DirectDownload | undefined> {
     return this.objects.createDownloadUrl?.(storageKey) ?? Promise.resolve(undefined);
+  }
+
+  async contentHash(file: { storageKey: string; contentHash?: string }): Promise<string> {
+    // Legacy files are read lazily. Their real hashes become part of the persisted render manifest.
+    if (file.contentHash) return file.contentHash;
+    try { return await hashContent(await this.objects.open(file.storageKey)); }
+    catch (error) { throw new ObjectStorageError("could not read media for versioning", 503, { cause: error }); }
   }
 
   delete(storageKey: string): Promise<void> {

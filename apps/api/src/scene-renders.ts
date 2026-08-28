@@ -1,70 +1,77 @@
 import { randomUUID } from "node:crypto";
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
-import { centeredFocusPoint, getMaterialPresentation, getMaterialSource, type VideoExportMode } from "@storyteller/domain";
-import { hashSceneRenderInput, type SceneRenderInput, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
-import { stillImageRendererVersion, videoRendererVersion } from "@storyteller/renderer";
+import type { Scene, VideoExportMode } from "@storyteller/domain";
+import { hashSceneRenderInput, sceneRenderParameters, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
+import type { MediaStorage } from "./media-storage.js";
+import { buildSceneRenderInput } from "./scene-render-input.js";
+
+export interface VersionedSceneRender extends SceneRenderJob { readonly current: boolean }
 
 export class SceneRenderService {
-  constructor(private readonly application: StoryApplication, private readonly queue: SceneRenderQueue) {}
+  constructor(private readonly application: StoryApplication, private readonly queue: SceneRenderQueue, private readonly media: MediaStorage) {}
 
-  async request(profileId: string, storyId: string, sceneId: string, mode?: VideoExportMode): Promise<SceneRenderJob> {
+  async request(profileId: string, storyId: string, sceneId: string, mode?: VideoExportMode): Promise<VersionedSceneRender> {
     const story = await this.application.getStory(profileId, storyId);
-    const scene = story.scenes.find(({ id }) => id === sceneId);
-    if (!scene) throw new ApplicationError(`scene not found: ${sceneId}`, 404);
-    const material = scene.materials[0];
-    if (scene.materials.length !== 1 || !material || (material.kind === "image" && scene.rendererId !== "still-image")) {
-      throw new ApplicationError("scene rendering is available only for one image or video", 422, "unsupported_scene_renderer");
-    }
-    if (mode === "audio" && (material.kind !== "video" || !material.hasAudio)) {
-      throw new ApplicationError("this scene has no audio track", 422, "missing_audio_track");
-    }
-    const presentation = getMaterialPresentation(material);
-    const source = material.kind === "video" ? getMaterialSource(material) : presentation;
-    const common = {
-      material: {
-        storageKey: source.storageKey,
-        name: source.storageKey,
-        mimeType: source.mimeType,
-        width: source.width,
-        height: source.height,
-        orientation: source.orientation,
-      },
-      durationSeconds: scene.durationSeconds,
-      motion: scene.motion,
-      focusPoint: scene.focusPoint ?? centeredFocusPoint,
-      output: { width: 1080, height: 1920, fps: 30, codec: "h264" as const },
-    };
-    const sourceDurationSeconds = material.kind === "video" ? material.sourceDurationSeconds ?? material.videoTrack?.durationSeconds : undefined;
-    const input: SceneRenderInput = material.kind === "video" ? {
-      ...common, rendererId: "video", rendererVersion: videoRendererVersion, mode: mode ?? "combined",
-      hasAudio: material.hasAudio,
-      edit: { rotation: material.edit?.rotation ?? 0, crop: material.edit?.crop ?? { x: 0, y: 0, width: 1, height: 1 },
-        ...(material.edit?.trim ? { trim: material.edit.trim } : {}) },
-      ...(sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds }),
-      ...(material.audioTrack ? { audio: {
-        storageKey: material.audioTrack.storageKey, name: material.audioTrack.storageKey, mimeType: material.audioTrack.mimeType,
-      } } : {}),
-      durationSeconds: presentation.durationSeconds ?? sourceDurationSeconds ?? scene.durationSeconds,
-      output: { ...common.output, width: presentation.width, height: presentation.height },
-    } : { ...common, rendererId: "still-image", rendererVersion: stillImageRendererVersion };
+    const input = await buildSceneRenderInput(findScene(story.scenes, sceneId), this.media, mode);
     const job = await this.queue.enqueue({
       id: randomUUID(), profileId, storyId, sceneId, input, inputHash: hashSceneRenderInput(input),
-    });
-    if (!job) throw new ApplicationError(`scene not found: ${sceneId}`, 404, "scene_not_found");
-    return job;
+    }, story.revision);
+    if (!job) {
+      findScene((await this.application.getStory(profileId, storyId)).scenes, sceneId);
+      throw new ApplicationError("story changed before rendering; reload and try again", 409, "story_revision_conflict");
+    }
+    // A queued snapshot may already be obsolete by the time the request finishes.
+    return this.get(profileId, storyId, sceneId, job.id);
   }
 
-  async get(profileId: string, storyId: string, sceneId: string, renderId: string): Promise<SceneRenderJob> {
+  async list(profileId: string, storyId: string, sceneId: string): Promise<readonly VersionedSceneRender[]> {
+    const scene = findScene((await this.application.getStory(profileId, storyId)).scenes, sceneId);
+    const jobs = await this.queue.listAuthorized(profileId, storyId, sceneId);
+    const versions = new Map<string, Promise<string | undefined>>();
+    return Promise.all(jobs.map(async (job) => {
+      const mode = job.input.rendererId === "video" ? job.input.mode : undefined;
+      const key = mode ?? "image";
+      if (!versions.has(key)) versions.set(key, this.currentHash(scene, mode));
+      return { ...job, current: isCurrent(job, await versions.get(key)!) };
+    }));
+  }
+
+  async get(profileId: string, storyId: string, sceneId: string, renderId: string): Promise<VersionedSceneRender> {
+    const scene = findScene((await this.application.getStory(profileId, storyId)).scenes, sceneId);
     const job = await this.queue.findAuthorized(profileId, storyId, sceneId, renderId);
     if (!job) throw new ApplicationError(`scene render not found: ${renderId}`, 404);
-    return job;
+    const hash = await this.currentHash(scene, job.input.rendererId === "video" ? job.input.mode : undefined);
+    return { ...job, current: isCurrent(job, hash) };
+  }
+
+  private async currentHash(scene: Scene, mode?: VideoExportMode): Promise<string | undefined> {
+    try { return hashSceneRenderInput(await buildSceneRenderInput(scene, this.media, mode)); }
+    catch (error) {
+      // Adding/removing a material can make a previously supported scene unrenderable.
+      if (error instanceof ApplicationError && error.statusCode === 422) return undefined;
+      throw error;
+    }
   }
 }
 
-export function serializeSceneRender(job: SceneRenderJob) {
+function findScene(scenes: readonly Scene[], sceneId: string): Scene {
+  const scene = scenes.find(({ id }) => id === sceneId);
+  if (!scene) throw new ApplicationError(`scene not found: ${sceneId}`, 404, "scene_not_found");
+  return scene;
+}
+
+function isCurrent(job: SceneRenderJob, hash: string | undefined): boolean {
+  return job.inputHash === hash && (job.status !== "ready" || Boolean(job.contentHash));
+}
+
+export function serializeSceneRender(job: VersionedSceneRender) {
   return {
-    id: job.id,
-    status: job.status,
+    id: job.id, status: job.status, current: job.current, inputHash: job.inputHash,
+    mode: job.input.rendererId === "video" ? job.input.mode : "video" as const,
+    parameters: sceneRenderParameters(job.input),
+    dependencies: (job.input.dependencies ?? []).map((dependency) => ({ ...dependency, parents: [...dependency.parents] })),
+    ...(job.contentHash === undefined ? {} : { contentHash: job.contentHash }),
+    ...(job.createdAt === undefined ? {} : { createdAt: job.createdAt }),
     ...(job.sizeBytes === undefined ? {} : { sizeBytes: job.sizeBytes }),
     ...(job.error === undefined ? {} : { error: job.error }),
   };

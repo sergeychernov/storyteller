@@ -28,6 +28,8 @@ export interface VideoTrim {
 }
 
 export interface MaterialEditResult {
+  /** SHA-256 of the stored bytes; absent only on files uploaded before content versioning. */
+  readonly contentHash?: string;
   readonly storageKey: string;
   readonly mimeType: string;
   readonly sizeBytes: number;
@@ -50,6 +52,7 @@ export interface FocusPoint {
 export interface AssetRef { readonly id: string; readonly kind: AssetKind }
 
 export interface MaterialFile {
+  readonly contentHash?: string;
   readonly id: string;
   readonly name: string;
   readonly orientation: MaterialOrientation;
@@ -77,6 +80,7 @@ export interface VideoMaterial extends MaterialFile {
 }
 
 export interface VideoTrack {
+  readonly contentHash?: string;
   readonly storageKey: string;
   readonly mimeType: string;
   readonly sizeBytes: number;

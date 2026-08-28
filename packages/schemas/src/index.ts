@@ -34,6 +34,7 @@ export const editMaterialSchema = z.object({
   rotation: materialRotationSchema, crop: materialCropSchema, trim: videoTrimSchema.optional(),
 });
 const materialFileShape = {
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   id: z.string().uuid(), name: z.string(), orientation: materialOrientationSchema, storageKey: z.string(), mimeType: z.string(),
   sizeBytes: z.number().int().nonnegative(), width: z.number().int().positive(), height: z.number().int().positive(),
   edit: z.object({
@@ -41,6 +42,7 @@ const materialFileShape = {
     crop: materialCropSchema,
     trim: videoTrimSchema.optional(),
     result: z.object({
+      contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
       storageKey: z.string(), mimeType: z.string(), sizeBytes: z.number().int().nonnegative(),
       width: z.number().int().positive(), height: z.number().int().positive(), orientation: materialOrientationSchema,
       durationSeconds: z.number().positive().optional(),
@@ -48,6 +50,7 @@ const materialFileShape = {
   }).optional(),
 };
 const videoTrackSchema = z.object({
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   storageKey: z.string(), mimeType: z.string(), sizeBytes: z.number().int().nonnegative(), durationSeconds: z.number().positive(),
 });
 const audioTrackSchema = videoTrackSchema.extend({
@@ -93,6 +96,14 @@ export const sceneRenderStatusSchema = z.enum(["queued", "running", "ready", "fa
 export const sceneRenderRequestSchema = z.object({ mode: z.enum(["video", "audio", "combined"]).optional() }).nullish().default({});
 export const sceneRenderSchema = z.object({
   id: z.string().uuid(), status: sceneRenderStatusSchema,
+  current: z.boolean(), inputHash: z.string().regex(/^[a-f0-9]{64}$/),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), createdAt: z.iso.datetime().optional(),
+  mode: z.enum(["video", "audio", "combined"]), parameters: z.record(z.string(), z.unknown()),
+  dependencies: z.array(z.object({
+    role: z.enum(["original", "image-edit", "video-track", "audio-track"]),
+    storageKey: z.string(), contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+    parents: z.array(z.string()), parameters: z.record(z.string(), z.unknown()),
+  })),
   sizeBytes: z.number().int().nonnegative().optional(), error: z.string().optional(),
 });
 

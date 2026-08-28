@@ -18,15 +18,18 @@ export interface MaterialCrop { x: number; y: number; width: number; height: num
 export interface VideoTrim { startSeconds: number; endSeconds: number }
 export interface MaterialEdit { rotation: MaterialRotation; crop: MaterialCrop; trim?: VideoTrim }
 export interface MaterialEditResult {
+  contentHash?: string;
   storageKey: string; mimeType: string; sizeBytes: number; width: number; height: number; orientation: MaterialOrientation;
   durationSeconds?: number;
 }
 export interface AppliedMaterialEdit extends MaterialEdit { result?: MaterialEditResult }
 export type ImageMaterial = {
+  contentHash?: string;
   id: string; kind: "image"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
   sizeBytes: number; width: number; height: number; edit?: AppliedMaterialEdit;
 };
 export type VideoMaterial = {
+  contentHash?: string;
   id: string; kind: "video"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
   sizeBytes: number; width: number; height: number; edit?: AppliedMaterialEdit;
   hasAudio: boolean; sourceDurationSeconds?: number; audioTags: VideoAudioTag[];
@@ -44,9 +47,18 @@ export interface Story extends Omit<StorySummary, "sceneCount"> {
 }
 export interface SceneRender {
   id: string;
+  current: boolean;
   status: "queued" | "running" | "ready" | "failed" | "canceled";
   sizeBytes?: number;
   error?: string;
+}
+export interface SceneRenderVersion extends SceneRender {
+  inputHash: string;
+  contentHash?: string;
+  createdAt?: string;
+  mode: VideoExportMode;
+  parameters: Record<string, unknown>;
+  dependencies: { role: string; storageKey: string; contentHash: string; parents: string[]; parameters: Record<string, unknown> }[];
 }
 export async function checkHealth(): Promise<boolean> { try { return (await fetch(`${apiUrl}/health`)).ok; } catch { return false; } }
 export function signIn(email: string, password: string, name?: string): Promise<AuthSession> {
@@ -129,9 +141,12 @@ export function requestSceneRender(token: string, storyId: string, sceneId: stri
 export function getSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<SceneRender> {
   return request(`/stories/${storyId}/scenes/${sceneId}/renders/${renderId}`, signal ? { signal } : {}, token);
 }
+export function listSceneRenderVersions(token: string, storyId: string, sceneId: string, signal?: AbortSignal): Promise<SceneRenderVersion[]> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/renders`, { cache: "no-store", ...(signal ? { signal } : {}) }, token);
+}
 export async function downloadSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<Blob> {
   const response = await fetch(`${apiUrl}/stories/${storyId}/scenes/${sceneId}/renders/${renderId}/content`, {
-    headers: { authorization: `Bearer ${token}` }, ...(signal ? { signal } : {}),
+    cache: "no-store", headers: { authorization: `Bearer ${token}` }, ...(signal ? { signal } : {}),
   });
   if (!response.ok) await throwResponseError(response);
   return response.blob();

@@ -39,3 +39,32 @@ test("video render cache distinguishes tracks, trim, crop and export mode", () =
   assert.equal(sceneRenderStorageKey({ profileId: "p", storyId: "s", sceneId: "c", inputHash: "audio", input: { ...video, mode: "audio" } }),
     "projects/p/s/scenes/c/renders/audio.m4a");
 });
+
+test("versioned fingerprints follow content, processing and transitive parents instead of file locations", () => {
+  const versioned: SceneRenderInput = { ...input, dependencies: [
+    { role: "original", storageKey: "original.jpg", contentHash: "a".repeat(64), parents: [], parameters: {} },
+    { role: "image-edit", storageKey: "edited.jpg", contentHash: "b".repeat(64), parents: ["original"], parameters: { rotation: 90 } },
+  ] };
+  const hash = hashSceneRenderInput(versioned);
+  assert.equal(hash, hashSceneRenderInput({ ...versioned, material: { ...input.material, name: "renamed.jpg", storageKey: "new-key" },
+    dependencies: versioned.dependencies!.map((dependency) => ({ ...dependency, storageKey: `new/${dependency.storageKey}` })).reverse() }));
+  for (const changed of [
+    { ...versioned, rendererVersion: 2 },
+    { ...versioned, dependencies: versioned.dependencies!.map((dependency) => dependency.role === "original"
+      ? { ...dependency, contentHash: "c".repeat(64) } : dependency) },
+    { ...versioned, dependencies: versioned.dependencies!.map((dependency) => dependency.role === "image-edit"
+      ? { ...dependency, parameters: { rotation: 180 } } : dependency) },
+  ]) assert.notEqual(hash, hashSceneRenderInput(changed));
+  assert.notEqual(hash, hashSceneRenderInput(input));
+});
+
+test("an audio version ignores visual parameters but still depends on its trim and source", () => {
+  const audio: SceneRenderInput = { ...input, rendererId: "video", mode: "audio", hasAudio: true,
+    sourceDurationSeconds: 10, edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } },
+    dependencies: [{ role: "original", storageKey: "video.mp4", contentHash: "a".repeat(64), parents: [], parameters: {} }],
+  };
+  const hash = hashSceneRenderInput(audio);
+  assert.equal(hash, hashSceneRenderInput({ ...audio, motion: "none", focusPoint: { x: 1, y: 0 }, durationSeconds: 15,
+    edit: { rotation: 90, crop: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 } } }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...audio, edit: { ...audio.edit, trim: { startSeconds: 2, endSeconds: 5 } } }));
+});

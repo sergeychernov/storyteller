@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+export { hashContent, hashFileContent } from "./content-hash.js";
 
 export interface StoredObjectInput {
   readonly body: Readable;

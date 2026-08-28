@@ -1,0 +1,15 @@
+.versions { margin-top: 8px; padding-top: 12px; border-top: 1px solid #d6d3c8; min-width: 0; }
+.versions h4 { margin: 0 0 6px; font-size: 14px; }
+.versions > p { color: #66665c; font-size: 12px; line-height: 1.5; }
+.versions ul { list-style: none; padding: 0; margin: 12px 0 0; }
+.versions li { padding: 10px 0; border-top: 1px solid #e3e0d8; }
+.heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.current, .stale { padding: 3px 7px; border-radius: 5px; font-size: 11px; }
+.current { background: #e4efd3; color: #3f581f; }
+.stale { background: #fff0d5; color: #875716; }
+.versions li p, .versions time, .versions details { font-size: 12px; }
+.versions time { color: #66665c; }
+.versions details { margin-top: 8px; }
+.versions summary { cursor: pointer; padding: 4px 0; }
+.versions code { overflow-wrap: anywhere; }
+.versions pre { max-height: 180px; overflow: auto; padding: 8px; background: #eeede6; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }

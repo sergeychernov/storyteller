@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { SceneRender } from "../../api.js";
-import { SceneRenderTimeoutError, waitForSceneRender } from "./scene-render-polling.js";
+import { SceneRenderStaleError, SceneRenderTimeoutError, waitForSceneRender } from "./scene-render-polling.js";
 
 test("waits for queued and running renders, or returns an existing ready render immediately", async () => {
   const controller = new AbortController();
@@ -13,10 +13,10 @@ test("waits for queued and running renders, or returns an existing ready render 
     load: async (id: string, signal: AbortSignal): Promise<SceneRender> => {
       assert.equal(id, "render-1");
       assert.equal(signal, controller.signal);
-      return { id, status: statuses[polls++]! };
+      return { id, current: true, status: statuses[polls++]! };
     },
   };
-  const ready = await waitForSceneRender({ id: "render-1", status: "queued" }, options);
+  const ready = await waitForSceneRender({ id: "render-1", current: true, status: "queued" }, options);
   assert.equal(ready.status, "ready");
   assert.equal(polls, 2);
   assert.equal(await waitForSceneRender(ready, options), ready);
@@ -27,11 +27,11 @@ test("stops polling when no worker claims the render or rendering never finishes
   for (const status of ["queued", "running"] as const) {
     let now = 0;
     let polls = 0;
-    await assert.rejects(waitForSceneRender({ id: "render-1", status }, {
+    await assert.rejects(waitForSceneRender({ id: "render-1", current: true, status }, {
       signal: new AbortController().signal,
       now: () => now,
       wait: async (milliseconds) => { now += milliseconds; },
-      load: async (id) => { polls++; return { id, status }; },
+      load: async (id) => { polls++; return { id, current: true, status }; },
       intervalMs: 10, queueTimeoutMs: 20, renderTimeoutMs: 40,
     }), (error) => error instanceof SceneRenderTimeoutError && error.phase === (status === "queued" ? "queue" : "render"));
     assert.equal(polls, status === "queued" ? 2 : 4);
@@ -40,11 +40,11 @@ test("stops polling when no worker claims the render or rendering never finishes
 
 test("allows a claimed render to continue beyond the queue deadline", async () => {
   let now = 0;
-  const render = await waitForSceneRender({ id: "render-1", status: "queued" }, {
+  const render = await waitForSceneRender({ id: "render-1", current: true, status: "queued" }, {
     signal: new AbortController().signal,
     now: () => now,
     wait: async (milliseconds) => { now += milliseconds; },
-    load: async (id) => ({ id, status: now >= 30 ? "ready" : "running" }),
+    load: async (id) => ({ id, current: true, status: now >= 30 ? "ready" : "running" }),
     intervalMs: 10, queueTimeoutMs: 20, renderTimeoutMs: 40,
   });
   assert.equal(render.status, "ready");
@@ -53,7 +53,7 @@ test("allows a claimed render to continue beyond the queue deadline", async () =
 
 test("reports failed and canceled renders without polling again", async () => {
   for (const status of ["failed", "canceled"] as const) {
-    await assert.rejects(waitForSceneRender({ id: "render-1", status, error: "render stopped" }, {
+    await assert.rejects(waitForSceneRender({ id: "render-1", current: true, status, error: "render stopped" }, {
       signal: new AbortController().signal,
       load: async () => { throw new Error("unexpected poll"); },
     }), /render stopped/);
@@ -62,11 +62,22 @@ test("reports failed and canceled renders without polling again", async () => {
 
 test("aborts the pending delay when leaving or changing a scene", async () => {
   const controller = new AbortController();
-  const pending = waitForSceneRender({ id: "render-1", status: "queued" }, {
+  const pending = waitForSceneRender({ id: "render-1", current: true, status: "queued" }, {
     signal: controller.signal,
     intervalMs: 60_000,
     load: async () => { throw new Error("unexpected poll"); },
   });
   controller.abort();
   await assert.rejects(pending, { name: "AbortError" });
+});
+
+test("never downloads an obsolete ready file and stops when an edit invalidates a running job", async () => {
+  for (const status of ["ready", "queued"] as const) {
+    let polls = 0;
+    await assert.rejects(waitForSceneRender({ id: "render", status, current: status === "queued" }, {
+      signal: new AbortController().signal, wait: async () => {},
+      load: async (id) => { polls++; return { id, status: "running", current: false }; },
+    }), SceneRenderStaleError);
+    assert.equal(polls, status === "queued" ? 1 : 0);
+  }
 });

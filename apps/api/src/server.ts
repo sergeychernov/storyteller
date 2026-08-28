@@ -23,7 +23,7 @@ export async function buildApi(application: StoryApplication, options: {
   readonly renderQueue?: SceneRenderQueue;
 } = {}) {
   const mediaStorage = options.mediaStorage ?? new MediaStorage();
-  const renderService = options.renderQueue && new SceneRenderService(application, options.renderQueue);
+  const renderService = options.renderQueue && new SceneRenderService(application, options.renderQueue, mediaStorage);
   const app = Fastify({ logger: process.env.NODE_ENV !== "test" })
     .setValidatorCompiler(validatorCompiler).setSerializerCompiler(serializerCompiler).withTypeProvider<ZodTypeProvider>();
 
@@ -288,8 +288,15 @@ export async function buildApi(application: StoryApplication, options: {
   )));
 
   const renderParams = sceneParams.extend({ renderId: z.string().uuid() });
+  app.get("/stories/:storyId/scenes/:sceneId/renders", {
+    schema: { security: bearerSecurity, params: sceneParams, response: { 200: z.array(sceneRenderSchema), 401: errorSchema, 404: errorSchema, 503: errorSchema } },
+  }, async (request, reply) => {
+    const profile = await authenticate(application, request);
+    reply.header("cache-control", "private, no-store");
+    return (await requireRenderService(renderService).list(profile.id, request.params.storyId, request.params.sceneId)).map(serializeSceneRender);
+  });
   app.post("/stories/:storyId/scenes/:sceneId/renders", {
-    schema: { security: bearerSecurity, params: sceneParams, body: sceneRenderRequestSchema, response: { 202: sceneRenderSchema, 401: errorSchema, 404: errorSchema, 422: errorSchema, 503: errorSchema } },
+    schema: { security: bearerSecurity, params: sceneParams, body: sceneRenderRequestSchema, response: { 202: sceneRenderSchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 422: errorSchema, 503: errorSchema } },
   }, async (request, reply) => {
     const service = requireRenderService(renderService);
     const profile = await authenticate(application, request);
@@ -297,9 +304,10 @@ export async function buildApi(application: StoryApplication, options: {
   });
   app.get("/stories/:storyId/scenes/:sceneId/renders/:renderId", {
     schema: { security: bearerSecurity, params: renderParams, response: { 200: sceneRenderSchema, 401: errorSchema, 404: errorSchema, 503: errorSchema } },
-  }, async (request) => {
+  }, async (request, reply) => {
     const service = requireRenderService(renderService);
     const profile = await authenticate(application, request);
+    reply.header("cache-control", "private, no-store");
     return serializeSceneRender(await service.get(profile.id, request.params.storyId, request.params.sceneId, request.params.renderId));
   });
   app.get("/stories/:storyId/scenes/:sceneId/renders/:renderId/content", {
@@ -310,10 +318,11 @@ export async function buildApi(application: StoryApplication, options: {
     if (!storage) throw new ApplicationError("render storage is unavailable", 503);
     const profile = await authenticate(application, request);
     const job = await service.get(profile.id, request.params.storyId, request.params.sceneId, request.params.renderId);
+    if (!job.current) throw new ApplicationError("scene render is outdated; render the current version", 409, "scene_render_stale");
     if (job.status !== "ready" || !job.storageKey) throw new ApplicationError("scene render is not ready", 409);
     const file = sceneRenderFileType(job.input);
     return reply.type(file.mimeType)
-      .header("cache-control", "private, max-age=3600")
+      .header("cache-control", "private, no-store")
       .header("content-disposition", `attachment; filename="scene-${request.params.sceneId}.${file.extension}"`)
       .send(await storage.open(job.storageKey));
   });

@@ -8,10 +8,7 @@ import { PostgresSceneRenderQueue, type SceneRenderInput } from "@storyteller/re
 import { Pool } from "pg";
 import { PostgresStoryRepository } from "./database.js";
 import { migrateDatabase } from "./migrations.js";
-
-// Never use DATABASE_URL: these tests require an explicitly selected disposable database.
-const databaseUrl = process.env.STORYTELLER_TEST_DATABASE_URL;
-const options = { skip: !databaseUrl, timeout: 15_000 };
+import { createPostgresTestPool, postgresTestOptions as options } from "./postgres-test-fixture.js";
 
 test("PostgreSQL: scene deletion commits the story, render removal and cleanup together", options, async (context) => {
   const fixture = await createFixture(context);
@@ -33,7 +30,7 @@ test("PostgreSQL: scene deletion commits the story, render removal and cleanup t
     { storage_key: "original.png", status: "queued", attempts: 0 },
     { storage_key: "ready.mp4", status: "queued", attempts: 0 },
   ]);
-  assert.equal(await fixture.queue.complete(running.id, "worker", "late.mp4", 100), false);
+  assert.equal(await fixture.queue.complete(running.id, "worker", "late.mp4", 100, "a".repeat(64)), false);
   assert.equal(await fixture.queue.findAuthorized(story.profileId, story.id, sceneId, queued.id), undefined);
 });
 
@@ -156,18 +153,44 @@ test("PostgreSQL: deletion captures an artifact completed by a concurrent worker
   }
 });
 
+test("PostgreSQL: versions persist content hashes and reject stale snapshots and late completions", options, async (context) => {
+  const { pool, queue, repository, story, sceneId } = await createFixture(context);
+  const job = renderJob(story.profileId, story.id, sceneId);
+  const queued = await queue.enqueue(job, story.revision);
+  assert.ok(queued);
+  const running = await queue.claim("worker", 60_000);
+  assert.equal(running?.id, queued.id);
+  const contentHash = "a".repeat(64);
+  assert.equal(await queue.complete(queued.id, "other-worker", "wrong.mp4", 10, contentHash), false);
+  assert.equal(await queue.complete(queued.id, "worker", "result.mp4", 10, contentHash), true);
+  assert.equal(await queue.complete(queued.id, "worker", "late.mp4", 20, "b".repeat(64)), false);
+  const reopened = new PostgresSceneRenderQueue(pool);
+  const history = await reopened.listAuthorized(story.profileId, story.id, sceneId);
+  assert.equal(history[0]?.contentHash, contentHash);
+  assert.equal(history[0]?.storageKey, "result.mp4");
+  assert.ok(history[0]?.createdAt);
+  assert.deepEqual(await reopened.listAuthorized(randomUUID(), story.id, sceneId), []);
+  assert.equal((await reopened.enqueue(job, story.revision))?.id, queued.id);
+  await repository.updateStory(configureScene(story, sceneId, { durationSeconds: 8 }));
+  assert.equal(await reopened.enqueue(renderJob(story.profileId, story.id, sceneId), story.revision), undefined);
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 1);
+});
+
+test("PostgreSQL: retry refreshes source locations without changing the content version", options, async (context) => {
+  const { queue, pool, story, sceneId } = await createFixture(context);
+  const job = renderJob(story.profileId, story.id, sceneId);
+  await queue.enqueue(job);
+  await pool.query("UPDATE scene_renders SET status = 'failed', attempts = 3, error = 'old path' WHERE id = $1", [job.id]);
+  const retry = await queue.enqueue({ ...job, id: randomUUID(), input: { ...job.input, material: { ...job.input.material, storageKey: "new-path.png" } } });
+  assert.equal(retry?.id, job.id);
+  assert.equal(retry?.status, "queued");
+  assert.equal(retry?.input.material.storageKey, "new-path.png");
+  assert.equal(retry?.error, undefined);
+  assert.equal((await queue.claim("retry-worker", 60_000))?.id, job.id);
+});
+
 async function createFixture(context: TestContext) {
-  assert.ok(databaseUrl);
-  const schema = `b05_test_${randomUUID().replaceAll("-", "")}`;
-  const admin = new Pool({ connectionString: databaseUrl });
-  await admin.query(`CREATE SCHEMA ${schema}`);
-  const isolatedUrl = new URL(databaseUrl);
-  isolatedUrl.searchParams.set("options", `-c search_path=${schema} -c statement_timeout=5000`);
-  const pool = new Pool({ connectionString: isolatedUrl.href });
-  context.after(async () => {
-    await pool.end();
-    try { await admin.query(`DROP SCHEMA ${schema} CASCADE`); } finally { await admin.end(); }
-  });
+  const { pool } = await createPostgresTestPool(context);
   await migrateDatabase(pool);
   const repository = new PostgresStoryRepository(pool, Buffer.alloc(32));
   const application = new StoryApplication(repository);

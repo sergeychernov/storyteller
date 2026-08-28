@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-const migrations = [{
+export const migrations = [{
   version: 1,
   sql: `
     CREATE TABLE profiles (
@@ -81,6 +81,10 @@ const migrations = [{
     );
     CREATE INDEX object_deletion_jobs_queue_idx ON object_deletion_jobs(status, locked_until, created_at);
   `,
+}, {
+  version: 4,
+  sql: `ALTER TABLE scene_renders ADD COLUMN content_hash char(64)
+    CHECK (content_hash ~ '^[a-f0-9]{64}$');`,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {
@@ -99,7 +103,7 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
       } catch (error) { await client.query("ROLLBACK"); throw error; }
     }
   } finally {
-    await client.query("SELECT pg_advisory_unlock(813791234)");
-    client.release();
+    try { await client.query("SELECT pg_advisory_unlock(813791234)"); }
+    finally { client.release(); }
   }
 }
