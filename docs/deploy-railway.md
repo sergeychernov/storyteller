@@ -93,13 +93,27 @@ Enable **Settings → Source → Wait for CI** for `api`, `worker`, and `web` so
 
 Pre-release audit, 2026-08-28: production API/worker pre-deploy commands, worker backend build, API healthcheck, and API/worker/web watch paths were saved and read back from Railway. Web watches include the product roadmap and its generators. Railway's pending-change view confirmed the plugin's `Check Suites: false → true` updates; a pending setting is not yet an active setting. Read `source.checkSuites` back after applying it before relying on automatic CI gating. An embedded browser is not required to configure Railway.
 
-For an ordered rollout, temporarily disable autodeploy on the three services without stopping their running deployments. Publish and verify the exact commit in GitHub CI, then deploy that commit to worker, API, and Web separately as described below. Apply the pending Check Suites changes only once all services run compatible F05.1 code: applying environment changes can redeploy multiple services. Confirm `source.checkSuites: true` and restore each service's previous autodeploy state. Never bypass a failed CI check or mix an old image with commands that exist only in the new commit.
+For an ordered rollout, publish a feature branch and verify its exact commit in GitHub CI while keeping the watched `main` branch unchanged. Deploy that explicit commit SHA to worker, API, and Web separately as described below; do not use a redeploy operation that reuses an older image. Once all services run compatible F05.1 code, merge the verified change into `main` and apply the pending Check Suites settings. Applying environment changes can redeploy multiple services, so the source branch must already contain the compatible release. Confirm `source.checkSuites: true` on each service. Alternatively, temporarily disable autodeploy before merging and restore its previous state after the ordered rollout; verify that the setting actually changed before relying on it. Never bypass a failed CI check or mix an old image with commands that exist only in the new commit.
 
 ### Migration 4 and the first F05.1 release
 
 Migration 4 is an additive, nullable `scene_renders.content_hash` column with a SHA-256 format check. Existing values remain `NULL`, existing story JSON is untouched, and SQL from the previous API/worker still works. Rolling application code back does not require dropping the column or undoing this migration. The `ALTER TABLE` still takes a database lock; do not assume zero lock time.
 
 Database compatibility does not imply compatibility of every mixed application version. For the first F05.1 release, let the new worker's pre-deploy step apply the migration, update **all worker replicas**, and wait for old workers to stop before releasing the API, then Web. An old worker cannot produce the result hash expected by the new API. Pre-deploy hooks are per service: they do not enforce this cross-service order. Use a staged rollout (or disable autodeploy temporarily) for this transition; do not push all three services into an uncontrolled simultaneous rollout.
+
+### Verified first rollout, 2026-08-28
+
+Commit `dc4871a62aee305f0ee7e64de7e59f067270e79d` passed [GitHub CI #33204145109](https://github.com/sergeychernov/storyteller/actions/runs/33204145109) and was deployed to production by explicit SHA while `main` remained unchanged. Autodeploy was left enabled. Each previous deployment was verified as `REMOVED` before proceeding to the next service:
+
+| Order | Service | Verified deployment | Status |
+| --- | --- | --- | --- |
+| 1 | `worker` | `5d0b314a-13dd-42b0-a7b3-b7ae76605da9` | `SUCCESS`; pre-deploy migration succeeded |
+| 2 | `api` | `45248c4c-7e30-43e3-af0c-18a1b3a45e76` | `SUCCESS`; repeated pre-deploy migration succeeded |
+| 3 | `web` | `3e190d79-ab19-4d5a-9a7b-57ac462cace5` | `SUCCESS` |
+
+The API returned HTTP 200 for `/health` and `/docs/json`; its OpenAPI schema includes render history and the content hash/dependency/current fields. The public Web page and bundle returned HTTP 200. The deployed bundle includes the EN/RU/SR version-history UI and the generated product roadmap revision `ba0f99e02e17` (P0: 11 of 37 task/interface pairs complete, 29%). These were read-only production checks; rendering was exercised locally, and no YouTube publication was made.
+
+The subsequent merge and Wait for CI activation are tracked in [PR #2](https://github.com/sergeychernov/storyteller/pull/2). Verify active `source.checkSuites` values after applying the environment changes; the successful application rollout alone does not prove CI gating is enabled.
 
 ## Watch paths
 
