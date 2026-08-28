@@ -8,6 +8,7 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 | Read/update own profile | `GET/PATCH /profile` |
 | Create/list stories | `POST/GET /stories` |
 | Create scene | `POST /stories/{storyId}/scenes` |
+| Delete scene (optional expected revision) | `DELETE /stories/{storyId}/scenes/{sceneId}` |
 | Upload original photo/video to scene (multipart) | `POST /stories/{storyId}/scenes/{sceneId}/materials` |
 | Read authenticated material content | `GET /stories/{storyId}/materials/{materialId}/content` |
 | Reorder scene materials | `PUT /stories/{storyId}/scenes/{sceneId}/material-order` |
@@ -26,3 +27,5 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 | Publish story | `POST /stories/{storyId}/publications` |
 
 Preview, music generation and publication endpoints create asynchronous jobs. Their status/resource endpoints will be designed with the first vertical slice so idempotency and persistence are not guessed prematurely.
+
+The implemented scene-deletion contract, current file-cleanup semantics and Web integration are documented in [B05 — scene deletion](b05-scene-deletion.md). Deleting a scene is not archive preservation; that remains part of F10.1 in the product roadmap.

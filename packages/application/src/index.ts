@@ -29,7 +29,9 @@ export interface StoryRepository {
   createStory(story: Story): Promise<void>;
   listStories(profileId: string): Promise<readonly Story[]>;
   findStory(profileId: string, storyId: string): Promise<Story | undefined>;
+  /** Persist only if the stored revision is story.revision - 1; otherwise reject with a conflict. */
   updateStory(story: Story): Promise<void>;
+  /** Apply the same revision check and schedule cleanup atomically with the story update. */
   deleteScene(story: Story, sceneId: string, storageKeys: readonly string[]): Promise<void>;
   upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary>;
   listPlatformCredentials(profileId: string): Promise<readonly PlatformCredentialSummary[]>;
@@ -104,11 +106,20 @@ export class StoryApplication {
   async createScene(profileId: string, storyId: string): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => addScene(story, randomUUID()));
   }
-  async deleteScene(profileId: string, storyId: string, sceneId: string): Promise<Story> {
+  async deleteScene(profileId: string, storyId: string, sceneId: string, expectedRevision?: number): Promise<Story> {
     const story = await this.getStory(profileId, storyId);
     const scene = story.scenes.find(({ id }) => id === sceneId);
+    if (!scene) throw new ApplicationError(`scene not found: ${sceneId}`, 404, "scene_not_found");
+    if (expectedRevision !== undefined && expectedRevision !== story.revision) {
+      throw new ApplicationError("story has changed; reload it before deleting the scene", 409, "story_revision_conflict");
+    }
+    if (story.status !== "draft" && story.status !== "ready") {
+      throw new ApplicationError(`story cannot be edited while ${story.status}`, 409, "story_not_editable");
+    }
     const changed = removeScene(story, sceneId);
-    await this.repository.deleteScene(changed, sceneId, scene?.materials.flatMap(materialStorageKeys) ?? []);
+    const retainedKeys = new Set(changed.scenes.flatMap(({ materials }) => materials.flatMap(materialStorageKeys)));
+    const storageKeys = [...new Set(scene.materials.flatMap(materialStorageKeys))].filter((key) => !retainedKeys.has(key));
+    await this.repository.deleteScene(changed, sceneId, storageKeys);
     return changed;
   }
   async addSceneMaterial(profileId: string, storyId: string, sceneId: string, material: NewSceneMaterial): Promise<Story> {

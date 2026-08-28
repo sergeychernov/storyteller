@@ -1,35 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { getStory, type AuthSession } from "../api.js";
 import { useLocalization } from "../localization.js";
 import feedbackStyles from "../styles/feedback.module.css";
 import { StoryEditor } from "./editor/StoryEditor.js";
+import { useStorySceneSelection } from "./editor/use-story-scene-selection.js";
 import styles from "./StoryDetails.module.css";
 
 interface StoryDetailsProps { readonly session: AuthSession; readonly storyId: string; readonly sceneId: string | undefined }
 
 export function StoryDetails({ session, storyId, sceneId }: StoryDetailsProps) {
   const { t } = useLocalization();
-  const navigate = useNavigate();
   const story = useQuery({
     queryKey: ["story", storyId],
-    queryFn: () => getStory(session.accessToken, storyId),
+    queryFn: ({ signal }) => getStory(session.accessToken, storyId, signal),
   });
-  const selectedId = story.data?.scenes.some(({ id }) => id === sceneId)
-    ? sceneId ?? ""
-    : story.data?.scenes[0]?.id ?? "";
-
-  useEffect(() => {
-    if (!story.data || !selectedId || sceneId === selectedId) return;
-    navigate(`/stories/${storyId}/scenes/${selectedId}`, { replace: true });
-  }, [navigate, sceneId, selectedId, story.data, storyId]);
+  const selection = useStorySceneSelection(storyId, sceneId, story.data);
 
   if (story.data) return <StoryEditor
+    key={storyId}
     story={story.data}
     session={session}
-    selectedId={selectedId}
-    onSelect={(id) => navigate(`/stories/${storyId}/scenes/${id}`, { replace: true })}
+    selectedId={selection.selectedId}
+    onSelect={selection.onSelect}
   />;
 
   return <section className={styles.loading}>

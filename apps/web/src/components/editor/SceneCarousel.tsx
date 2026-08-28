@@ -3,10 +3,10 @@ import type { AuthSession, Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneCanvas } from "./SceneCanvas.js";
-import { SceneDownloadButton } from "./SceneDownloadButton.js";
-import { SceneDebugButton } from "./SceneDebugButton.js";
+import { ScenePreviewActions } from "./ScenePreviewActions.js";
 import { SceneEdgeActions } from "./SceneEdgeActions.js";
 import { buildSceneCarouselSlots, sceneCarouselKey, type SceneCarouselSlot } from "./scene-carousel-model.js";
+import { formatSceneDuration } from "./scene-duration-model.js";
 import styles from "./SceneCarousel.module.css";
 import type { SceneChange } from "./story-editor-view.js";
 
@@ -18,6 +18,8 @@ interface SceneCarouselProps {
   readonly session: AuthSession;
   readonly adding: boolean;
   readonly saving: boolean;
+  readonly deleteDisabled: boolean;
+  readonly onDeleteScene: (sceneId: string) => void;
   readonly onSelect: (id: string) => void;
   readonly onAdd: () => void;
   readonly onChange: (change: SceneChange) => void;
@@ -25,7 +27,7 @@ interface SceneCarouselProps {
 
 const emptyKey = "edge:empty";
 
-export function SceneCarousel({ scenes, selectedId, copy, storyId, session, adding, saving, onSelect, onAdd, onChange }: SceneCarouselProps) {
+export function SceneCarousel({ scenes, selectedId, copy, storyId, session, adding, saving, deleteDisabled, onDeleteScene, onSelect, onAdd, onChange }: SceneCarouselProps) {
   const slots = useMemo(() => buildSceneCarouselSlots(scenes), [scenes]);
   const viewport = useRef<HTMLDivElement>(null);
   const scrollTimer = useRef<number | undefined>(undefined);
@@ -127,11 +129,9 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
                 <div className={classNames(styles.label, adjacent && styles.dimmed)}>
                   <strong>{slot.scene.title || `${copy.scene} ${slot.index + 1}`}</strong>
                   <span className={styles.labelActions}>
-                    <span>9:16 · {slot.scene.durationSeconds} {copy.seconds}</span>
-                    {active && <>
-                      <SceneDownloadButton scene={slot.scene} storyId={storyId} session={session} copy={copy} />
-                      <SceneDebugButton scene={slot.scene} copy={copy} />
-                    </>}
+                    <span><span className={styles.aspectRatio}>9:16 · </span>{formatSceneDuration(slot.scene)} {copy.seconds}</span>
+                    {active && <ScenePreviewActions scene={slot.scene} storyId={storyId} session={session} copy={copy}
+                      deleteDisabled={deleteDisabled} onDeleteScene={onDeleteScene} />}
                   </span>
                 </div>
                 <SceneCanvas

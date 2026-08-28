@@ -6,7 +6,7 @@ import { ApplicationError, type StoryApplication } from "@storyteller/applicatio
 import { getMaterialPresentation, getMaterialSource, materialStorageKeys, type MaterialEdit } from "@storyteller/domain";
 import { sceneRenderFileType, type SceneRenderQueue } from "@storyteller/render-queue";
 import {
-  authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, editMaterialSchema, errorSchema, healthSchema,
+  authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, deleteSceneSchema, editMaterialSchema, errorSchema, healthSchema,
   loginSchema, materialContentAccessSchema, materialWaveformSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
   reorderSceneMaterialsSchema, sceneRenderRequestSchema, sceneRenderSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
@@ -41,6 +41,13 @@ export async function buildApi(application: StoryApplication, options: {
       components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "opaque" } } },
     },
     transform: jsonSchemaTransform,
+    transformObject: (document) => {
+      if (!("openapiObject" in document)) return document.swaggerObject;
+      // Swagger assumes every body schema is required, but this route also accepts bodyless DELETEs.
+      const body = document.openapiObject.paths?.["/stories/{storyId}/scenes/{sceneId}"]?.delete?.requestBody;
+      if (body && "content" in body) body.required = false;
+      return document.openapiObject;
+    },
   });
   await app.register(swaggerUi, { routePrefix: "/docs" });
   app.setErrorHandler((error, request, reply) => {
@@ -88,17 +95,24 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request) => serializeStory(await application.getStory((await authenticate(application, request)).id, request.params.storyId)));
   const sceneParams = storyParams.extend({ sceneId: z.string().uuid() });
   app.post("/stories/:storyId/scenes", {
-    schema: { security: bearerSecurity, params: storyParams, response: { 201: storySchema, 401: errorSchema, 404: errorSchema } },
+    schema: { security: bearerSecurity, params: storyParams, response: { 201: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema } },
   }, async (request, reply) => reply.status(201).send(serializeStory(await application.createScene(
     (await authenticate(application, request)).id, request.params.storyId,
   ))));
   app.delete("/stories/:storyId/scenes/:sceneId", {
-    schema: { security: bearerSecurity, params: sceneParams, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
-  }, async (request) => serializeStory(await application.deleteScene(
-    (await authenticate(application, request)).id, request.params.storyId, request.params.sceneId,
-  )));
+    schema: {
+      operationId: "deleteScene", summary: "Delete a scene",
+      description: "Permanently removes the scene and its anchored narrations, and returns the updated story. "
+        + "Scene renders and material files not referenced by another scene in this story are queued for deletion. "
+        + "An optional expectedRevision guards against deleting from a stale editor. Missing scenes return 404, including repeated deletes.",
+      security: bearerSecurity, params: sceneParams, body: deleteSceneSchema.nullish(),
+      response: { 200: storySchema, 400: errorSchema, 401: errorSchema, 404: errorSchema, 409: errorSchema },
+    },
+  }, async (request, reply) => reply.header("cache-control", "private, no-store").send(serializeStory(await application.deleteScene(
+    (await authenticate(application, request)).id, request.params.storyId, request.params.sceneId, request.body?.expectedRevision,
+  ))));
   app.post("/stories/:storyId/scenes/:sceneId/materials", {
-    schema: { security: bearerSecurity, params: sceneParams, response: { 201: storySchema, 401: errorSchema, 404: errorSchema, 413: errorSchema, 415: errorSchema, 422: errorSchema } },
+    schema: { security: bearerSecurity, params: sceneParams, response: { 201: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 413: errorSchema, 415: errorSchema, 422: errorSchema } },
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
     const story = await application.getStory(profile.id, request.params.storyId);
@@ -122,7 +136,7 @@ export async function buildApi(application: StoryApplication, options: {
   const materialParams = storyParams.extend({ materialId: z.string().uuid() });
   const sceneMaterialParams = sceneParams.extend({ materialId: z.string().uuid() });
   app.delete("/stories/:storyId/scenes/:sceneId/materials/:materialId", {
-    schema: { security: bearerSecurity, params: sceneMaterialParams, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
+    schema: { security: bearerSecurity, params: sceneMaterialParams, response: { 200: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema } },
   }, async (request) => {
     const profile = await authenticate(application, request);
     const removed = await application.removeSceneMaterial(
@@ -136,7 +150,7 @@ export async function buildApi(application: StoryApplication, options: {
   app.patch("/stories/:storyId/scenes/:sceneId/materials/:materialId", {
     schema: {
       security: bearerSecurity, params: sceneMaterialParams, body: editMaterialSchema,
-      response: { 200: storySchema, 401: errorSchema, 404: errorSchema, 422: errorSchema, 503: errorSchema },
+      response: { 200: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 422: errorSchema, 503: errorSchema },
     },
   }, async (request) => {
     const profile = await authenticate(application, request);
@@ -258,12 +272,12 @@ export async function buildApi(application: StoryApplication, options: {
     });
   }
   app.put("/stories/:storyId/scenes/:sceneId/material-order", {
-    schema: { security: bearerSecurity, params: sceneParams, body: reorderSceneMaterialsSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
+    schema: { security: bearerSecurity, params: sceneParams, body: reorderSceneMaterialsSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema } },
   }, async (request) => serializeStory(await application.reorderSceneMaterials(
     (await authenticate(application, request)).id, request.params.storyId, request.params.sceneId, request.body.materialIds,
   )));
   app.patch("/stories/:storyId/scenes/:sceneId", {
-    schema: { security: bearerSecurity, params: sceneParams, body: configureSceneSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
+    schema: { security: bearerSecurity, params: sceneParams, body: configureSceneSchema, response: { 200: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema } },
   }, async (request) => serializeStory(await application.configureScene(
     (await authenticate(application, request)).id, request.params.storyId, request.params.sceneId, {
       ...(request.body.durationSeconds === undefined ? {} : { durationSeconds: request.body.durationSeconds }),

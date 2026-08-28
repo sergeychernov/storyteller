@@ -47,9 +47,11 @@ export class SceneRenderService {
       durationSeconds: presentation.durationSeconds ?? sourceDurationSeconds ?? scene.durationSeconds,
       output: { ...common.output, width: presentation.width, height: presentation.height },
     } : { ...common, rendererId: "still-image", rendererVersion: stillImageRendererVersion };
-    return this.queue.enqueue({
+    const job = await this.queue.enqueue({
       id: randomUUID(), profileId, storyId, sceneId, input, inputHash: hashSceneRenderInput(input),
     });
+    if (!job) throw new ApplicationError(`scene not found: ${sceneId}`, 404, "scene_not_found");
+    return job;
   }
 
   async get(profileId: string, storyId: string, sceneId: string, renderId: string): Promise<SceneRenderJob> {

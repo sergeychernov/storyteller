@@ -67,37 +67,31 @@ export class PostgresStoryRepository implements StoryRepository {
     return payload === undefined ? undefined : normalizeStoredStory(payload);
   }
   async updateStory(story: Story): Promise<void> {
-    const result = await this.pool.query(
-      "UPDATE stories SET status = $2, scene_count = $3, revision = $4, payload = $5 WHERE id = $1 AND profile_id = $6",
-      [story.id, story.status, story.scenes.length, story.revision, story, story.profileId],
-    );
-    if (result.rowCount !== 1) throw new ApplicationError(`story not found: ${story.id}`, 404);
+    await persistStoryRevision(this.pool, story);
   }
   async deleteScene(story: Story, sceneId: string, storageKeys: readonly string[]): Promise<void> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      // Lock/update the story first: stale saves must not resurrect the deleted scene.
+      await persistStoryRevision(client, story);
       await client.query(
-        `INSERT INTO object_deletion_jobs (storage_key)
-         SELECT storage_key FROM scene_renders
-         WHERE story_id = $1 AND scene_id = $2 AND storage_key IS NOT NULL
+        `WITH removed_renders AS (
+           DELETE FROM scene_renders WHERE story_id = $1 AND scene_id = $2 RETURNING storage_key
+         )
+         INSERT INTO object_deletion_jobs (storage_key)
+         SELECT DISTINCT storage_key FROM removed_renders WHERE storage_key IS NOT NULL
          ON CONFLICT (storage_key) DO UPDATE SET status = 'queued', attempts = 0, worker_id = NULL,
            locked_until = NULL, error = NULL, updated_at = now()`,
         [story.id, sceneId],
       );
       await client.query(
         `INSERT INTO object_deletion_jobs (storage_key)
-         SELECT unnest($1::text[])
+         SELECT DISTINCT unnest($1::text[])
          ON CONFLICT (storage_key) DO UPDATE SET status = 'queued', attempts = 0, worker_id = NULL,
            locked_until = NULL, error = NULL, updated_at = now()`,
         [storageKeys],
       );
-      await client.query("DELETE FROM scene_renders WHERE story_id = $1 AND scene_id = $2", [story.id, sceneId]);
-      const result = await client.query(
-        "UPDATE stories SET status = $2, scene_count = $3, revision = $4, payload = $5 WHERE id = $1 AND profile_id = $6",
-        [story.id, story.status, story.scenes.length, story.revision, story, story.profileId],
-      );
-      if (result.rowCount !== 1) throw new ApplicationError(`story not found: ${story.id}`, 404);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
@@ -128,6 +122,18 @@ export class PostgresStoryRepository implements StoryRepository {
   async deletePlatformCredential(profileId: string, provider: PlatformProvider): Promise<boolean> {
     return (await this.pool.query("DELETE FROM platform_credentials WHERE profile_id = $1 AND provider = $2", [profileId, provider])).rowCount === 1;
   }
+}
+
+async function persistStoryRevision(client: Pick<Pool | PoolClient, "query">, story: Story): Promise<void> {
+  const result = await client.query(
+    `UPDATE stories SET status = $2, scene_count = $3, revision = $4, payload = $5
+     WHERE id = $1 AND profile_id = $6 AND revision = $7`,
+    [story.id, story.status, story.scenes.length, story.revision, story, story.profileId, story.revision - 1],
+  );
+  if (result.rowCount === 1) return;
+  const existing = await client.query("SELECT id FROM stories WHERE id = $1 AND profile_id = $2", [story.id, story.profileId]);
+  if (!existing.rowCount) throw new ApplicationError(`story not found: ${story.id}`, 404);
+  throw new ApplicationError("story has changed; reload it before saving", 409, "story_revision_conflict");
 }
 
 /**

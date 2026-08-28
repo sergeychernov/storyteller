@@ -1,0 +1,10 @@
+.content { font-size: 13px; font-weight: 400; line-height: 1.5; letter-spacing: normal; text-transform: none; }
+.content p { margin: 0 0 16px; }
+.content .error { padding: 10px; border-radius: 7px; color: #873e34; background: #f5dfda; }
+.actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.actions button { min-height: 44px; padding: 9px 16px; font-size: 13px; }
+.cancel { border: 1px solid #cac7bd; color: #47473f; background: transparent; }
+.delete { border: 1px solid #963d31; color: #fff; background: #963d31; }
+.delete:hover:not(:disabled) { background: #7e3026; }
+.actions button:disabled { opacity: 0.5; cursor: default; }
+.actions button:focus-visible { outline: 2px solid #879b48; outline-offset: 2px; }

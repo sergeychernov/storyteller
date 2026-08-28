@@ -1,7 +1,8 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { classNames } from "../../class-names.js";
 import styles from "./MiniDialog.module.css";
+import { useDialogFocus } from "./use-dialog-focus.js";
 
 interface MiniDialogProps {
   readonly open: boolean;
@@ -12,9 +13,13 @@ interface MiniDialogProps {
   readonly width?: "default" | "wide";
   readonly variant?: "default" | "editor";
   readonly onClose: () => void;
+  readonly initialFocusRef?: RefObject<HTMLElement | null>;
+  readonly returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
-export function MiniDialog({ open, title, closeLabel, closeDisabled = false, children, width = "default", variant = "default", onClose }: MiniDialogProps) {
+export function MiniDialog({ open, title, closeLabel, closeDisabled = false, children, width = "default", variant = "default", onClose, initialFocusRef, returnFocusRef }: MiniDialogProps) {
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialogFocus(open, dialogRef, initialFocusRef, returnFocusRef);
   useEffect(() => {
     if (!open || closeDisabled) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
@@ -32,7 +37,7 @@ export function MiniDialog({ open, title, closeLabel, closeDisabled = false, chi
   if (!open) return null;
   return createPortal(
     <div className={classNames(styles.backdrop, variant === "editor" && styles.editorBackdrop)} onMouseDown={(event) => { if (!closeDisabled && event.currentTarget === event.target) onClose(); }}>
-      <section className={classNames(styles.dialog, width === "wide" && styles.wide, variant === "editor" && styles.editorDialog)} role="dialog" aria-modal="true" aria-label={title}>
+      <section ref={dialogRef} tabIndex={-1} className={classNames(styles.dialog, width === "wide" && styles.wide, variant === "editor" && styles.editorDialog)} role="dialog" aria-modal="true" aria-label={title}>
         <header><h3>{title}</h3><button type="button" aria-label={closeLabel} disabled={closeDisabled} onClick={onClose}>×</button></header>
         {variant === "editor" ? <div className={styles.editorContent}>{children}</div> : children}
       </section>

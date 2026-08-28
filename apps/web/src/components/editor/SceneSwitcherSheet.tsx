@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
+import { formatSceneDuration } from "./scene-duration-model.js";
 import sharedStyles from "./editor-shared.module.css";
 import styles from "./SceneSwitcherSheet.module.css";
 
@@ -44,7 +45,7 @@ export function SceneSwitcherSheet({ open, scenes, selectedId, copy, adding, onC
             >
               <span>{String(index + 1).padStart(2, "0")}</span>
               <strong>{scene.title || `${copy.scene} ${index + 1}`}</strong>
-              <small>{scene.durationSeconds} {copy.seconds} · {scene.materials.length}</small>
+              <small>{formatSceneDuration(scene)} {copy.seconds} · {scene.materials.length}</small>
             </button>
           ))}
           {!scenes.length && <p>{copy.noScenes}</p>}

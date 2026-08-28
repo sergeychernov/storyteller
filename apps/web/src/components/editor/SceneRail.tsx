@@ -1,6 +1,7 @@
 import type { Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
+import { formatSceneDuration } from "./scene-duration-model.js";
 import sharedStyles from "./editor-shared.module.css";
 import styles from "./SceneRail.module.css";
 
@@ -22,7 +23,7 @@ export function SceneRail({ scenes, selectedId, copy, onSelect, onAdd, adding, v
         {scenes.map((scene, index) => (
           <button className={classNames(styles.tab, scene.id === selectedId && styles.active)} key={scene.id} onClick={() => onSelect(scene.id)}>
             <span className={styles.number}>{String(index + 1).padStart(2, "0")}</span>
-            <span><strong>{scene.title || `${copy.scene} ${index + 1}`}</strong><small>{scene.durationSeconds} {copy.seconds} · {scene.materials.length}</small></span>
+            <span><strong>{scene.title || `${copy.scene} ${index + 1}`}</strong><small>{formatSceneDuration(scene)} {copy.seconds} · {scene.materials.length}</small></span>
           </button>
         ))}
       </div>

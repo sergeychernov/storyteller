@@ -56,7 +56,8 @@ export interface ObjectDeletionJob {
 }
 
 export interface SceneRenderQueue {
-  enqueue(job: Omit<SceneRenderJob, "status" | "storageKey" | "sizeBytes" | "error">): Promise<SceneRenderJob>;
+  /** Returns undefined if the authorized scene no longer exists when the job is enqueued. */
+  enqueue(job: Omit<SceneRenderJob, "status" | "storageKey" | "sizeBytes" | "error">): Promise<SceneRenderJob | undefined>;
   findAuthorized(profileId: string, storyId: string, sceneId: string, renderId: string): Promise<SceneRenderJob | undefined>;
   claim(workerId: string, leaseMilliseconds: number): Promise<SceneRenderJob | undefined>;
   complete(renderId: string, workerId: string, storageKey: string, sizeBytes: number): Promise<boolean>;
@@ -68,12 +69,17 @@ export interface SceneRenderQueue {
 }
 
 export class PostgresSceneRenderQueue implements SceneRenderQueue {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pick<Pool, "query">) {}
 
-  async enqueue(job: Omit<SceneRenderJob, "status" | "storageKey" | "sizeBytes" | "error">): Promise<SceneRenderJob> {
+  async enqueue(job: Omit<SceneRenderJob, "status" | "storageKey" | "sizeBytes" | "error">): Promise<SceneRenderJob | undefined> {
     const result = await this.pool.query<RenderRow>(
-      `INSERT INTO scene_renders (id, profile_id, story_id, scene_id, input_hash, input, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'queued')
+      `WITH authorized_scene AS (
+         SELECT id FROM stories WHERE id = $3 AND profile_id = $2
+           AND payload->'scenes' @> jsonb_build_array(jsonb_build_object('id', $4::uuid))
+         FOR SHARE
+       )
+       INSERT INTO scene_renders (id, profile_id, story_id, scene_id, input_hash, input, status)
+       SELECT $1, $2, $3, $4, $5, $6, 'queued' FROM authorized_scene
        ON CONFLICT (story_id, scene_id, input_hash) DO UPDATE SET
          status = CASE WHEN scene_renders.status IN ('failed', 'canceled') THEN 'queued' ELSE scene_renders.status END,
          error = CASE WHEN scene_renders.status IN ('failed', 'canceled') THEN NULL ELSE scene_renders.error END,
@@ -84,7 +90,7 @@ export class PostgresSceneRenderQueue implements SceneRenderQueue {
        RETURNING id, profile_id, story_id, scene_id, input_hash, input, status, storage_key, size_bytes, error`,
       [job.id, job.profileId, job.storyId, job.sceneId, job.inputHash, job.input],
     );
-    return mapRenderRow(result.rows[0]!);
+    return result.rows[0] && mapRenderRow(result.rows[0]);
   }
 
   async findAuthorized(profileId: string, storyId: string, sceneId: string, renderId: string): Promise<SceneRenderJob | undefined> {

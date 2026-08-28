@@ -1,3 +1,5 @@
+.focusRoot { outline: none; }
+
 .secondaryButton {
   border: 1px solid #cac7bd;
   color: #47473f;

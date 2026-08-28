@@ -1,0 +1,24 @@
+.actions { display: inline-flex; align-items: center; gap: 6px; }
+
+.deleteButton {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #cbcbbf;
+  border-radius: 7px;
+  color: #68645a;
+  background: #ffffffb8;
+  cursor: pointer;
+}
+
+.deleteButton:hover:not(:disabled) { border-color: #bd7568; color: #963d31; background: #fff0eb; }
+.deleteButton:focus-visible { outline: 2px solid #963d31; outline-offset: 2px; }
+.deleteButton:disabled { opacity: 0.38; cursor: default; }
+.deleteButton svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+@media (max-width: 767px) {
+  .actions > button, .actions > span > button, .actions > span > a { width: 44px; height: 44px; }
+}

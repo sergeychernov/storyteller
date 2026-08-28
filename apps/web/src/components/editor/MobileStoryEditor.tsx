@@ -8,8 +8,8 @@ import { SceneEditorTabs } from "./SceneEditorTabs.js";
 
 export function MobileStoryEditor(props: StoryEditorViewProps) {
   const {
-    story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage,
-    onSelect, onAdd, onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange,
+    story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, deleteDisabled,
+    onSelect, onAdd, onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange, onDeleteScene,
   } = props;
 
   return (
@@ -34,6 +34,8 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
           session={session}
           adding={adding}
           saving={saving}
+          deleteDisabled={deleteDisabled}
+          onDeleteScene={onDeleteScene}
           onSelect={onSelect}
           onAdd={onAdd}
           onChange={onChange}

@@ -13,6 +13,7 @@ import { useLocalization } from "../../localization.js";
 import { getEditorCopy, getEditorOperationError } from "./editor-copy.js";
 import type { SceneChange, StoryEditorViewProps } from "./story-editor-view.js";
 import { useReorderSceneMaterials } from "./use-reorder-scene-materials.js";
+import { useDeleteScene, type SceneDeletionController } from "./use-delete-scene.js";
 
 interface UseStoryEditorArgs {
   readonly story: Story;
@@ -21,7 +22,9 @@ interface UseStoryEditorArgs {
   readonly onSelect: (id: string) => void;
 }
 
-export function useStoryEditor({ story, session, selectedId, onSelect }: UseStoryEditorArgs): StoryEditorViewProps {
+export function useStoryEditor({ story, session, selectedId, onSelect }: UseStoryEditorArgs): {
+  view: StoryEditorViewProps; deletion: SceneDeletionController;
+} {
   const { locale } = useLocalization();
   const copy = getEditorCopy(locale);
   const queryClient = useQueryClient();
@@ -66,43 +69,47 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
   const selected = story.scenes.find(({ id }) => id === selectedId) ?? story.scenes[0];
   const saving = addSceneMutation.isPending || uploadMaterialsMutation.isPending || deleteMaterialMutation.isPending
     || editMaterialMutation.isPending || reorderMutation.isPending || configureMutation.isPending;
+  const deletion = useDeleteScene({ story, session, selectedId, onSelect, copy, saving });
   const operationError = addSceneMutation.error ?? uploadMaterialsMutation.error ?? deleteMaterialMutation.error
     ?? editMaterialMutation.error ?? reorderMutation.error ?? configureMutation.error;
 
   function addScene() {
+    if (deletion.target || deletion.pending) return;
     addSceneMutation.reset();
     addSceneMutation.mutate();
   }
 
-  return {
+  return { deletion, view: {
     story,
     session,
     selected,
     copy,
-    saving,
+    saving: saving || deletion.pending,
+    deleteDisabled: saving || deletion.pending || (story.status !== "draft" && story.status !== "ready"),
     adding: addSceneMutation.isPending,
     uploading: uploadMaterialsMutation.isPending,
     uploadCount: uploadMaterialsMutation.variables?.files.length ?? 0,
     operationErrorMessage: operationError
       ? addSceneMutation.isError ? copy.sceneCreateError : getEditorOperationError(copy, operationError)
       : undefined,
-    onSelect,
+    onSelect: (id) => { if (!deletion.target && !deletion.pending) onSelect(id); },
     onAdd: addScene,
+    onDeleteScene: deletion.open,
     onUpload: (files) => {
-      if (selected) uploadMaterialsMutation.mutate({ sceneId: selected.id, files });
+      if (selected && !deletion.target && !deletion.pending) uploadMaterialsMutation.mutate({ sceneId: selected.id, files });
     },
     onDeleteMaterial: (materialId) => {
-      if (selected) deleteMaterialMutation.mutate({ sceneId: selected.id, materialId });
+      if (selected && !deletion.target && !deletion.pending) deleteMaterialMutation.mutate({ sceneId: selected.id, materialId });
     },
     onEditMaterial: async (materialId, edit) => {
-      if (!selected) return;
+      if (!selected || deletion.target || deletion.pending) return;
       await editMaterialMutation.mutateAsync({ sceneId: selected.id, materialId, edit });
     },
     onReorder: (ids) => {
-      if (selected) reorderMutation.mutate({ sceneId: selected.id, ids });
+      if (selected && !deletion.target && !deletion.pending) reorderMutation.mutate({ sceneId: selected.id, ids });
     },
     onChange: (change) => {
-      if (selected) configureMutation.mutate({ sceneId: selected.id, change });
+      if (selected && !deletion.target && !deletion.pending) configureMutation.mutate({ sceneId: selected.id, change });
     },
-  };
+  } };
 }

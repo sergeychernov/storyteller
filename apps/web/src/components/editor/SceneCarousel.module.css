@@ -34,7 +34,7 @@
   position: relative;
   display: grid;
   flex: 0 0 calc(100% - 72px);
-  grid-template-rows: 26px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   place-items: stretch center;
   min-width: 0;
   height: 100%;
@@ -71,6 +71,7 @@
   justify-content: space-between;
   gap: 8px;
   width: 100%;
+  min-height: 44px;
   color: #7b7b72;
   font-size: 9px;
 }
@@ -97,6 +98,16 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+@media (max-width: 479px) {
+  .label { flex-wrap: wrap; row-gap: 2px; padding-bottom: 6px; }
+  .label > strong { flex: 1 1 100%; }
+  .labelActions { width: 100%; justify-content: space-between; }
+}
+
+@media (max-width: 359px) {
+  .aspectRatio { display: none; }
 }
 
 .adjacentTarget {

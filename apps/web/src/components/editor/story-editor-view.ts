@@ -14,12 +14,14 @@ export interface StoryEditorViewProps {
   readonly selected: Scene | undefined;
   readonly copy: EditorCopy;
   readonly saving: boolean;
+  readonly deleteDisabled: boolean;
   readonly adding: boolean;
   readonly uploading: boolean;
   readonly uploadCount: number;
   readonly operationErrorMessage: string | undefined;
   readonly onSelect: (id: string) => void;
   readonly onAdd: () => void;
+  readonly onDeleteScene: (sceneId: string) => void;
   readonly onUpload: (files: readonly File[]) => void;
   readonly onDeleteMaterial: (materialId: string) => void;
   readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;

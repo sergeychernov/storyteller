@@ -59,14 +59,16 @@ export function createStory(token: string, title: string): Promise<StorySummary>
 export function listStories(token: string): Promise<StorySummary[]> {
   return request("/stories", {}, token);
 }
-export function getStory(token: string, storyId: string): Promise<Story> {
-  return request(`/stories/${storyId}`, {}, token);
+export function getStory(token: string, storyId: string, signal?: AbortSignal): Promise<Story> {
+  return request(`/stories/${storyId}`, signal ? { signal } : {}, token);
 }
 export function createScene(token: string, storyId: string): Promise<Story> {
   return request(`/stories/${storyId}/scenes`, { method: "POST" }, token);
 }
-export function deleteScene(token: string, storyId: string, sceneId: string): Promise<Story> {
-  return request(`/stories/${storyId}/scenes/${sceneId}`, { method: "DELETE" }, token);
+export function deleteScene(token: string, storyId: string, sceneId: string, expectedRevision?: number): Promise<Story> {
+  return request(`/stories/${storyId}/scenes/${sceneId}`, {
+    method: "DELETE", ...(expectedRevision === undefined ? {} : { body: JSON.stringify({ expectedRevision }) }),
+  }, token);
 }
 export function uploadSceneMaterial(token: string, storyId: string, sceneId: string, file: File): Promise<Story> {
   const form = new FormData();

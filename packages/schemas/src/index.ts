@@ -84,6 +84,7 @@ export const storySchema = z.object({
   revision: z.number().int().positive(),
 });
 export const reorderSceneMaterialsSchema = z.object({ materialIds: z.array(z.string().uuid()) });
+export const deleteSceneSchema = z.object({ expectedRevision: z.number().int().positive().optional() }).strict();
 export const configureSceneSchema = z.object({
   durationSeconds: z.number().min(3).max(15).optional(), layoutId: z.string().nullable().optional(),
   motion: sceneMotionSchema.optional(), focusPoint: focusPointSchema.optional(),
@@ -111,6 +112,7 @@ export const errorSchema = z.object({ message: z.string(), code: z.string().opti
 export type RegisterRequest = z.infer<typeof registerSchema>;
 export type LoginRequest = z.infer<typeof loginSchema>;
 export type CreateStoryRequest = z.infer<typeof createStorySchema>;
+export type DeleteSceneRequest = z.infer<typeof deleteSceneSchema>;
 export interface CreateSceneRequest { readonly id: string }
 export interface SelectSceneRendererRequest { readonly rendererId: string }
 export interface SetSceneTitleRequest { readonly title: string | null }
