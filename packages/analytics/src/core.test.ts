@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createProductAnalytics, resolveAnalyticsServerZone, type AnalyticsAdapter } from "./core.js";
+import {
+  createProductAnalytics, resolveAnalyticsRelayUrl, resolveAnalyticsServerZone, type AnalyticsAdapter,
+} from "./core.js";
 
 function fixture(onFlush: () => Promise<void> = () => Promise.resolve()) {
   const calls: { name: string; arguments: readonly unknown[] }[] = [];
@@ -34,7 +36,7 @@ test("adds the surface and never needs content identifiers", () => {
   analytics.track("scene render succeeded", { export_mode: "combined" });
 
   assert.deepEqual(calls, [
-    { name: "initialize", arguments: ["public-key", "EU"] },
+    { name: "initialize", arguments: ["public-key", "EU", undefined] },
     { name: "setUserId", arguments: ["profile-id"] },
     { name: "track", arguments: ["material uploaded", { surface: "story-web", material_kind: "video" }] },
     { name: "track", arguments: ["scene render succeeded", { surface: "story-web", export_mode: "combined" }] },
@@ -63,6 +65,11 @@ test("defaults unknown regions to EU", () => {
   assert.equal(resolveAnalyticsServerZone(undefined), "EU");
   assert.equal(resolveAnalyticsServerZone("eu"), "EU");
   assert.equal(resolveAnalyticsServerZone("US"), "US");
+});
+
+test("normalizes the first-party analytics relay URL", () => {
+  assert.equal(resolveAnalyticsRelayUrl(undefined), "http://localhost:3001/analytics/amplitude");
+  assert.equal(resolveAnalyticsRelayUrl(" https://api.example.com/ "), "https://api.example.com/analytics/amplitude");
 });
 
 test("exposes adapter flush completion to navigation callers", async () => {

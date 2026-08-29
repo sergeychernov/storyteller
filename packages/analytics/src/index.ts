@@ -4,6 +4,7 @@ export type {
   AnalyticsAdapter,
   AnalyticsConfiguration,
   AnalyticsEventMap,
+  AnalyticsEventName,
   AnalyticsServerZone,
   AnalyticsSurface,
   ExportFailureReason,
@@ -12,18 +13,19 @@ export type {
   MaterialKind,
   ProductAnalytics,
 } from "./core.js";
-export { createProductAnalytics, resolveAnalyticsServerZone } from "./core.js";
+export { analyticsEventPropertyNames, createProductAnalytics, resolveAnalyticsRelayUrl, resolveAnalyticsServerZone } from "./core.js";
 
 type AmplitudeClient = typeof import("@amplitude/analytics-browser");
 let amplitudeClient: Promise<AmplitudeClient> | undefined;
 
 export const analytics = createProductAnalytics({
-  initialize: (apiKey, serverZone) => {
+  initialize: (apiKey, serverZone, relayUrl) => {
     amplitudeClient = import("@amplitude/analytics-browser").then(async (client) => {
       await client.init(apiKey, {
         autocapture: false,
         fetchRemoteConfig: false,
         identityStorage: "localStorage",
+        ...(relayUrl ? { serverUrl: relayUrl } : {}),
         serverZone,
         trackingOptions: { ipAddress: false },
       }).promise;

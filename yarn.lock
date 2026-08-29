@@ -3188,6 +3188,7 @@ __metadata:
     "@fastify/multipart": "npm:^10.1.1"
     "@fastify/swagger": "npm:9.8.1"
     "@fastify/swagger-ui": "npm:6.1.1"
+    "@storyteller/analytics": "workspace:*"
     "@storyteller/application": "workspace:*"
     "@storyteller/domain": "workspace:*"
     "@storyteller/render-queue": "workspace:*"

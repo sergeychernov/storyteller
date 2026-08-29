@@ -16,6 +16,7 @@
     "@fastify/multipart": "^10.1.1",
     "@fastify/swagger": "9.8.1",
     "@fastify/swagger-ui": "6.1.1",
+    "@storyteller/analytics": "workspace:*",
     "@storyteller/application": "workspace:*",
     "@storyteller/domain": "workspace:*",
     "@storyteller/render-queue": "workspace:*",

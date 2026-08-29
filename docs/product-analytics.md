@@ -6,23 +6,35 @@ statuses and will add the same outcome events when those interfaces are built.
 
 ## Configuration
 
-The browser integration is disabled when `VITE_AMPLITUDE_API_KEY` is empty. Set
-both variables in the root `.env.local` for local verification and on the
-Railway `web` service for a production build:
+The browser integration is disabled when `VITE_AMPLITUDE_API_KEY` is empty. The
+Browser SDK sends to the first-party API relay at
+`<VITE_API_URL>/analytics/amplitude`; the browser does not contact an Amplitude
+ingestion domain directly. Set the browser variables in the root `.env.local`
+for local verification and on the Railway `web` service for a production build:
 
 ```dotenv
 VITE_AMPLITUDE_API_KEY=<browser project API key>
 VITE_AMPLITUDE_SERVER_ZONE=US
 ```
 
-The server zone must match the Amplitude organization. Use `EU` for an EU data
-region and `US` for a default US organization. The API key is designed to be
-embedded in a browser bundle, but it still belongs in deployment configuration
-so environments can use different Amplitude projects.
+Set the matching server variables on the Railway `api` service:
 
-All three Vite applications load the repository-root environment. A missing key
-is an intentional no-op, so tests, local development and preview builds do not
-send accidental events.
+```dotenv
+AMPLITUDE_API_KEY=<same project API key>
+AMPLITUDE_SERVER_ZONE=US
+```
+
+The server zone must match the Amplitude organization. Use `EU` for an EU data
+region and `US` for a default US organization. The project API key is designed
+to be embedded in a browser bundle, but the relay requires the browser and API
+values to match so environments cannot write to a different configured project.
+
+All three Vite applications load the repository-root environment. A missing
+browser key is an intentional no-op. A missing API key leaves the relay route at
+HTTP 503, so tests, local development and preview builds do not send accidental
+events. The relay forwards only to the fixed Amplitude HTTP V2 endpoint for the
+configured region. It accepts batches of documented event types, strips SDK
+metadata outside its allowlist, and rejects any extra event property.
 
 ## Privacy boundary
 
@@ -33,6 +45,9 @@ send accidental events.
   enrichment are disabled.
 - Session replay is not installed. In particular, the authenticated editors do
   not record personal photos, videos, text or signed media URLs.
+- The first-party relay does not forward client-supplied IP or arbitrary user
+  properties. Its fixed destination and typed property allowlist prevent it
+  from becoming a general-purpose proxy.
 - Logout resets Amplitude identity. A missing or expired application session
   clears the Amplitude user ID before another page event is recorded.
 
@@ -78,6 +93,6 @@ Keep the first dashboard small:
 5. `scene export failed` grouped by `failure_stage` and `failure_reason` next to
    the successful export count.
 
-Before marking Web B17 done, deploy the two variables, perform one isolated test
+Before marking Web B17 done, deploy all four variables, perform one isolated test
 journey and verify the exact events, user merge and property values in Amplitude
 Live Events. Do not use a real publication as an analytics test.

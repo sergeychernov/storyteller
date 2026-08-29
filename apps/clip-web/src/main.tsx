@@ -1,4 +1,4 @@
-import { analytics, resolveAnalyticsServerZone } from "@storyteller/analytics";
+import { analytics, resolveAnalyticsRelayUrl, resolveAnalyticsServerZone } from "@storyteller/analytics";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -8,6 +8,7 @@ import "./styles/global.css";
 
 analytics.initialize({
   apiKey: import.meta.env.VITE_AMPLITUDE_API_KEY ?? "",
+  relayUrl: resolveAnalyticsRelayUrl(import.meta.env.VITE_API_URL),
   serverZone: resolveAnalyticsServerZone(import.meta.env.VITE_AMPLITUDE_SERVER_ZONE),
   surface: "clip-web",
 });

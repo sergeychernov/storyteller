@@ -18,11 +18,13 @@ import { MediaStorage, MediaUploadError } from "./media-storage.js";
 import { SceneRenderService, serializeSceneRender } from "./scene-renders.js";
 import { authenticate } from "./authentication.js";
 import { registerStoryTimelineRoutes } from "./story-timeline-routes.js";
+import { registerAmplitudeRelayRoutes, type AmplitudeRelayOptions } from "./amplitude-relay.js";
 
 export async function buildApi(application: StoryApplication, options: {
   readonly mediaStorage?: MediaStorage;
   readonly objectStorage?: ObjectStorage;
   readonly renderQueue?: SceneRenderQueue;
+  readonly amplitudeRelay?: AmplitudeRelayOptions;
 } = {}) {
   const mediaStorage = options.mediaStorage ?? new MediaStorage();
   const renderService = options.renderQueue && new SceneRenderService(application, options.renderQueue, mediaStorage);
@@ -65,6 +67,7 @@ export async function buildApi(application: StoryApplication, options: {
   });
 
   app.get("/health", { schema: { response: { 200: healthSchema } } }, async () => ({ status: "ok" as const }));
+  registerAmplitudeRelayRoutes(app, options.amplitudeRelay);
   app.post("/auth/register", {
     schema: { body: registerSchema, response: { 201: authenticationSchema, 409: errorSchema } },
   }, async (request, reply) => reply.status(201).send(await application.register(request.body)));

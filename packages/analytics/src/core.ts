@@ -22,12 +22,25 @@ export interface AnalyticsEventMap {
   };
 }
 
-type AnalyticsEventName = keyof AnalyticsEventMap;
+export type AnalyticsEventName = keyof AnalyticsEventMap;
 type AnalyticsValue = string | number | boolean;
 type AdapterProperties = Readonly<Record<string, AnalyticsValue>>;
 
+export const analyticsEventPropertyNames = {
+  "page viewed": ["surface", "page"],
+  "account created": ["surface"],
+  "account signed in": ["surface"],
+  "story created": ["surface"],
+  "scene created": ["surface"],
+  "material uploaded": ["surface", "material_kind"],
+  "scene render requested": ["surface", "export_mode"],
+  "scene render succeeded": ["surface", "export_mode"],
+  "scene exported": ["surface", "export_mode"],
+  "scene export failed": ["surface", "export_mode", "failure_stage", "failure_reason"],
+} as const satisfies Readonly<Record<AnalyticsEventName, readonly string[]>>;
+
 export interface AnalyticsAdapter {
-  readonly initialize: (apiKey: string, serverZone: AnalyticsServerZone) => void;
+  readonly initialize: (apiKey: string, serverZone: AnalyticsServerZone, relayUrl: string | undefined) => void;
   readonly setUserId: (profileId: string | undefined) => void;
   readonly reset: () => void;
   readonly track: (eventName: string, properties: AdapterProperties) => void;
@@ -38,6 +51,7 @@ export interface AnalyticsConfiguration {
   readonly apiKey: string;
   readonly serverZone: AnalyticsServerZone;
   readonly surface: AnalyticsSurface;
+  readonly relayUrl?: string;
 }
 
 export interface ProductAnalytics {
@@ -67,7 +81,7 @@ export function createProductAnalytics(adapter: AnalyticsAdapter): ProductAnalyt
       const apiKey = configuration.apiKey.trim();
       surface = configuration.surface;
       if (!apiKey) return false;
-      adapter.initialize(apiKey, configuration.serverZone);
+      adapter.initialize(apiKey, configuration.serverZone, configuration.relayUrl?.trim() || undefined);
       enabled = true;
       return true;
     },
@@ -101,4 +115,8 @@ export function createProductAnalytics(adapter: AnalyticsAdapter): ProductAnalyt
 
 export function resolveAnalyticsServerZone(value: string | undefined): AnalyticsServerZone {
   return value?.toUpperCase() === "US" ? "US" : "EU";
+}
+
+export function resolveAnalyticsRelayUrl(apiUrl: string | undefined): string {
+  return `${(apiUrl?.trim() || "http://localhost:3001").replace(/\/+$/, "")}/analytics/amplitude`;
 }

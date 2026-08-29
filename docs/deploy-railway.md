@@ -48,6 +48,15 @@ VITE_AMPLITUDE_SERVER_ZONE=US
 
 These `VITE_` variables are compiled into all three browser bundles, so changing one requires a new frontend deployment. The Amplitude server zone must match the organization's US or EU data region; omit the API key to disable analytics. No `PORT` variable needs to be created: Railway injects it for public services. See the [event and privacy contract](product-analytics.md) before enabling it.
 
+Add the same project key and region to the `api` service. The Browser SDK sends
+to this service's first-party relay, which validates the typed event taxonomy
+before forwarding to the fixed regional Amplitude ingestion endpoint:
+
+```dotenv
+AMPLITUDE_API_KEY=<same browser project API key>
+AMPLITUDE_SERVER_ZONE=US
+```
+
 The public English homepage lives at `/`; Russian and Serbian use `/ru` and `/sr`. Scenario and feature pages follow the same localized URL structure. Site owns `/sign-in` and `/app`; Story Studio uses `/app/stories/*`, and Clip Studio uses `/app/clips/*`. The frontend build generates route-specific public HTML, canonical and hreflang links, structured metadata, `robots.txt`, and `sitemap.xml` for `https://makeitastory.app`. Both application prefixes remain `noindex`, and legacy `/stories/*` links redirect to `/app/stories/*` with IDs and query strings intact. Point the Railway custom domain at the `web` service before submitting that sitemap to search engines.
 
 The public homepage and features page include a roadmap widget. Every Site build reads `docs/product-roadmap.md` through the [Vite plugin](../scripts/vite-public-roadmap.mjs) and embeds a validated public summary in the content-hashed bundle. There is no manually maintained JSON snapshot or runtime API dependency. Invalid milestone definitions/statuses fail the build. Completed task cells retain their original milestone as `done (Pn)` / the generated badge tooltip.
@@ -151,6 +160,7 @@ Railway's automatic monorepo import may initially watch only the application dir
 
 ```text
 /apps/api/**
+/packages/analytics/**
 /packages/application/**
 /packages/domain/**
 /packages/schemas/**

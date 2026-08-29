@@ -25,3 +25,10 @@
 - Avoid oversized "god components" that mix authentication, navigation, remote data, forms, and editor UI. If a component accumulates multiple independent reasons to change, split it before adding more behavior.
 - Preserve the repository's ESM import convention: TypeScript source imports local modules using the emitted `.js` extension.
 - Before completing frontend work, review every changed page and component for meaningful decomposition and run `yarn check` and the relevant tests.
+
+## Product analytics instrumentation
+
+- Every new user-facing product feature must include analytics instrumentation for its meaningful confirmed outcome on each implemented interface. Extend the typed taxonomy in `@storyteller/analytics`, emit the event only after the operation succeeds, and update `docs/product-analytics.md` in the same change. Do not substitute button-click or form-submit events for a confirmed product outcome.
+- Keep the API relay allowlist synchronized with the typed taxonomy and add tests for the new event and its properties. Use stable categorical properties that support funnels or diagnosis; never send emails, names, resource IDs, titles, filenames, URLs, free-form text, raw errors, or media/content data.
+- Preserve the privacy defaults: no autocapture, session replay, remote configuration, or IP enrichment without an explicit privacy review and user request. If a feature truly has no user-observable outcome to measure, record that decision in the product roadmap evidence instead of silently omitting analytics.
+- Before completing feature work, run the analytics package tests and API relay tests in addition to the checks required by the affected interface.

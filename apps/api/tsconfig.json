@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "dist" },
   "references": [
+    { "path": "../../packages/analytics" },
     { "path": "../../packages/domain" },
     { "path": "../../packages/application" },
     { "path": "../../packages/render-queue" },
