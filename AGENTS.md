@@ -31,6 +31,13 @@
 - Preserve the repository's ESM import convention: TypeScript source imports local modules using the emitted `.js` extension.
 - Before completing frontend work, review every changed page and component for meaningful decomposition and run `yarn check` and the relevant tests.
 
+## Reuse and third-party libraries
+
+- Before implementing a common capability from scratch, inspect the repository and its workspace dependencies for an existing utility, service, hook, component, or established pattern that already solves the problem. Prefer extending or composing the canonical existing solution over creating a parallel abstraction or duplicating behavior.
+- For standard, well-understood problems, prefer a mature, well-known, actively maintained npm package over a bespoke implementation when it fits the project's architecture, runtime, and license requirements. Reuse a compatible dependency already present in the workspace before adding another package with overlapping functionality.
+- Add a new dependency only after checking its maintenance status, security posture, bundle or runtime cost, TypeScript support, and compatibility with the repository's supported environments. Implement locally when the requirement is small and project-specific, or when available packages introduce disproportionate risk, weight, or complexity; record the reason when that choice is not obvious.
+- Reuse existing design-system components, shared UI primitives, API clients, schemas, types, test helpers, and conventions. When reuse is awkward, improve the shared solution if doing so remains coherent for its existing consumers instead of bypassing it with a one-off variant.
+
 ## Product analytics instrumentation
 
 - Every new user-facing product feature must include analytics instrumentation for its meaningful confirmed outcome on each implemented interface. Extend the typed taxonomy in `@storyteller/analytics`, emit the event only after the operation succeeds, and update `docs/product-analytics.md` in the same change. Do not substitute button-click or form-submit events for a confirmed product outcome.
