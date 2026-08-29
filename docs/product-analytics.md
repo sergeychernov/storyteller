@@ -61,6 +61,7 @@ Event names follow the `object verb` form and are compile-time checked by
 | `page viewed` | `surface`, `page` | A safe logical route without resource IDs is shown |
 | `account created` | `surface` | Registration succeeds |
 | `account signed in` | `surface` | Sign-in succeeds |
+| `profile language changed` | `surface`, `language` | The authenticated profile API confirms a supported language |
 | `story created` | `surface` | The API returns the created story |
 | `scene created` | `surface` | The API returns the updated story |
 | `material uploaded` | `surface`, `material_kind` | Each image/video upload succeeds |
@@ -74,6 +75,10 @@ frontend bundle. A failed analytics request never prevents the authenticated
 session from continuing. The API returns the authoritative `accountCreated`
 result; the client never infers registration from whether the name field was
 shown or submitted.
+
+`profile language changed` is emitted only after `PATCH /profile` succeeds. Its
+`language` property is restricted to the supported locale identifiers and never
+contains profile text, email or another user-supplied value.
 
 The current Web activation event is `scene render succeeded`. It is deliberately
 not named `story exported`: full-story master assembly belongs to F04 and is not

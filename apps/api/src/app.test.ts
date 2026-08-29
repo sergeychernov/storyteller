@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
 import { ApplicationError, StoryApplication, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
-import { getMaterialPresentation, materialStorageKeys, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type Story } from "@storyteller/domain";
+import { getMaterialPresentation, materialStorageKeys, type PlatformCredential, type PlatformProvider, type Profile, type ProfileUpdate, type SceneMaterial, type Story } from "@storyteller/domain";
 import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue } from "@storyteller/render-queue";
 import { probeMedia, renderVideo, SpawnMediaProcessRunner } from "@storyteller/renderer";
 import { Readable } from "node:stream";
@@ -46,21 +46,29 @@ test("protects a profile, uploads media and stores its stories", async (context)
   assert.equal(nameRequest.statusCode, 422);
   assert.equal(nameRequest.json<{ code: string }>().code, "profile_name_required");
   const registration = await api.inject({
-    method: "POST", url: "/auth/sign-in", payload: { name: "Sergej", email: "sergej@example.com", password: "long-test-password" },
+    method: "POST", url: "/auth/sign-in", payload: { name: "Sergej", email: "sergej@example.com", password: "long-test-password", language: "es" },
   });
   assert.equal(registration.statusCode, 200);
   const auth = registration.json<{ accessToken: string; accountCreated: boolean; profile: Profile }>();
   assert.equal(auth.accountCreated, true);
   const headers = { authorization: `Bearer ${auth.accessToken}` };
-  assert.equal((await api.inject({ method: "GET", url: "/profile", headers })).json<Profile>().email, "sergej@example.com");
+  assert.deepEqual((await api.inject({ method: "GET", url: "/profile", headers })).json<Profile>(), {
+    id: auth.profile.id, name: "Sergej", email: "sergej@example.com", language: "es",
+  });
+  const updatedProfile = await api.inject({ method: "PATCH", url: "/profile", headers, payload: { language: "ru" } });
+  assert.equal(updatedProfile.statusCode, 200, updatedProfile.body);
+  assert.equal(updatedProfile.json<Profile>().language, "ru");
+  assert.equal((await api.inject({ method: "PATCH", url: "/profile", headers, payload: {} })).statusCode, 400);
+  assert.equal((await api.inject({ method: "PATCH", url: "/profile", headers, payload: { language: "unsupported" } })).statusCode, 400);
 
   const repeatedSignIn = await api.inject({
     method: "POST", url: "/auth/sign-in",
-    payload: { name: "Ignored retry name", email: "sergej@example.com", password: "long-test-password" },
+    payload: { name: "Ignored retry name", email: "sergej@example.com", password: "long-test-password", language: "en" },
   });
   assert.equal(repeatedSignIn.statusCode, 200);
   assert.equal(repeatedSignIn.json<{ accountCreated: boolean; profile: Profile }>().accountCreated, false);
   assert.equal(repeatedSignIn.json<{ accountCreated: boolean; profile: Profile }>().profile.name, "Sergej");
+  assert.equal(repeatedSignIn.json<{ accountCreated: boolean; profile: Profile }>().profile.language, "ru");
 
   const storyResponse = await api.inject({ method: "POST", url: "/stories", headers, payload: { title: "First story" } });
   assert.equal(storyResponse.statusCode, 201);
@@ -1049,9 +1057,11 @@ class MemoryRepository implements StoryRepository {
   async createSession(session: SessionRecord) { this.sessions.set(session.tokenHash, session); }
   async findProfileBySession(tokenHash: string, now: Date) {
     const session = this.sessions.get(tokenHash); const profile = session && session.expiresAt > now ? this.profiles.get(session.profileId) : undefined;
-    return profile && { id: profile.id, name: profile.name, email: profile.email };
+    return profile && { id: profile.id, name: profile.name, email: profile.email, language: profile.language };
   }
-  async updateProfile(profileId: string, name: string) { const old = this.profiles.get(profileId)!; const profile = { ...old, name }; this.profiles.set(profileId, profile); return profile; }
+  async updateProfile(profileId: string, input: ProfileUpdate) {
+    const old = this.profiles.get(profileId)!; const profile = { ...old, ...input }; this.profiles.set(profileId, profile); return profile;
+  }
   async createStory(story: Story) { this.stories.set(story.id, story); }
   async listStories(profileId: string) { return [...this.stories.values()].filter((story) => story.profileId === profileId); }
   async findStory(profileId: string, storyId: string) { const story = this.stories.get(storyId); return story?.profileId === profileId ? story : undefined; }

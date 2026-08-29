@@ -1,12 +1,13 @@
+import { profileLanguages, type Profile as DomainProfile, type ProfileLanguage, type ProfileUpdate } from "@storyteller/domain";
 import { useCallback, useEffect, useState } from "react";
+
+export { createGravatarUrl, ProfileAvatar, profileInitials } from "./ProfileAvatar.js";
+export { useProfileLanguage } from "./useProfileLanguage.js";
 
 const sessionStorageKey = "storyteller.auth-session";
 
-export interface Profile {
-  readonly id: string;
-  readonly name: string;
-  readonly email: string;
-}
+export type Profile = DomainProfile;
+export type { ProfileLanguage, ProfileUpdate } from "@storyteller/domain";
 
 export interface AuthSession {
   readonly accessToken: string;
@@ -26,8 +27,9 @@ export class ApiError extends Error {
 }
 
 export interface AuthClient {
-  readonly signIn: (email: string, password: string, name?: string) => Promise<SignInResult>;
+  readonly signIn: (email: string, password: string, name?: string, language?: ProfileLanguage) => Promise<SignInResult>;
   readonly getProfile: (token: string) => Promise<Profile>;
+  readonly updateProfile: (token: string, input: ProfileUpdate) => Promise<Profile>;
 }
 
 export function createAuthClient(apiUrl: string): AuthClient {
@@ -45,10 +47,10 @@ export function createAuthClient(apiUrl: string): AuthClient {
   };
 
   return {
-    signIn: async (email, password, name) => {
+    signIn: async (email, password, name, language) => {
       const response = await request<AuthSession & { readonly accountCreated: boolean }>("/auth/sign-in", {
         method: "POST",
-        body: JSON.stringify({ email, password, ...(name ? { name } : {}) }),
+        body: JSON.stringify({ email, password, ...(name ? { name } : {}), ...(language ? { language } : {}) }),
       });
       return {
         accountCreated: response.accountCreated,
@@ -56,10 +58,11 @@ export function createAuthClient(apiUrl: string): AuthClient {
       };
     },
     getProfile: (token) => request("/profile", {}, token),
+    updateProfile: (token, input) => request("/profile", { method: "PATCH", body: JSON.stringify(input) }, token),
   };
 }
 
-export function usePersistentSession(client: Pick<AuthClient, "getProfile">) {
+export function usePersistentSession(client: Pick<AuthClient, "getProfile" | "updateProfile">) {
   const [session, setSession] = useState<AuthSession | null>(loadSession);
 
   const authenticate = useCallback((nextSession: AuthSession): void => {
@@ -72,10 +75,17 @@ export function usePersistentSession(client: Pick<AuthClient, "getProfile">) {
     setSession(null);
   }, []);
 
+  const updateProfile = useCallback(async (input: ProfileUpdate): Promise<Profile> => {
+    if (!session) throw new ApiError("authentication required", 401);
+    const profile = await client.updateProfile(session.accessToken, input);
+    authenticate({ ...session, profile });
+    return profile;
+  }, [authenticate, client, session]);
+
   useEffect(() => {
     if (!session) return;
     void client.getProfile(session.accessToken).then((profile) => {
-      if (profile.name === session.profile.name && profile.email === session.profile.email) return;
+      if (profile.name === session.profile.name && profile.email === session.profile.email && profile.language === session.profile.language) return;
       authenticate({ ...session, profile });
     }).catch((error: unknown) => {
       if (error instanceof ApiError && error.status === 401) clearSession();
@@ -90,11 +100,11 @@ export function usePersistentSession(client: Pick<AuthClient, "getProfile">) {
     return () => window.removeEventListener("storage", synchronize);
   }, []);
 
-  return { session, authenticate, clearSession } as const;
+  return { session, authenticate, clearSession, updateProfile } as const;
 }
 
 export function sanitizeContinuePath(value: string | null | undefined, fallback = "/app"): string {
-  if (!value || !/^\/app(?:$|\/(?:stories|clips)(?:\/.*)?$)/.test(value)) return fallback;
+  if (!value || !/^\/app(?:$|\/(?:stories|clips|profile)(?:\/.*)?$)/.test(value)) return fallback;
   if (value.includes("\\") || value.includes("//")) return fallback;
   return value;
 }
@@ -113,7 +123,9 @@ function loadSession(): AuthSession | null {
       localStorage.removeItem(sessionStorageKey);
       return null;
     }
-    return session as AuthSession;
+    const profile = session.profile as Partial<Profile>;
+    const language = profileLanguages.includes(profile.language as ProfileLanguage) ? profile.language as ProfileLanguage : "en";
+    return { ...session, profile: { ...profile, language } } as AuthSession;
   } catch {
     localStorage.removeItem(sessionStorageKey);
     return null;

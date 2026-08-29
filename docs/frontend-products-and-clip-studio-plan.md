@@ -61,7 +61,7 @@ packages/
   clip-application/     P5/P6 clip-project use cases
   clip-domain/          P5/P6 clip, sync, audio-mix and visual-edit rules
   auth-client/          Shared browser session and authenticated API helpers
-  localization/         Shared EN/RU/SR Latin dictionaries
+  localization/         Shared EN/RU/SR Latin/ES dictionaries
   renderer/             Shared FFmpeg/process boundary
   render-queue/         Shared job primitives; project-specific jobs stay typed
   storage/              Shared object-storage boundary
@@ -218,7 +218,7 @@ current public and authenticated routes work from their new owners.
 ### Stage 1 — capture current behavior
 
 - Inventory public, sign-in, story-library and deep editor routes.
-- Add routing/SEO fixtures for every EN/RU/SR public path and representative
+- Add routing/SEO fixtures for every EN/RU/SR/ES public path and representative
   authenticated deep links before moving files.
 - Record the current production redirects, caching headers, noindex behavior and
   API origin configuration.

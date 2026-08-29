@@ -16,6 +16,35 @@
   text-decoration: none;
 }
 
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatarLink {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+}
+
+.avatarLink:focus-visible { outline: 2px solid #d9fb76; outline-offset: 3px; }
+
+.avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  place-items: center;
+  border: 1px solid #4c4c44;
+  border-radius: 50%;
+  color: #222;
+  background: #e7e3d9;
+  object-fit: cover;
+  font-size: 11px;
+}
+
 @media (max-width: 640px) {
   .header {
     padding: 0 18px;

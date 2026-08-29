@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { syncProductRoadmap } from "./sync-product-roadmap.mjs";
 
-const locales = ["en", "ru", "sr-Latn"];
+const locales = ["en", "ru", "sr-Latn", "es"];
 
 function readCompletionEstimates(source, ids) {
   const blocks = [...source.matchAll(/<!-- product-roadmap-estimates:\s*([\s\S]*?)-->/g)];

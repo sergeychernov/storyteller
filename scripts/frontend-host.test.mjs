@@ -35,6 +35,10 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
   const signIn = await inject(server, "/sign-in");
   assert.equal(signIn.body, "SITE_APP");
   assert.equal(signIn.headers["X-Robots-Tag"], "noindex, nofollow");
+  const profile = await inject(server, "/app/profile");
+  assert.equal(profile.body, "SITE_APP");
+  assert.equal(profile.headers["X-Robots-Tag"], "noindex, nofollow");
+  assert.equal((await inject(server, "/app/profile/")).headers.Location, "/app/profile");
   const siteAsset = await inject(server, "/assets/site.js");
   assert.equal(siteAsset.body, "SITE_ASSET");
   assert.equal(siteAsset.headers["Cache-Control"], "public, max-age=31536000, immutable");

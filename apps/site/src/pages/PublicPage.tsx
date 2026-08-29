@@ -11,10 +11,12 @@ import styles from "./PublicPage.module.css";
 
 interface PublicPageProps {
   readonly resolvedPage: ResolvedPublicPage;
+  readonly session: AuthSession | null;
   readonly studioPath: string;
+  readonly onLanguageChange: (locale: Locale) => Promise<void>;
 }
 
-export function PublicPage({ resolvedPage, studioPath }: PublicPageProps) {
+export function PublicPage({ resolvedPage, session, studioPath, onLanguageChange }: PublicPageProps) {
   const { locale, setLocale } = useLocalization();
 
   useEffect(() => {
@@ -25,7 +27,8 @@ export function PublicPage({ resolvedPage, studioPath }: PublicPageProps) {
     <div className={styles.page}>
       <PublicSeo resolvedPage={resolvedPage} />
       <a className={styles.skipLink} href="#public-content">{resolvedPage.localeData.skipToContent}</a>
-      <PublicHeader resolvedPage={resolvedPage} studioPath={studioPath} />
+      <PublicHeader resolvedPage={resolvedPage} profile={session?.profile} studioPath={studioPath}
+        onLanguageChange={session ? onLanguageChange : undefined} />
       <main className={styles.content} id="public-content">
         <PublicIntro resolvedPage={resolvedPage} studioPath={studioPath} />
         <PublicSections resolvedPage={resolvedPage} />
@@ -35,3 +38,5 @@ export function PublicPage({ resolvedPage, studioPath }: PublicPageProps) {
     </div>
   );
 }
+import type { AuthSession } from "@storyteller/auth-client";
+import type { Locale } from "@storyteller/localization";

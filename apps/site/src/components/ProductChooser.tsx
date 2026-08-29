@@ -55,6 +55,19 @@ const copy: Record<Locale, {
     planned: "Planirano",
     signOut: "Odjavi se",
   },
+  es: {
+    eyebrow: "Tu espacio de trabajo",
+    title: "Elige un estudio",
+    welcome: (name) => `Te damos la bienvenida de nuevo, ${name}.`,
+    storyTitle: "Story Studio",
+    storyBody: "Crea historias con tus fotos, vídeos, narración y música.",
+    storyAction: "Abrir Story Studio →",
+    clipTitle: "Clip Studio",
+    clipBody: "El espacio independiente para videoclips musicales está previsto para un milestone posterior.",
+    clipAction: "Ver el estudio previsto →",
+    planned: "Previsto",
+    signOut: "Cerrar sesión",
+  },
 };
 
 export function ProductChooser({ session, onSignOut }: { readonly session: AuthSession; readonly onSignOut: () => void }) {

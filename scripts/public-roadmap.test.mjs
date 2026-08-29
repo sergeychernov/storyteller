@@ -8,7 +8,7 @@ import { createPublicRoadmap } from "./public-roadmap.mjs";
 import { publicRoadmapPlugin } from "./vite-public-roadmap.mjs";
 
 function fixture(rows, ids = ["P0", "P1", "P2", "P3"], estimates) {
-  const titles = Object.fromEntries(ids.map((id) => [id, { en: `Title ${id}`, ru: `Название ${id}`, "sr-Latn": `Naslov ${id}` }]));
+  const titles = Object.fromEntries(ids.map((id) => [id, { en: `Title ${id}`, ru: `Название ${id}`, "sr-Latn": `Naslov ${id}`, es: `Título ${id}` }]));
   return [
     "# Product roadmap", "",
     "| Milestone | Product outcome | Completion criteria |", "| --- | --- | --- |",
@@ -95,8 +95,8 @@ test("completion estimates use document months and localized month/year labels",
   const source = fixture([["F01", "P0", "P1", "n/a"]], ["P0", "P1"], { P0: "2026-09", P1: "2027-01" });
   const data = createPublicRoadmap(source);
   assert.deepEqual(data.milestones.map(({ estimatedCompletion }) => estimatedCompletion), [
-    { month: "2026-09", label: { en: "September 2026", ru: "сентябрь 2026", "sr-Latn": "septembar 2026" } },
-    { month: "2027-01", label: { en: "January 2027", ru: "январь 2027", "sr-Latn": "januar 2027" } },
+    { month: "2026-09", label: { en: "September 2026", ru: "сентябрь 2026", "sr-Latn": "septembar 2026", es: "septiembre 2026" } },
+    { month: "2027-01", label: { en: "January 2027", ru: "январь 2027", "sr-Latn": "januar 2027", es: "enero 2027" } },
   ]);
   const completed = createPublicRoadmap(source.replace("| P0 | P1 | n/a |", "| done (P0) | P1 | n/a |"));
   assert.deepEqual(completed.milestones[0].estimatedCompletion, data.milestones[0].estimatedCompletion);

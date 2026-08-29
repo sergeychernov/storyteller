@@ -85,8 +85,8 @@ function renderStaticPage(page, localeData) {
       <a href="#content">${escapeHtml(localeData.skipToContent)}</a>
       <header>
         <a href="${pagesByKey.get("home").path}">${publicSite.brand}</a>
-        <nav aria-label="Primary">${nav}</nav>
-        <nav aria-label="Languages">${languages}</nav>
+        <nav aria-label="${escapeHtml(localeData.primaryNavigation)}">${nav}</nav>
+        <nav aria-label="${escapeHtml(localeData.languageNavigation)}">${languages}</nav>
         <a href="/sign-in">${escapeHtml(localeData.openStudio)}</a>
       </header>
       <main id="content">

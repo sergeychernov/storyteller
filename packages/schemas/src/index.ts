@@ -1,17 +1,22 @@
 import { z } from "zod";
+import { profileLanguages } from "@storyteller/domain";
 
-export const profileSchema = z.object({ id: z.string().uuid(), name: z.string(), email: z.email() });
+export const profileLanguageSchema = z.enum(profileLanguages);
+export const profileSchema = z.object({ id: z.string().uuid(), name: z.string(), email: z.email(), language: profileLanguageSchema });
 export const registerSchema = z.object({
   name: z.string().trim().min(1).max(80),
   email: z.email().max(254),
   password: z.string().min(10).max(200),
+  language: profileLanguageSchema.optional(),
 });
 export const loginSchema = registerSchema.pick({ email: true, password: true });
-export const signInSchema = loginSchema.extend({ name: registerSchema.shape.name.optional() });
+export const signInSchema = loginSchema.extend({ name: registerSchema.shape.name.optional(), language: profileLanguageSchema.optional() });
 export const authenticationSchema = z.object({
   accessToken: z.string(), accountCreated: z.boolean(), expiresAt: z.iso.datetime(), profile: profileSchema,
 });
-export const updateProfileSchema = z.object({ name: z.string().trim().min(1).max(80) });
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(), language: profileLanguageSchema.optional(),
+}).refine(({ name, language }) => name !== undefined || language !== undefined, { message: "profile update must not be empty" });
 
 export const createStorySchema = z.object({ title: z.string().trim().min(1).max(120) });
 export const storySummarySchema = z.object({

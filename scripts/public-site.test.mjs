@@ -9,9 +9,9 @@ import { getAlternatePages, listPublicPages, publicSite } from "./public-site.mj
 const expectedKeys = ["features", "home", "personal", "travel"];
 
 test("public site has complete localized page families and stable slugs", () => {
-  assert.deepEqual(Object.keys(publicSite.locales), ["en", "ru", "sr-Latn"]);
+  assert.deepEqual(Object.keys(publicSite.locales), ["en", "ru", "sr-Latn", "es"]);
   const pages = listPublicPages();
-  assert.equal(pages.length, 12);
+  assert.equal(pages.length, 16);
   assert.equal(new Set(pages.map((page) => page.path)).size, pages.length);
 
   for (const locale of Object.values(publicSite.locales)) {
@@ -32,13 +32,15 @@ test("public site has complete localized page families and stable slugs", () => 
   assert.equal(publicSite.locales.en.pages.find((page) => page.key === "travel")?.path, "/travel-stories");
   assert.equal(publicSite.locales.ru.pages.find((page) => page.key === "travel")?.path, "/ru/istorii-o-puteshestviyah");
   assert.equal(publicSite.locales.ru.pages.find((page) => page.key === "features")?.path, "/ru/vozmozhnosti");
+  assert.equal(publicSite.locales.es.pages.find((page) => page.key === "travel")?.path, "/es/historias-de-viaje");
+  assert.equal(publicSite.locales.es.pages.find((page) => page.key === "features")?.path, "/es/funciones");
 });
 
 test("each page family exposes reciprocal language alternates", () => {
   for (const key of expectedKeys) {
     const alternates = getAlternatePages(key);
-    assert.equal(alternates.length, 3);
-    assert.deepEqual(alternates.map(({ hrefLang }) => hrefLang), ["en", "ru", "sr-Latn"]);
+    assert.equal(alternates.length, 4);
+    assert.deepEqual(alternates.map(({ hrefLang }) => hrefLang), ["en", "ru", "sr-Latn", "es"]);
     assert.ok(alternates.every(({ page }) => page?.key === key));
   }
 });
@@ -46,8 +48,8 @@ test("each page family exposes reciprocal language alternates", () => {
 test("sitemap includes every canonical page and hreflang family", () => {
   const sitemap = renderSitemap();
   for (const page of listPublicPages()) assert.match(sitemap, new RegExp(`<loc>${publicSite.origin}${page.path}</loc>`));
-  assert.equal((sitemap.match(/<url>/g) ?? []).length, 12);
-  assert.equal((sitemap.match(/hreflang="x-default"/g) ?? []).length, 12);
+  assert.equal((sitemap.match(/<url>/g) ?? []).length, 16);
+  assert.equal((sitemap.match(/hreflang="x-default"/g) ?? []).length, 16);
   assert.equal(sitemap.includes("undefined"), false);
 });
 
@@ -70,6 +72,12 @@ test("prerender writes crawlable HTML, sitemap and robots policy", async (contex
   assert.match(russianHome, /name="robots" content="index, follow, max-image-preview:large"/);
   assert.equal(russianHome.includes("noindex"), false);
   assert.equal(russianHome.includes("undefined"), false);
+  const spanishHome = await readFile(join(directory, "es/index.html"), "utf8");
+  assert.match(spanishHome, /<html lang="es">/);
+  assert.match(spanishHome, /<h1>No es un montón de fotos\./);
+  assert.match(spanishHome, /rel="canonical" href="https:\/\/makeitastory\.app\/es"/);
+  assert.match(spanishHome, /hreflang="es" href="https:\/\/makeitastory\.app\/es"/);
+  assert.equal(spanishHome.includes("undefined"), false);
 
   const robots = await readFile(join(directory, "robots.txt"), "utf8");
   assert.match(robots, /Allow: \//);

@@ -85,6 +85,10 @@ export const migrations = [{
   version: 4,
   sql: `ALTER TABLE scene_renders ADD COLUMN content_hash char(64)
     CHECK (content_hash ~ '^[a-f0-9]{64}$');`,
+}, {
+  version: 5,
+  sql: `ALTER TABLE profiles ADD COLUMN language varchar(20) NOT NULL DEFAULT 'en'
+    CHECK (language IN ('en', 'ru', 'sr-Latn', 'es'));`,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

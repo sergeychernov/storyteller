@@ -1,10 +1,13 @@
-export const supportedLocales = ["en", "ru", "sr-Latn"] as const;
-export type Locale = (typeof supportedLocales)[number];
+import { profileLanguages, type ProfileLanguage } from "@storyteller/domain";
+
+export const supportedLocales = profileLanguages;
+export type Locale = ProfileLanguage;
 
 export const localeOptions: readonly { locale: Locale; label: string; shortLabel: string }[] = [
   { locale: "en", label: "English", shortLabel: "EN" },
   { locale: "ru", label: "Русский", shortLabel: "RU" },
   { locale: "sr-Latn", label: "Srpski", shortLabel: "SR" },
+  { locale: "es", label: "Español", shortLabel: "ES" },
 ];
 
 type PluralMessage = Partial<Record<Intl.LDMLPluralRule, string>> & { other: string };
@@ -18,6 +21,14 @@ const en = {
   "common.status.publishing": "Publishing",
   "common.status.published": "Published",
   "language.label": "Language",
+  "language.saveError": "Could not save the language. Please try again.",
+  "profile.open": "Open profile",
+  "profile.eyebrow": "Account settings",
+  "profile.title": "Your profile",
+  "profile.name": "Name",
+  "profile.email": "Email",
+  "profile.languageHint": "This language is used across the site and web studios.",
+  "profile.back": "Back to studios",
   "web.api.online": "API online",
   "web.api.offline": "API offline",
   "web.welcome.eyebrow": "Your production space",
@@ -84,6 +95,14 @@ const ru: Record<TranslationKey, Message> = {
   "common.status.publishing": "Публикация",
   "common.status.published": "Опубликовано",
   "language.label": "Язык",
+  "language.saveError": "Не удалось сохранить язык. Попробуйте ещё раз.",
+  "profile.open": "Открыть профиль",
+  "profile.eyebrow": "Настройки аккаунта",
+  "profile.title": "Ваш профиль",
+  "profile.name": "Имя",
+  "profile.email": "Email",
+  "profile.languageHint": "Этот язык используется на сайте и во всех веб-студиях.",
+  "profile.back": "Назад к студиям",
   "web.api.online": "API доступен",
   "web.api.offline": "API недоступен",
   "web.welcome.eyebrow": "Ваше пространство для производства",
@@ -148,6 +167,14 @@ const srLatn: Record<TranslationKey, Message> = {
   "common.status.publishing": "Objavljivanje",
   "common.status.published": "Objavljeno",
   "language.label": "Jezik",
+  "language.saveError": "Nije moguće sačuvati jezik. Pokušajte ponovo.",
+  "profile.open": "Otvori profil",
+  "profile.eyebrow": "Podešavanja naloga",
+  "profile.title": "Vaš profil",
+  "profile.name": "Ime",
+  "profile.email": "Email",
+  "profile.languageHint": "Ovaj jezik se koristi na sajtu i u svim veb studijima.",
+  "profile.back": "Nazad na studije",
   "web.api.online": "API je dostupan",
   "web.api.offline": "API nije dostupan",
   "web.welcome.eyebrow": "Vaš produkcijski prostor",
@@ -204,12 +231,85 @@ const srLatn: Record<TranslationKey, Message> = {
   "mobile.sceneCount": { one: "{{count}} scena", few: "{{count}} scene", other: "{{count}} scena" },
 };
 
-const messages: Record<Locale, Record<TranslationKey, Message>> = { en, ru, "sr-Latn": srLatn };
+const es: Record<TranslationKey, Message> = {
+  "common.error": "Algo salió mal. Inténtalo de nuevo.",
+  "common.status.draft": "Borrador",
+  "common.status.rendering": "Renderizando",
+  "common.status.ready": "Listo",
+  "common.status.publishing": "Publicando",
+  "common.status.published": "Publicado",
+  "language.label": "Idioma",
+  "language.saveError": "No se pudo guardar el idioma. Inténtalo de nuevo.",
+  "profile.open": "Abrir perfil",
+  "profile.eyebrow": "Configuración de la cuenta",
+  "profile.title": "Tu perfil",
+  "profile.name": "Nombre",
+  "profile.email": "Correo electrónico",
+  "profile.languageHint": "Este idioma se usa en el sitio y en todos los estudios web.",
+  "profile.back": "Volver a los estudios",
+  "web.api.online": "API disponible",
+  "web.api.offline": "API no disponible",
+  "web.welcome.eyebrow": "Tu espacio de producción",
+  "web.welcome.title.first": "Convierte momentos sin editar en",
+  "web.welcome.title.second": "historias terminadas.",
+  "web.welcome.copy": "Empieza con un estudio sencillo para escenas, narración, música y publicación. El flujo de trabajo crece con el producto.",
+  "web.welcome.name.label": "Tu nombre",
+  "web.welcome.name.placeholder": "¿Cómo quieres que te llamemos?",
+  "web.welcome.email.label": "Correo electrónico",
+  "web.welcome.email.placeholder": "tu@ejemplo.com",
+  "web.welcome.password.label": "Contraseña",
+  "web.welcome.password.placeholder": "Al menos 10 caracteres",
+  "web.welcome.creating": "Creando…",
+  "web.welcome.enter": "Entrar al estudio →",
+  "web.welcome.login": "Iniciar sesión →",
+  "web.welcome.signingIn": "Iniciando sesión…",
+  "web.welcome.nameNeeded": "Este correo es nuevo. Dinos cómo quieres que te llamemos para crear tu perfil.",
+  "web.welcome.haveAccount": "¿Ya tienes una cuenta? Inicia sesión",
+  "web.welcome.needAccount": "¿Es tu primera vez? Crea un perfil",
+  "web.library.eyebrow": "Biblioteca de producción",
+  "web.library.title": "Tus historias",
+  "web.library.storyTitle.label": "Título de la historia",
+  "web.library.storyTitle.placeholder": "Título de la nueva historia",
+  "web.library.newStory": "+ Nueva historia",
+  "web.library.sceneCount": { one: "{{count}} escena", other: "{{count}} escenas" },
+  "web.library.empty": "Crea tu primera historia.",
+  "web.story.back": "Todas las historias",
+  "web.story.eyebrow": "Historia",
+  "web.story.empty": "Esta historia está vacía. La edición de escenas aparecerá aquí cuando esté implementada.",
+  "web.story.loading": "Cargando la historia…",
+  "web.editor.eyebrow": "Editor de historias",
+  "web.editor.select": "Selecciona una historia",
+  "web.editor.previewStory": "Vista previa de la historia",
+  "web.editor.scenes": "Escenas",
+  "web.editor.firstScene": "Primera escena",
+  "web.editor.addScene": "+ Añadir escena",
+  "web.editor.scenePreview": "Vista previa de la escena",
+  "web.editor.preview": "Vista previa",
+  "web.editor.settings": "Ajustes de la escena",
+  "web.editor.title": "Título",
+  "web.editor.addTitle": "Añadir un título",
+  "web.editor.renderer": "Renderizador",
+  "web.editor.chooseRenderer": "Elegir renderizador",
+  "web.editor.timeline": "Línea de tiempo",
+  "mobile.companion": "APLICACIÓN MÓVIL",
+  "mobile.hero.label": "TUS HISTORIAS",
+  "mobile.hero.title": "Lleva el estudio\ncontigo.",
+  "mobile.hero.copy": "Revisa historias, sigue la producción y captura nuevos materiales mientras el editor completo permanece en la web.",
+  "mobile.recent": "Recientes",
+  "mobile.viewAll": "Ver todo",
+  "mobile.createStory": "＋ Crear una historia",
+  "mobile.story.beijing": "Pekín en primavera",
+  "mobile.story.sea": "Fin de semana junto al mar",
+  "mobile.sceneCount": { one: "{{count}} escena", other: "{{count}} escenas" },
+};
+
+const messages: Record<Locale, Record<TranslationKey, Message>> = { en, ru, "sr-Latn": srLatn, es };
 
 export function normalizeLocale(locale: string | null | undefined): Locale {
   const normalized = locale?.toLowerCase();
   if (normalized?.startsWith("ru")) return "ru";
   if (normalized?.startsWith("sr")) return "sr-Latn";
+  if (normalized?.startsWith("es")) return "es";
   return "en";
 }
 

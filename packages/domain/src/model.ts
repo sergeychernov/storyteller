@@ -184,6 +184,15 @@ export interface Profile {
   readonly id: string;
   readonly name: string;
   readonly email: string;
+  readonly language: ProfileLanguage;
+}
+
+export const profileLanguages = ["en", "ru", "sr-Latn", "es"] as const;
+export type ProfileLanguage = (typeof profileLanguages)[number];
+
+export interface ProfileUpdate {
+  readonly name?: string;
+  readonly language?: ProfileLanguage;
 }
 
 export const platformProviders = ["telegram", "tiktok", "instagram"] as const;

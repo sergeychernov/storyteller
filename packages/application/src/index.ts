@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
   addMaterial, addScene, buildStoryTimeline, configureScene, createStory, DomainError, materialStorageKeys, moveSceneMaterials, removeMaterial, removeScene, reorderMaterials, reorderScenes, replaceMaterial,
-  type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
+  type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type ProfileLanguage, type ProfileUpdate, type SceneMaterial, type SceneMotion, type Story,
 } from "@storyteller/domain";
 import { timelineDurationLimits } from "./timeline-formats.js";
 
@@ -26,7 +26,7 @@ export interface StoryRepository {
   findProfileAuthenticationByEmail(email: string): Promise<ProfileAuthentication | undefined>;
   createSession(session: SessionRecord): Promise<void>;
   findProfileBySession(tokenHash: string, now: Date): Promise<Profile | undefined>;
-  updateProfile(profileId: string, name: string): Promise<Profile>;
+  updateProfile(profileId: string, input: ProfileUpdate): Promise<Profile>;
   createStory(story: Story): Promise<void>;
   listStories(profileId: string): Promise<readonly Story[]>;
   findStory(profileId: string, storyId: string): Promise<Story | undefined>;
@@ -50,17 +50,18 @@ const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
 export class StoryApplication {
   constructor(private readonly repository: StoryRepository) {}
 
-  async signIn(input: { email: string; password: string; name?: string }): Promise<AuthenticationResult> {
+  async signIn(input: { email: string; password: string; name?: string; language?: ProfileLanguage }): Promise<AuthenticationResult> {
     const email = normalizeEmail(input.email);
     const authentication = await this.repository.findProfileAuthenticationByEmail(email);
     if (authentication) return this.loginAuthentication(authentication, input.password);
     if (!input.name?.trim()) throw new ApplicationError("profile name is required", 422, "profile_name_required");
-    return this.register({ name: input.name, email, password: input.password });
+    return this.register({ name: input.name, email, password: input.password, ...(input.language ? { language: input.language } : {}) });
   }
 
-  async register(input: { name: string; email: string; password: string }): Promise<AuthenticationResult> {
+  async register(input: { name: string; email: string; password: string; language?: ProfileLanguage }): Promise<AuthenticationResult> {
     const profile: ProfileAuthentication = {
-      id: randomUUID(), name: input.name.trim(), email: normalizeEmail(input.email), passwordHash: await hashPassword(input.password),
+      id: randomUUID(), name: input.name.trim(), email: normalizeEmail(input.email), language: input.language ?? "en",
+      passwordHash: await hashPassword(input.password),
     };
     const issued = issueSession(profile.id);
     if (!await this.repository.createProfileWithSession(profile, issued.record)) {
@@ -99,8 +100,8 @@ export class StoryApplication {
     return profile;
   }
 
-  updateProfile(profileId: string, input: { name: string }): Promise<Profile> {
-    return this.repository.updateProfile(profileId, input.name.trim());
+  updateProfile(profileId: string, input: ProfileUpdate): Promise<Profile> {
+    return this.repository.updateProfile(profileId, { ...input, ...(input.name === undefined ? {} : { name: input.name.trim() }) });
   }
   async createStory(profileId: string, input: { title: string }): Promise<StorySummary> {
     const story = createStory({ id: randomUUID(), profileId, title: input.title.trim() });
@@ -256,4 +257,6 @@ async function verifyPassword(password: string, encoded: string): Promise<boolea
 function derivePassword(password: string, salt: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => scrypt(password, salt, 64, (error, key) => error ? reject(error) : resolve(key)));
 }
-function publicProfile(profile: ProfileAuthentication): Profile { return { id: profile.id, name: profile.name, email: profile.email }; }
+function publicProfile(profile: ProfileAuthentication): Profile {
+  return { id: profile.id, name: profile.name, email: profile.email, language: profile.language };
+}

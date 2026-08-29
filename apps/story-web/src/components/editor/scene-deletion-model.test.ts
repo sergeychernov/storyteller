@@ -99,7 +99,7 @@ test("an ambiguous failure never repeats DELETE while checking the outcome", asy
 });
 
 test("scene deletion confirmation and recovery messages are available in all Web locales", () => {
-  for (const locale of ["en", "ru", "sr-Latn"] as const) {
+  for (const locale of ["en", "ru", "sr-Latn", "es"] as const) {
     const copy = getEditorCopy(locale);
     assert.ok(copy.deleteScene);
     assert.ok(copy.deleteSceneTitle.includes("{{name}}"));

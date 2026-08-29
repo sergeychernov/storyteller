@@ -37,6 +37,8 @@ export interface PublicSiteLocaleData {
   readonly ogLocale: string;
   readonly languageName: string;
   readonly skipToContent: string;
+  readonly primaryNavigation: string;
+  readonly languageNavigation: string;
   readonly brandTagline: string;
   readonly nav: Readonly<Record<PublicPageKey, string>>;
   readonly openStudio: string;

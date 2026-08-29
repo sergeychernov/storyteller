@@ -70,7 +70,10 @@ export async function buildApi(application: StoryApplication, options: {
   registerAmplitudeRelayRoutes(app, options.amplitudeRelay);
   app.post("/auth/register", {
     schema: { body: registerSchema, response: { 201: authenticationSchema, 409: errorSchema } },
-  }, async (request, reply) => reply.status(201).send(await application.register(request.body)));
+  }, async (request, reply) => reply.status(201).send(await application.register({
+    name: request.body.name, email: request.body.email, password: request.body.password,
+    ...(request.body.language === undefined ? {} : { language: request.body.language }),
+  })));
   app.post("/auth/login", {
     schema: { body: loginSchema, response: { 200: authenticationSchema, 401: errorSchema } },
   }, async (request) => application.login(request.body));
@@ -79,6 +82,7 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request) => application.signIn({
     email: request.body.email, password: request.body.password,
     ...(request.body.name === undefined ? {} : { name: request.body.name }),
+    ...(request.body.language === undefined ? {} : { language: request.body.language }),
   }));
 
   app.get("/profile", {
@@ -86,7 +90,10 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request) => authenticate(application, request));
   app.patch("/profile", {
     schema: { security: bearerSecurity, body: updateProfileSchema, response: { 200: profileSchema, 401: errorSchema } },
-  }, async (request) => application.updateProfile((await authenticate(application, request)).id, request.body));
+  }, async (request) => application.updateProfile((await authenticate(application, request)).id, {
+    ...(request.body.name === undefined ? {} : { name: request.body.name }),
+    ...(request.body.language === undefined ? {} : { language: request.body.language }),
+  }));
 
   app.get("/stories", {
     schema: { security: bearerSecurity, response: { 200: z.array(storySummarySchema), 401: errorSchema } },

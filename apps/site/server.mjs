@@ -52,8 +52,8 @@ export function createFrontendHost({
         return;
       }
 
-      if (pathname === "/app/") {
-        redirect(response, `/app${url.search}`, 308);
+      if (pathname === "/app/" || pathname === "/app/profile/") {
+        redirect(response, `${pathname.slice(0, -1)}${url.search}`, 308);
         return;
       }
 
@@ -69,7 +69,7 @@ export function createFrontendHost({
         return;
       }
 
-      if (pathname === "/sign-in" || pathname === "/app") {
+      if (pathname === "/sign-in" || pathname === "/app" || pathname === "/app/profile") {
         await sendRequiredFile(request, response, join(siteRoot, "app.html"), true);
         return;
       }

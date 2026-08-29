@@ -4,11 +4,13 @@ export type MaterialKind = "image" | "video";
 export type ExportMode = "video" | "audio" | "combined";
 export type ExportFailureStage = "request" | "processing" | "download";
 export type ExportFailureReason = "version_changed" | "queue_timeout" | "render_timeout" | "api_error" | "unknown";
+export type AnalyticsLanguage = "en" | "ru" | "sr-Latn" | "es";
 
 export interface AnalyticsEventMap {
   readonly "page viewed": { readonly page: string };
   readonly "account created": Record<string, never>;
   readonly "account signed in": Record<string, never>;
+  readonly "profile language changed": { readonly language: AnalyticsLanguage };
   readonly "story created": Record<string, never>;
   readonly "scene created": Record<string, never>;
   readonly "material uploaded": { readonly material_kind: MaterialKind };
@@ -30,6 +32,7 @@ export const analyticsEventPropertyNames = {
   "page viewed": ["surface", "page"],
   "account created": ["surface"],
   "account signed in": ["surface"],
+  "profile language changed": ["surface", "language"],
   "story created": ["surface"],
   "scene created": ["surface"],
   "material uploaded": ["surface", "material_kind"],

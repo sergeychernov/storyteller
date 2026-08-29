@@ -24,6 +24,7 @@ test("stays disabled without an API key", () => {
   assert.equal(analytics.initialize({ apiKey: "  ", serverZone: "EU", surface: "site" }), false);
   analytics.setUser("profile-id");
   analytics.track("account signed in", {});
+  analytics.track("profile language changed", { language: "es" });
   analytics.flush();
   assert.deepEqual(calls, []);
 });
@@ -33,12 +34,14 @@ test("adds the surface and never needs content identifiers", () => {
   assert.equal(analytics.initialize({ apiKey: "public-key", serverZone: "EU", surface: "story-web" }), true);
   analytics.setUser("profile-id");
   analytics.track("material uploaded", { material_kind: "video" });
+  analytics.track("profile language changed", { language: "es" });
   analytics.track("scene render succeeded", { export_mode: "combined" });
 
   assert.deepEqual(calls, [
     { name: "initialize", arguments: ["public-key", "EU", undefined] },
     { name: "setUserId", arguments: ["profile-id"] },
     { name: "track", arguments: ["material uploaded", { surface: "story-web", material_kind: "video" }] },
+    { name: "track", arguments: ["profile language changed", { surface: "story-web", language: "es" }] },
     { name: "track", arguments: ["scene render succeeded", { surface: "story-web", export_mode: "combined" }] },
   ]);
 });

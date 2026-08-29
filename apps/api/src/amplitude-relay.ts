@@ -9,6 +9,7 @@ const ingestionEndpoints: Readonly<Record<AnalyticsServerZone, string>> = {
 };
 const allowedSurfaces = new Set(["site", "story-web", "clip-web"]);
 const allowedMaterialKinds = new Set(["image", "video"]);
+const allowedLanguages = new Set(["en", "ru", "sr-Latn", "es"]);
 const allowedExportModes = new Set(["video", "audio", "combined"]);
 const allowedFailureStages = new Set(["request", "processing", "download"]);
 const allowedFailureReasons = new Set(["version_changed", "queue_timeout", "render_timeout", "api_error", "unknown"]);
@@ -157,6 +158,9 @@ function sanitizeEventProperties(eventType: AnalyticsEventName, value: unknown):
   }
   if (eventType === "material uploaded" && !allowedMaterialKinds.has(value.material_kind as string)) {
     return { ok: false, message: "analytics material kind is invalid" };
+  }
+  if (eventType === "profile language changed" && !allowedLanguages.has(value.language as string)) {
+    return { ok: false, message: "analytics language is invalid" };
   }
   if (eventType.includes("render") || eventType.includes("export")) {
     if (!allowedExportModes.has(value.export_mode as string)) return { ok: false, message: "analytics export mode is invalid" };

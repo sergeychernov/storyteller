@@ -35,24 +35,39 @@ export function useLocalization(): LocalizationContextValue {
 
 interface LanguageSwitcherProps {
   readonly destinations?: Readonly<Partial<Record<Locale, string>>>;
+  readonly onLocaleChange?: ((locale: Locale) => Promise<void>) | undefined;
 }
 
-export function LanguageSwitcher({ destinations }: LanguageSwitcherProps) {
+export function LanguageSwitcher({ destinations, onLocaleChange }: LanguageSwitcherProps) {
   const { locale, setLocale, t } = useLocalization();
   const navigate = useNavigate();
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
-  function changeLocale(nextLocale: Locale) {
-    setLocale(nextLocale);
-    const destination = destinations?.[nextLocale];
-    if (destination) navigate(destination);
+  async function changeLocale(nextLocale: Locale) {
+    if (nextLocale === locale) return;
+    setIsSaving(true);
+    setSaveFailed(false);
+    try {
+      await onLocaleChange?.(nextLocale);
+      setLocale(nextLocale);
+      const destination = destinations?.[nextLocale];
+      if (destination) navigate(destination);
+    } catch {
+      setSaveFailed(true);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
     <label className={styles.languageSwitcher}>
       <span>{t("language.label")}</span>
-      <select aria-label={t("language.label")} value={locale} onChange={(event) => changeLocale(event.target.value as Locale)}>
+      <select aria-label={t("language.label")} aria-busy={isSaving} disabled={isSaving} value={locale}
+        onChange={(event) => { void changeLocale(event.target.value as Locale); }}>
         {localeOptions.map((option) => <option key={option.locale} value={option.locale}>{option.label}</option>)}
       </select>
+      {saveFailed && <span className={styles.languageError} role="alert">{t("language.saveError")}</span>}
     </label>
   );
 }

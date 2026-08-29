@@ -1,5 +1,5 @@
 import { createCipheriv, randomBytes } from "node:crypto";
-import type { PlatformCredential, PlatformProvider, Profile, Story } from "@storyteller/domain";
+import type { PlatformCredential, PlatformProvider, Profile, ProfileUpdate, Story } from "@storyteller/domain";
 import { ApplicationError, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
 import { sceneMaterialSchema, storySchema } from "@storyteller/schemas";
 import { Pool, type PoolClient } from "pg";
@@ -14,9 +14,9 @@ export class PostgresStoryRepository implements StoryRepository {
     try {
       await client.query("BEGIN");
       const result = await client.query(
-        `INSERT INTO profiles (id, name, email, password_hash) VALUES ($1, $2, $3, $4)
+        `INSERT INTO profiles (id, name, email, language, password_hash) VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (email) DO NOTHING RETURNING id`,
-        [profile.id, profile.name, profile.email, profile.passwordHash],
+        [profile.id, profile.name, profile.email, profile.language, profile.passwordHash],
       );
       if (result.rowCount === 0) { await client.query("ROLLBACK"); return false; }
       await insertSession(client, session);
@@ -30,7 +30,7 @@ export class PostgresStoryRepository implements StoryRepository {
 
   async findProfileAuthenticationByEmail(email: string): Promise<ProfileAuthentication | undefined> {
     const result = await this.pool.query<ProfileRow & { password_hash: string }>(
-      "SELECT id, name, email, password_hash FROM profiles WHERE email = $1", [email],
+      "SELECT id, name, email, language, password_hash FROM profiles WHERE email = $1", [email],
     );
     const row = result.rows[0];
     return row && { ...mapProfile(row), passwordHash: row.password_hash };
@@ -38,14 +38,15 @@ export class PostgresStoryRepository implements StoryRepository {
   async createSession(session: SessionRecord): Promise<void> { await insertSession(this.pool, session); }
   async findProfileBySession(tokenHash: string, now: Date): Promise<Profile | undefined> {
     const result = await this.pool.query<ProfileRow>(
-      `SELECT p.id, p.name, p.email FROM sessions s JOIN profiles p ON p.id = s.profile_id
+      `SELECT p.id, p.name, p.email, p.language FROM sessions s JOIN profiles p ON p.id = s.profile_id
        WHERE s.token_hash = $1 AND s.expires_at > $2`, [tokenHash, now],
     );
     return result.rows[0] && mapProfile(result.rows[0]);
   }
-  async updateProfile(profileId: string, name: string): Promise<Profile> {
+  async updateProfile(profileId: string, input: ProfileUpdate): Promise<Profile> {
     const result = await this.pool.query<ProfileRow>(
-      "UPDATE profiles SET name = $2, updated_at = now() WHERE id = $1 RETURNING id, name, email", [profileId, name],
+      `UPDATE profiles SET name = COALESCE($2, name), language = COALESCE($3, language), updated_at = now()
+       WHERE id = $1 RETURNING id, name, email, language`, [profileId, input.name ?? null, input.language ?? null],
     );
     const row = result.rows[0];
     if (!row) throw new ApplicationError("profile not found", 404);
@@ -177,9 +178,9 @@ function encryptSecret(secret: string, key: Buffer): string {
   const ciphertext = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
   return `${iv.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}.${ciphertext.toString("base64url")}`;
 }
-interface ProfileRow { id: string; name: string; email: string }
+interface ProfileRow { id: string; name: string; email: string; language: Profile["language"] }
 interface CredentialRow { id: string; provider: PlatformProvider; external_account_id: string | null; secret_hint: string }
-function mapProfile(row: ProfileRow): Profile { return { id: row.id, name: row.name, email: row.email }; }
+function mapProfile(row: ProfileRow): Profile { return { id: row.id, name: row.name, email: row.email, language: row.language }; }
 function mapCredential(row: CredentialRow): PlatformCredentialSummary {
   return { id: row.id, provider: row.provider, secretHint: row.secret_hint, ...(row.external_account_id === null ? {} : { externalAccountId: row.external_account_id }) };
 }

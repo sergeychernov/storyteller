@@ -1,4 +1,5 @@
 .languageSwitcher {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -17,8 +18,26 @@
   font-size: 11px;
 }
 
+.languageError {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  right: 0;
+  width: max-content;
+  max-width: min(230px, 80vw);
+  padding: 8px 10px;
+  border: 1px solid #75493f;
+  border-radius: 7px;
+  color: #ffe6df;
+  background: #3a2520;
+  font-size: 11px;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
 @media (max-width: 800px) {
-  .languageSwitcher > span {
+  .languageSwitcher > span:not(.languageError) {
     display: none;
   }
 }

@@ -20,7 +20,7 @@ test("PostgreSQL: release migration works on a fresh database, concurrently and 
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 0);
 });
 
-test("PostgreSQL: migration 4 preserves legacy rows and accepts old API and worker writes", options, async (context) => {
+test("PostgreSQL: migrations 4 and 5 preserve legacy rows and accept old API and worker writes", options, async (context) => {
   const { pool } = await createPostgresTestPool(context);
   await applyVersion3(pool);
   const profileId = randomUUID(), storyId = randomUUID(), sceneId = randomUUID(), renderId = randomUUID();
@@ -38,6 +38,8 @@ test("PostgreSQL: migration 4 preserves legacy rows and accepts old API and work
   const before = (await pool.query("SELECT * FROM scene_renders WHERE id = $1", [renderId])).rows[0];
 
   await migrateDatabase(pool);
+  assert.equal((await pool.query("SELECT language FROM profiles WHERE id = $1", [profileId])).rows[0].language, "en");
+  await assert.rejects(pool.query("UPDATE profiles SET language = 'unsupported' WHERE id = $1", [profileId]), { code: "23514" });
   assert.deepEqual((await pool.query("SELECT * FROM scene_renders WHERE id = $1", [renderId])).rows[0], { ...before, content_hash: null });
   assert.deepEqual((await pool.query("SELECT payload FROM stories WHERE id = $1", [storyId])).rows[0].payload, payload);
   const nextId = randomUUID();

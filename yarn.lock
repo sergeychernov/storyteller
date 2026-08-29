@@ -3218,6 +3218,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@storyteller/auth-client@workspace:packages/auth-client"
   dependencies:
+    "@storyteller/domain": "workspace:*"
     "@types/react": "npm:19.2.2"
     react: "npm:19.2.3"
   languageName: unknown
@@ -3249,6 +3250,8 @@ __metadata:
 "@storyteller/localization@workspace:*, @storyteller/localization@workspace:packages/localization":
   version: 0.0.0-use.local
   resolution: "@storyteller/localization@workspace:packages/localization"
+  dependencies:
+    "@storyteller/domain": "workspace:*"
   languageName: unknown
   linkType: soft
 

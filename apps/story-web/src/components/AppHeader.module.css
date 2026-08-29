@@ -48,14 +48,26 @@
   box-shadow: 0 0 8px #bde958;
 }
 
+.avatarLink {
+  display: block;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+
+.avatarLink:focus-visible { outline: 2px solid #d9fb76; outline-offset: 3px; }
+
 .avatar {
   display: grid;
   place-items: center;
   width: 34px;
   height: 34px;
+  box-sizing: border-box;
+  border: 1px solid #4c4c44;
   border-radius: 50%;
   color: #222;
   background: #e7e3d9;
+  object-fit: cover;
   font-size: 11px;
 }
 

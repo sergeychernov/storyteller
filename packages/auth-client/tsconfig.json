@@ -6,5 +6,6 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM"]
   },
+  "references": [{ "path": "../domain" }],
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }
