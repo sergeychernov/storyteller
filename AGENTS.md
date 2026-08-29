@@ -1,5 +1,10 @@
 # Storyteller agent guidelines
 
+## Git changes and review
+
+- Leave completed changes uncommitted so the user can review and commit them. Never run `git commit` unless the user explicitly authorizes that specific commit after reviewing the current changes; a request to implement, finish, deploy, or mark a task done is not commit authorization.
+- Never run `git push` unless the user explicitly authorizes that specific push. Commit permission does not imply push permission, and prior permission does not carry over to later commits or pushes. Prefer handing off the working-tree diff, verification results, and a suggested commit message so the user can commit and push personally.
+
 ## Product roadmap maintenance
 
 - Use the terms **product roadmap** and **milestone** in documentation and user communication. Milestones describe product outcomes with completion criteria; P0, P1, P2, and later IDs identify these milestones, not priority levels.
