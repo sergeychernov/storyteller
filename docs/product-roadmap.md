@@ -115,16 +115,16 @@ F19.1 F19.2 F19.3 F19.4 F19.5 F19.6 F19.7 F19.8
 
 | № | ID | Интерфейс | Задача |
 | --- | --- | --- | --- |
-| 1 | B17 | Web | Измерять продуктовый путь |
-| 2 | B13 | Web | Определить и применять права пользователей |
-| 3 | B14 | Web | Наблюдать пользователей в мини-админке |
-| 4 | B15 | Web | Управлять ручным доступом в админке |
-| 5 | F01.2 | Web | Редактировать общий таймлайн |
-| 6 | F02.2 | Web | Дополнить фото-анимацию |
-| 7 | F03.1 | Web | Рендерить коллаж из 2–6 фото |
-| 8 | F03.2 | Web | Рендерить карточки внахлёст |
-| 9 | F02.1 | Web | Добавить титры |
-| 10 | F11 | Web | Создавать нестандартные макеты |
+| 1 | B13 | Web | Определить и применять права пользователей |
+| 2 | B14 | Web | Наблюдать пользователей в мини-админке |
+| 3 | B15 | Web | Управлять ручным доступом в админке |
+| 4 | F01.2 | Web | Редактировать общий таймлайн |
+| 5 | F02.2 | Web | Дополнить фото-анимацию |
+| 6 | F03.1 | Web | Рендерить коллаж из 2–6 фото |
+| 7 | F03.2 | Web | Рендерить карточки внахлёст |
+| 8 | F02.1 | Web | Добавить титры |
+| 9 | F11 | Web | Создавать нестандартные макеты |
+| 10 | F12.1 | Web | Накладывать фото-карточки |
 
 <!-- product-roadmap-next:end -->
 
@@ -170,7 +170,7 @@ F19.1 F19.2 F19.3 F19.4 F19.5 F19.6 F19.7 F19.8
 | B14 | Наблюдать пользователей в мини-админке | ![P0](assets/product-roadmap/next-P0.svg) | n/a | n/a | [Read-only этап](access-control-admin-plan.md#первая-read-only-версия-b14): отдельные `apps/admin`, container/service и `admin.makeitastory.app`; общая с основным Web opaque API-сессия без второго user store, прямого DB-доступа и передачи token в URL. Список пользователей, безопасные activity-агрегаты, session metadata, audit и access explanation; `401` без сессии, `403` без административного права. Реализация, DNS и Railway service не создавались. |
 | B15 | Управлять ручным доступом в админке | ![P0](assets/product-roadmap/next-P0.svg) | n/a | n/a | [Управляющий этап](access-control-admin-plan.md#управление-b15): роли, когорты, временные membership, персональные allow/deny и limit overrides с preview, обязательной причиной, expiry, audit, отзывом сессий и защитой от self-lockout. Платные подписки, цены и usage остаются F17. Реализация не начата. |
 | B16 | Разделить публичный сайт и продуктовые Web-приложения | ![done](assets/product-roadmap/done.svg "P0") | n/a | n/a | [План, архитектура и запись реализации](frontend-products-and-clip-studio-plan.md#b16-implementation-record--29082026): независимые `apps/site`, `apps/story-web`, `apps/clip-web` собираются отдельно и обслуживаются одним host на `/`, `/app/stories/*`, `/app/clips/*`. Общий `packages/auth-client` восстанавливает origin-сессию и ограничивает `continue`; старые `/stories/*` сохраняют ID/query через 308. Публичные EN/RU/SR URL, SEO/404 и Story Studio перенесены без изменения продукта; app HTML/headers — `noindex`, assets и SPA fallbacks изолированы. Проверены shared auth, host routing/headers/redirects, полный test suite, три production-сборки и браузер на 1280/390/320 px. Railway production build/start/watch settings сохранены и прочитаны обратно 29.08.2026; deployment этой незакоммиченной версии не заявляется. Clip показывает только честную локализованную оболочку и не закрывает F18/F19. |
-| B17 | Измерять продуктовый путь | ![P0](assets/product-roadmap/next-P0.svg) | P1 | P2 | [Контракт аналитики](product-analytics.md): общий типизированный `packages/analytics`, один Amplitude project и безопасные page/account/story/scene/material/render/export outcome-события. Web Site, Story Studio и Clip shell подключены; пользователь определяется только по `profile.id`, произвольный autocapture, IP enrichment, remote config и replay отключены, отсутствие ключа безопасно выключает SDK. Проверены TypeScript и 5 unit-тестов адаптера, включая awaitable flush перед межпродуктовой навигацией; сбой аналитики не блокирует вход. Признак `accountCreated` теперь формирует серверный register/login outcome, а API/client integration-тест подтверждает, что повторный sign-in с заполненным именем не считается регистрацией. Локальный browser key/US zone сохранены в игнорируемом `.env.local`. Production-переменные `VITE_AMPLITUDE_API_KEY` и `VITE_AMPLITUDE_SERVER_ZONE` записаны в Railway `@storyteller/web`, а их имена подтверждены read-back без раскрытия значения; redeploy отложен до публикации кода. Осталось проверить реальную доставку и user merge в Amplitude Live Events, создать стартовый dashboard и сохранить/read-back production watch path; до этого Web остаётся P0. Mobile/MCP не подключены. |
+| B17 | Измерять продуктовый путь | ![done](assets/product-roadmap/done.svg "P0") | P1 | P2 | [Контракт аналитики](product-analytics.md): общий типизированный `packages/analytics`, безопасные outcome-события и first-party `/analytics/amplitude` relay с фиксированным upstream, project key, лимитом batch и allowlist событий/свойств. Web Site, Story Studio и Clip shell подключены; identity lifecycle связывает анонимный device с `profile.id` и очищается при logout, а unit/integration-тесты покрывают user merge, reset, register/login outcome и awaitable flush перед навигацией. Произвольный autocapture, IP enrichment, remote config и replay отключены; PII, пользовательский контент и resource ID запрещены контрактом и relay. Railway API key/US zone и API/Web watch paths сохранены и прочитаны обратно без раскрытия секрета; production API, Web и Worker успешно развёрнуты из `58215d7`. В Chrome подтверждён `POST /analytics/amplitude` 200 с production Story Studio, а изолированный четырёхшаговый batch принят как 4 события. В Amplitude сохранены воронка `Web activation · account to first render` (account → story → material → first render, 1-day window), недельный retention `Web retention · after first render` и dashboard `Storyteller · Web product path`; на синтетическом профиле воронка показывает 100% и одного пользователя. Web выполнен; Mobile/MCP не подключены и сохраняют P1/P2. |
 
 
 Основания для done: [общая Web-сессия](../packages/auth-client/src/index.ts), [библиотека историй](../apps/story-web/src/components/StoryLibrary.tsx), [операции редактора](../apps/story-web/src/components/editor/use-story-editor.ts), [экспорт сцены](../apps/story-web/src/components/editor/use-scene-download.ts), [мобильная локализация](../apps/mobile/app/localization.tsx). [Мобильный главный экран](../apps/mobile/app/index.tsx) содержит демонстрационные данные, [MCP](../apps/mcp/src/index.ts) пока не предоставляет прикладных инструментов.
@@ -222,7 +222,7 @@ F19.1 F19.2 F19.3 F19.4 F19.5 F19.6 F19.7 F19.8
 | F10.1 | Отделить медиаархив от сцен | P3 | P3 | P3 | Повторное использование без копий, поиск дублей по хешу; удаление сцены не удаляет архивный оригинал. Не завершена; по решению пользователя перенесена после MVP: повторная загрузка с устройства достаточна для P0–P2. |
 | F10.2 | Вести редакционный журнал | P3 | P3 | P3 | Время съёмки с источником даты, время загрузки и монтажный порядок раздельны; комментарии, контекст и исправления сохраняются. Не завершена; перенесена после MVP вместе с обязательной зависимостью F10.1. |
 | F11 | Создавать нестандартные макеты | ![P0](assets/product-roadmap/next-P0.svg) | P1 | P2 | Варианты геометрии, ручные ячейки, иерархия, направление и область титра; сохранение макета или разбиение избытка фото на сцены без потерь. Выбор custom пока не реализует эту возможность. |
-| F12.1 | Накладывать фото-карточки | P0 | P1 | P2 | Карточки поверх фото/видео и на финальном стоп-кадре; тайминг, направление, размер и финальная позиция, корректная длина звука. |
+| F12.1 | Накладывать фото-карточки | ![P0](assets/product-roadmap/next-P0.svg) | P1 | P2 | Карточки поверх фото/видео и на финальном стоп-кадре; тайминг, направление, размер и финальная позиция, корректная длина звука. |
 | F12.2 | Объединять сцены в группы | P0 | P1 | P2 | Переиспользуемый блок с явным порядком и границами, общим титром и озвучкой; группировка сама не меняет звук. |
 | F13 | Предлагать сюжет, титры и тексты | P4 | P4 | P4 | Редакционный AI-помощник после подключения монетизации F17: предложения сюжета, порядка/длительностей и титров с вариантами тона, описания/тегов. Использует таймлайн, материалы, язык профиля B12 и необязательный контекст F01.1; ручная правка до применения, без дублирования материалов. В MVP тексты и монтаж редактируются вручную. |
 
