@@ -6,6 +6,7 @@ import { createStory, listStories, type AuthSession } from "../api.js";
 import { useLocalization } from "@storyteller/web-ui";
 import feedbackStyles from "@storyteller/web-ui/feedback.module.css";
 import typographyStyles from "@storyteller/web-ui/typography.module.css";
+import { preloadStoryPage } from "../pages/LazyStoryPage.js";
 import { StoryCard } from "./StoryCard.js";
 import styles from "./StoryLibrary.module.css";
 import { useCapability } from "../access-control.js";
@@ -26,6 +27,7 @@ export function StoryLibrary({ session }: { readonly session: AuthSession }) {
     mutationFn: () => createStory(session.accessToken, title),
     onSuccess: async (story) => {
       analytics.track("story created", {});
+      preloadStoryPage();
       setTitle("");
       await queryClient.invalidateQueries({ queryKey: ["stories", session.profile.id] });
       navigate(`/${story.id}`);

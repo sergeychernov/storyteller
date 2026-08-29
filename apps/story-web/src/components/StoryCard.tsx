@@ -2,12 +2,13 @@ import type { TranslationKey } from "@storyteller/localization";
 import { Link } from "react-router-dom";
 import type { StorySummary } from "../api.js";
 import { useLocalization } from "@storyteller/web-ui";
+import { preloadStoryPage } from "../pages/LazyStoryPage.js";
 import styles from "./StoryCard.module.css";
 
 export function StoryCard({ story }: { readonly story: StorySummary }) {
   const { t } = useLocalization();
   return (
-    <Link className={styles.card} to={`/${story.id}`}>
+    <Link className={styles.card} to={`/${story.id}`} onPointerEnter={preloadStoryPage} onFocus={preloadStoryPage}>
       <span className={styles.preview}>{story.title?.slice(0, 1).toUpperCase()}</span>
       <span className={styles.info}>
         <strong>{story.title}</strong>

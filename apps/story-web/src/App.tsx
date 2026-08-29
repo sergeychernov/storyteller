@@ -6,8 +6,8 @@ import type { Locale } from "@storyteller/localization";
 import { AppHeader } from "./components/AppHeader.js";
 import { ExternalRedirect, useLocalization } from "@storyteller/web-ui";
 import { AuthenticatedLayout } from "./layouts/AuthenticatedLayout.js";
+import { LazyStoryPage } from "./pages/LazyStoryPage.js";
 import { StoriesPage } from "./pages/StoriesPage.js";
-import { StoryPage } from "./pages/StoryPage.js";
 import { usePersistentSession } from "./use-persistent-session.js";
 import { useStoryWebAnalytics } from "./use-story-web-analytics.js";
 import { AccessProvider, hasCapability } from "./access-control.js";
@@ -47,8 +47,8 @@ export function App() {
       <Routes>
         <Route element={<AuthenticatedLayout />}>
           <Route index element={<StoriesPage session={session} />} />
-          <Route path=":storyId" element={<StoryPage session={session} />} />
-          <Route path=":storyId/scenes/:sceneId" element={<StoryPage session={session} />} />
+          <Route path=":storyId" element={<LazyStoryPage session={session} />} />
+          <Route path=":storyId/scenes/:sceneId" element={<LazyStoryPage session={session} />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
