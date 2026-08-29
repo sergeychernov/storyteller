@@ -1,8 +1,9 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
-  addMaterial, addScene, configureScene, createStory, materialStorageKeys, removeMaterial, removeScene, reorderMaterials, replaceMaterial,
-  type FocusPoint, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
+  addMaterial, addScene, buildStoryTimeline, configureScene, createStory, DomainError, materialStorageKeys, moveSceneMaterials, removeMaterial, removeScene, reorderMaterials, reorderScenes, replaceMaterial,
+  type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type SceneMaterial, type SceneMotion, type Story,
 } from "@storyteller/domain";
+import { timelineDurationLimits } from "./timeline-formats.js";
 
 export interface ProfileAuthentication extends Profile { readonly passwordHash: string }
 export interface PlatformCredentialSummary {
@@ -106,6 +107,26 @@ export class StoryApplication {
   async createScene(profileId: string, storyId: string): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => addScene(story, randomUUID()));
   }
+  async getStoryTimeline(profileId: string, storyId: string) {
+    return buildStoryTimeline(await this.getStory(profileId, storyId), timelineDurationLimits);
+  }
+  async reorderStoryScenes(profileId: string, storyId: string, sceneIds: readonly string[], expectedRevision: number): Promise<Story> {
+    const story = await this.getEditableTimelineStory(profileId, storyId, expectedRevision);
+    return this.saveTimelineChange(() => reorderScenes(story, sceneIds));
+  }
+  async moveSceneMaterials(profileId: string, storyId: string, sourceSceneId: string, input: MoveSceneMaterialsInput & {
+    readonly expectedRevision: number;
+  }): Promise<Story> {
+    const story = await this.getEditableTimelineStory(profileId, storyId, input.expectedRevision);
+    const source = story.scenes.find(({ id }) => id === sourceSceneId);
+    if (!source || !story.scenes.some(({ id }) => id === input.targetSceneId)) {
+      throw new ApplicationError("source or target scene not found in this story", 404, "scene_not_found");
+    }
+    if (input.materialIds.some((id) => !source.materials.some((material) => material.id === id))) {
+      throw new ApplicationError("material not found in source scene", 404, "material_not_found");
+    }
+    return this.saveTimelineChange(() => moveSceneMaterials(story, sourceSceneId, input));
+  }
   async deleteScene(profileId: string, storyId: string, sceneId: string, expectedRevision?: number): Promise<Story> {
     const story = await this.getStory(profileId, storyId);
     const scene = story.scenes.find(({ id }) => id === sceneId);
@@ -168,6 +189,29 @@ export class StoryApplication {
     const story = await this.repository.findStory(profileId, storyId);
     if (!story) throw new ApplicationError(`story not found: ${storyId}`, 404);
     const changed = change(story);
+    await this.repository.updateStory(changed);
+    return changed;
+  }
+
+  private async getEditableTimelineStory(profileId: string, storyId: string, expectedRevision: number): Promise<Story> {
+    const story = await this.getStory(profileId, storyId);
+    if (story.revision !== expectedRevision) {
+      throw new ApplicationError("story has changed; reload it before editing the timeline", 409, "story_revision_conflict");
+    }
+    if (story.status !== "draft" && story.status !== "ready") {
+      throw new ApplicationError(`story cannot be edited while ${story.status}`, 409, "story_not_editable");
+    }
+    return story;
+  }
+
+  private async saveTimelineChange(change: () => Story): Promise<Story> {
+    let changed: Story;
+    try { changed = change(); }
+    catch (error) {
+      if (error instanceof DomainError) throw new ApplicationError(error.message, 422, "invalid_timeline_edit");
+      throw error;
+    }
+    // The repository's compare-and-swap protects the gap between read and write.
     await this.repository.updateStory(changed);
     return changed;
   }

@@ -7,6 +7,15 @@ export const sceneRenderStatuses = ["queued", "running", "ready", "failed", "can
 export type SceneRenderStatus = (typeof sceneRenderStatuses)[number];
 
 export interface StillImageRenderInput {
+  /** A frame is a separate derived artifact of the base visual composition. */
+  readonly artifact?: "scene-frame";
+  readonly frame?: {
+    readonly rendererVersion: number;
+    readonly format: "png";
+    readonly compressionLevel: number;
+    readonly intermediateCodec: "h264-lossless";
+    readonly layerPolicy: "base-visual";
+  };
   readonly dependencies?: readonly RenderDependency[];
   readonly rendererId: "still-image";
   readonly rendererVersion: number;
@@ -198,12 +207,29 @@ export class PostgresSceneRenderQueue implements SceneRenderQueue {
 
 export function sceneRenderStorageKey(job: Pick<SceneRenderJob, "profileId" | "storyId" | "sceneId" | "inputHash"> & { input?: SceneRenderInput }, attemptId?: string): string {
   const extension = job.input ? sceneRenderFileType(job.input).extension : "mp4";
-  return `projects/${job.profileId}/${job.storyId}/scenes/${job.sceneId}/renders/${job.inputHash}${attemptId ? `-${attemptId}` : ""}.${extension}`;
+  const collection = job.input?.artifact === "scene-frame" ? "frames" : "renders";
+  return `projects/${job.profileId}/${job.storyId}/scenes/${job.sceneId}/${collection}/${job.inputHash}${attemptId ? `-${attemptId}` : ""}.${extension}`;
 }
 
 export function sceneRenderFileType(input: SceneRenderInput) {
+  if (input.artifact === "scene-frame") return { extension: "png", mimeType: "image/png" } as const;
   return input.rendererId === "video" && input.mode === "audio"
-    ? { extension: "m4a", mimeType: "audio/mp4" } : { extension: "mp4", mimeType: "video/mp4" };
+    ? { extension: "m4a", mimeType: "audio/mp4" } as const : { extension: "mp4", mimeType: "video/mp4" } as const;
+}
+
+export function isSceneFrameInput(input: SceneRenderInput): boolean {
+  return input.artifact === "scene-frame";
+}
+
+export function sceneFrameDependency(frame: Pick<SceneRenderJob, "sceneId" | "inputHash" | "storageKey" | "contentHash">): RenderDependency {
+  if (!frame.storageKey || !frame.contentHash) throw new Error("ready scene frame storage and content hash are required");
+  return {
+    role: "scene-frame",
+    storageKey: frame.storageKey,
+    contentHash: frame.contentHash,
+    parents: [],
+    parameters: { sceneId: frame.sceneId, inputHash: frame.inputHash },
+  };
 }
 
 function mapRenderRow(row: RenderRow): SceneRenderJob {

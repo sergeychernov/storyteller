@@ -2,7 +2,7 @@ import type { Locale } from "@storyteller/localization";
 
 const copies = {
   en: {
-    scenes: "Scenes", addScene: "Add scene", scene: "Scene", emptyScene: "Start by adding a photo or video",
+    scenes: "Scenes", addScene: "Add scene", scene: "Scene", timeline: "Timeline", editorModes: "Editor mode", emptyScene: "Start by adding a photo or video",
     materials: "Materials", addMaterial: "Upload materials", uploadingMaterials: "Uploading {{count}}…",
     portrait: "Portrait", landscape: "Landscape", silent: "Silent", audioUnclassified: "Audio needs labels", voice: "Voice", music: "Music", ambient: "Background sound",
     layout: "Composition", layoutHint: "Options follow the orientation sequence", settings: "Settings", motion: "Movement", duration: "Duration",
@@ -14,6 +14,10 @@ const copies = {
     zoomIn: "Zoom in", zoomOut: "Zoom out", panLeft: "Right → left", panRight: "Left → right", noMotion: "No added motion",
     creatingScene: "Creating scene…", emptyPipelineHint: "No scenes yet. Add one in the pipeline on the left.",
     sceneCreateError: "Could not create the scene. Check that the API is running and try again.", operationError: "The change was not saved. Try again.",
+    sceneOrderChanged: "The story changed elsewhere. The previous order was restored and the current story was loaded.",
+    sceneOrderError: "The scene order was not saved. The previous order was restored.",
+    materialMoveChanged: "The story changed elsewhere. The material was left in its original scene and the current story was loaded.",
+    materialMoveError: "The material was not moved. It remains in its original scene.",
     uploadTooLarge: "The file is larger than the allowed upload size.", uploadUnsupported: "This photo or video format is not supported.",
     uploadUnreadable: "The photo or video could not be read. Check that the file plays and try again.",
     fileInfo: "File information", fileName: "Name", fileSize: "Size", fileFormat: "Format", fileDimensions: "Dimensions", fileDuration: "Duration", sourceAudio: "Source audio",
@@ -32,7 +36,8 @@ const copies = {
     sceneDeleteBlocked: "The story cannot be edited in its current state. Close this dialog and try again later.",
     sceneDeleteError: "The scene was not deleted. You can try again.",
     sceneDeleteUnverified: "Could not verify whether the scene was deleted. Check its status before trying again.", checkSceneDeletion: "Check status",
-    materialEditorHint: "Non-destructive editing tools will be added here.", dragMaterial: "Reorder material {{number}}", dragMaterialHint: "Drag to reorder. Use the arrow keys with a keyboard.", close: "Close",
+    materialEditorHint: "Non-destructive editing tools will be added here.", dragMaterial: "Drag material {{number}}", dragMaterialHint: "Drag to reorder or drop on another scene. The arrow keys reorder within this scene.",
+    dragScene: "Reorder scene {{number}}", dragSceneHint: "Drag to reorder. Use the up and down arrow keys with a keyboard.", close: "Close",
     createScene: "Create scene", createCover: "Create cover", coverEditorPending: "The cover will open in a separate editor later.",
     storyStart: "Start of the story", storyEnd: "End of the story", noScenes: "No scenes yet", sceneEdgeHint: "Continue the story or prepare its cover.",
     sceneCarousel: "Story scenes", swipeScenes: "Swipe left or right to change scenes", sceneTools: "Scene tools",
@@ -50,7 +55,7 @@ const copies = {
     renderSceneTimeout: "Rendering is taking too long. Try downloading again shortly.",
   },
   ru: {
-    scenes: "Сцены", addScene: "Добавить сцену", scene: "Сцена", emptyScene: "Добавьте фотографию или видео",
+    scenes: "Сцены", addScene: "Добавить сцену", scene: "Сцена", timeline: "Таймлайн", editorModes: "Режим редактора", emptyScene: "Добавьте фотографию или видео",
     materials: "Материалы", addMaterial: "Загрузить материалы", uploadingMaterials: "Загружаем: {{count}}…",
     portrait: "Портрет", landscape: "Альбом", silent: "Без звука", audioUnclassified: "Звук нужно разметить", voice: "Голос", music: "Музыка", ambient: "Фоновый звук",
     layout: "Композиция", layoutHint: "Варианты зависят от последовательности ориентаций", settings: "Настройки", motion: "Движение", duration: "Длительность",
@@ -62,6 +67,10 @@ const copies = {
     zoomIn: "Приближение", zoomOut: "Отдаление", panLeft: "Справа → налево", panRight: "Слева → направо", noMotion: "Без движения",
     creatingScene: "Создаём сцену…", emptyPipelineHint: "Сцен пока нет. Добавьте сцену в pipeline слева.",
     sceneCreateError: "Не удалось создать сцену. Проверьте, что API запущен, и попробуйте ещё раз.", operationError: "Изменение не сохранилось. Попробуйте ещё раз.",
+    sceneOrderChanged: "История изменилась в другом окне. Прежний порядок восстановлен, актуальная история загружена.",
+    sceneOrderError: "Порядок сцен не сохранился. Прежний порядок восстановлен.",
+    materialMoveChanged: "История изменилась в другом окне. Материал оставлен в исходной сцене, актуальная история загружена.",
+    materialMoveError: "Материал не перенесён и остался в исходной сцене.",
     uploadTooLarge: "Файл превышает допустимый размер загрузки.", uploadUnsupported: "Этот формат фотографии или видео не поддерживается.",
     uploadUnreadable: "Не удалось прочитать фотографию или видео. Проверьте, что файл воспроизводится, и попробуйте ещё раз.",
     fileInfo: "Информация о файле", fileName: "Название", fileSize: "Размер", fileFormat: "Формат", fileDimensions: "Разрешение", fileDuration: "Длительность", sourceAudio: "Исходный звук",
@@ -80,7 +89,8 @@ const copies = {
     sceneDeleteBlocked: "Сейчас эту историю нельзя редактировать. Закройте окно и попробуйте позже.",
     sceneDeleteError: "Сцена не удалена. Можно попробовать ещё раз.",
     sceneDeleteUnverified: "Не удалось проверить, удалена ли сцена. Проверьте её состояние перед повторной попыткой.", checkSceneDeletion: "Проверить состояние",
-    materialEditorHint: "Здесь появятся инструменты неразрушающего редактирования.", dragMaterial: "Изменить порядок материала {{number}}", dragMaterialHint: "Перетащите для изменения порядка. С клавиатуры используйте стрелки.", close: "Закрыть",
+    materialEditorHint: "Здесь появятся инструменты неразрушающего редактирования.", dragMaterial: "Перетащить материал {{number}}", dragMaterialHint: "Меняйте порядок или перенесите материал на другую сцену. Стрелки меняют порядок внутри текущей сцены.",
+    dragScene: "Изменить порядок сцены {{number}}", dragSceneHint: "Перетащите для изменения порядка. С клавиатуры используйте стрелки вверх и вниз.", close: "Закрыть",
     createScene: "Создать сцену", createCover: "Создать обложку", coverEditorPending: "Обложка позже откроется в отдельном редакторе.",
     storyStart: "Начало истории", storyEnd: "Конец истории", noScenes: "Сцен пока нет", sceneEdgeHint: "Продолжите историю или подготовьте её обложку.",
     sceneCarousel: "Сцены истории", swipeScenes: "Смахните влево или вправо, чтобы сменить сцену", sceneTools: "Инструменты сцены",
@@ -98,7 +108,7 @@ const copies = {
     renderSceneTimeout: "Рендер занимает слишком много времени. Попробуйте скачать сцену чуть позже.",
   },
   "sr-Latn": {
-    scenes: "Scene", addScene: "Dodaj scenu", scene: "Scena", emptyScene: "Dodajte fotografiju ili video",
+    scenes: "Scene", addScene: "Dodaj scenu", scene: "Scena", timeline: "Vremenska linija", editorModes: "Režim uređivača", emptyScene: "Dodajte fotografiju ili video",
     materials: "Materijali", addMaterial: "Otpremi materijale", uploadingMaterials: "Otpremanje: {{count}}…",
     portrait: "Portret", landscape: "Pejzaž", silent: "Bez zvuka", audioUnclassified: "Zvuk treba označiti", voice: "Glas", music: "Muzika", ambient: "Pozadinski zvuk",
     layout: "Kompozicija", layoutHint: "Opcije prate redosled orijentacija", settings: "Podešavanja", motion: "Kretanje", duration: "Trajanje",
@@ -110,6 +120,10 @@ const copies = {
     zoomIn: "Zumiraj", zoomOut: "Odumiraj", panLeft: "Zdesna → nalevo", panRight: "Sleva → nadesno", noMotion: "Bez dodatnog kretanja",
     creatingScene: "Kreiranje scene…", emptyPipelineHint: "Još nema scena. Dodajte scenu u pipeline-u levo.",
     sceneCreateError: "Scena nije kreirana. Proverite da li API radi i pokušajte ponovo.", operationError: "Promena nije sačuvana. Pokušajte ponovo.",
+    sceneOrderChanged: "Priča je promenjena u drugom prozoru. Prethodni redosled je vraćen i učitana je aktuelna priča.",
+    sceneOrderError: "Redosled scena nije sačuvan. Prethodni redosled je vraćen.",
+    materialMoveChanged: "Priča je promenjena u drugom prozoru. Materijal je ostao u izvornoj sceni i učitana je aktuelna priča.",
+    materialMoveError: "Materijal nije premešten i ostao je u izvornoj sceni.",
     uploadTooLarge: "Datoteka prelazi dozvoljenu veličinu otpremanja.", uploadUnsupported: "Ovaj format fotografije ili videa nije podržan.",
     uploadUnreadable: "Fotografija ili video nisu mogli da se pročitaju. Proverite da li se datoteka reprodukuje i pokušajte ponovo.",
     fileInfo: "Informacije o datoteci", fileName: "Naziv", fileSize: "Veličina", fileFormat: "Format", fileDimensions: "Dimenzije", fileDuration: "Trajanje", sourceAudio: "Izvorni zvuk",
@@ -128,7 +142,8 @@ const copies = {
     sceneDeleteBlocked: "Priču trenutno nije moguće uređivati. Zatvorite ovaj prozor i pokušajte kasnije.",
     sceneDeleteError: "Scena nije obrisana. Možete pokušati ponovo.",
     sceneDeleteUnverified: "Nije moguće proveriti da li je scena obrisana. Proverite status pre novog pokušaja.", checkSceneDeletion: "Proveri status",
-    materialEditorHint: "Ovde će biti dodati alati za nedestruktivno uređivanje.", dragMaterial: "Promeni redosled materijala {{number}}", dragMaterialHint: "Prevucite za promenu redosleda. Koristite strelice na tastaturi.", close: "Zatvori",
+    materialEditorHint: "Ovde će biti dodati alati za nedestruktivno uređivanje.", dragMaterial: "Prevuci materijal {{number}}", dragMaterialHint: "Prevucite za promenu redosleda ili spustite na drugu scenu. Strelice menjaju redosled unutar trenutne scene.",
+    dragScene: "Promeni redosled scene {{number}}", dragSceneHint: "Prevucite za promenu redosleda. Koristite strelice gore i dole na tastaturi.", close: "Zatvori",
     createScene: "Napravi scenu", createCover: "Napravi naslovnicu", coverEditorPending: "Naslovnica će se kasnije otvarati u posebnom editoru.",
     storyStart: "Početak priče", storyEnd: "Kraj priče", noScenes: "Još nema scena", sceneEdgeHint: "Nastavite priču ili pripremite naslovnicu.",
     sceneCarousel: "Scene priče", swipeScenes: "Prevucite levo ili desno za promenu scene", sceneTools: "Alati scene",
@@ -156,4 +171,14 @@ export function getEditorOperationError(copy: EditorCopy, error: unknown): strin
   if (status === 415) return copy.uploadUnsupported;
   if (status === 422) return copy.uploadUnreadable;
   return copy.operationError;
+}
+
+export function getSceneOrderError(copy: EditorCopy, error: unknown): string {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+  return code === "story_revision_conflict" ? copy.sceneOrderChanged : copy.sceneOrderError;
+}
+
+export function getMaterialMoveError(copy: EditorCopy, error: unknown): string {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+  return code === "story_revision_conflict" ? copy.materialMoveChanged : copy.materialMoveError;
 }

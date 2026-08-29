@@ -8,7 +8,7 @@ import { sceneRenderFileType, type SceneRenderQueue } from "@storyteller/render-
 import {
   authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, deleteSceneSchema, editMaterialSchema, errorSchema, healthSchema,
   loginSchema, materialContentAccessSchema, materialWaveformSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
-  reorderSceneMaterialsSchema, sceneRenderRequestSchema, sceneRenderSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
+  reorderSceneMaterialsSchema, sceneFrameSchema, sceneRenderRequestSchema, sceneRenderSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
 import type { ObjectStorage } from "@storyteller/storage";
 import Fastify, { type FastifyRequest } from "fastify";
@@ -16,6 +16,8 @@ import { jsonSchemaTransform, serializerCompiler, validatorCompiler, type ZodTyp
 import { z } from "zod";
 import { MediaStorage, MediaUploadError } from "./media-storage.js";
 import { SceneRenderService, serializeSceneRender } from "./scene-renders.js";
+import { authenticate } from "./authentication.js";
+import { registerStoryTimelineRoutes } from "./story-timeline-routes.js";
 
 export async function buildApi(application: StoryApplication, options: {
   readonly mediaStorage?: MediaStorage;
@@ -93,6 +95,7 @@ export async function buildApi(application: StoryApplication, options: {
   app.get("/stories/:storyId", {
     schema: { security: bearerSecurity, params: storyParams, response: { 200: storySchema, 401: errorSchema, 404: errorSchema } },
   }, async (request) => serializeStory(await application.getStory((await authenticate(application, request)).id, request.params.storyId)));
+  registerStoryTimelineRoutes(app, application);
   const sceneParams = storyParams.extend({ sceneId: z.string().uuid() });
   app.post("/stories/:storyId/scenes", {
     schema: { security: bearerSecurity, params: storyParams, response: { 201: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema } },
@@ -293,14 +296,17 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
     reply.header("cache-control", "private, no-store");
-    return (await requireRenderService(renderService).list(profile.id, request.params.storyId, request.params.sceneId)).map(serializeSceneRender);
+    return (await requireRenderService(renderService).list(profile.id, request.params.storyId, request.params.sceneId))
+      .map((job) => sceneRenderSchema.parse(serializeSceneRender(job)));
   });
   app.post("/stories/:storyId/scenes/:sceneId/renders", {
     schema: { security: bearerSecurity, params: sceneParams, body: sceneRenderRequestSchema, response: { 202: sceneRenderSchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 422: errorSchema, 503: errorSchema } },
   }, async (request, reply) => {
     const service = requireRenderService(renderService);
     const profile = await authenticate(application, request);
-    return reply.status(202).send(serializeSceneRender(await service.request(profile.id, request.params.storyId, request.params.sceneId, request.body?.mode)));
+    return reply.status(202).send(sceneRenderSchema.parse(serializeSceneRender(
+      await service.request(profile.id, request.params.storyId, request.params.sceneId, request.body?.mode),
+    )));
   });
   app.get("/stories/:storyId/scenes/:sceneId/renders/:renderId", {
     schema: { security: bearerSecurity, params: renderParams, response: { 200: sceneRenderSchema, 401: errorSchema, 404: errorSchema, 503: errorSchema } },
@@ -308,7 +314,9 @@ export async function buildApi(application: StoryApplication, options: {
     const service = requireRenderService(renderService);
     const profile = await authenticate(application, request);
     reply.header("cache-control", "private, no-store");
-    return serializeSceneRender(await service.get(profile.id, request.params.storyId, request.params.sceneId, request.params.renderId));
+    return sceneRenderSchema.parse(serializeSceneRender(
+      await service.get(profile.id, request.params.storyId, request.params.sceneId, request.params.renderId),
+    ));
   });
   app.get("/stories/:storyId/scenes/:sceneId/renders/:renderId/content", {
     schema: { security: bearerSecurity, params: renderParams },
@@ -324,6 +332,43 @@ export async function buildApi(application: StoryApplication, options: {
     return reply.type(file.mimeType)
       .header("cache-control", "private, no-store")
       .header("content-disposition", `attachment; filename="scene-${request.params.sceneId}.${file.extension}"`)
+      .send(await storage.open(job.storageKey));
+  });
+
+  const frameParams = sceneParams.extend({ frameId: z.string().uuid() });
+  app.post("/stories/:storyId/scenes/:sceneId/frames", {
+    schema: { security: bearerSecurity, params: sceneParams, response: { 202: sceneFrameSchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 422: errorSchema, 503: errorSchema } },
+  }, async (request, reply) => {
+    const service = requireRenderService(renderService);
+    const profile = await authenticate(application, request);
+    return reply.status(202).send(sceneFrameSchema.parse(serializeSceneRender(
+      await service.requestFrame(profile.id, request.params.storyId, request.params.sceneId),
+    )));
+  });
+  app.get("/stories/:storyId/scenes/:sceneId/frames/:frameId", {
+    schema: { security: bearerSecurity, params: frameParams, response: { 200: sceneFrameSchema, 401: errorSchema, 404: errorSchema, 503: errorSchema } },
+  }, async (request, reply) => {
+    const service = requireRenderService(renderService);
+    const profile = await authenticate(application, request);
+    reply.header("cache-control", "private, no-store");
+    return sceneFrameSchema.parse(serializeSceneRender(
+      await service.getFrame(profile.id, request.params.storyId, request.params.sceneId, request.params.frameId),
+    ));
+  });
+  app.get("/stories/:storyId/scenes/:sceneId/frames/:frameId/content", {
+    schema: { security: bearerSecurity, params: frameParams },
+  }, async (request, reply) => {
+    const service = requireRenderService(renderService);
+    const storage = options.objectStorage;
+    if (!storage) throw new ApplicationError("render storage is unavailable", 503);
+    const profile = await authenticate(application, request);
+    const job = await service.getFrame(profile.id, request.params.storyId, request.params.sceneId, request.params.frameId);
+    if (!job.current) throw new ApplicationError("scene frame is outdated; render the current version", 409, "scene_frame_stale");
+    if (job.status !== "ready" || !job.storageKey) throw new ApplicationError("scene frame is not ready", 409);
+    const file = sceneRenderFileType(job.input);
+    return reply.type(file.mimeType)
+      .header("cache-control", "private, no-store")
+      .header("content-disposition", `inline; filename="scene-${request.params.sceneId}-frame.${file.extension}"`)
       .send(await storage.open(job.storageKey));
   });
 
@@ -344,12 +389,6 @@ export async function buildApi(application: StoryApplication, options: {
   });
 
   return app;
-}
-
-async function authenticate(application: StoryApplication, request: FastifyRequest) {
-  const authorization = request.headers.authorization;
-  if (!authorization?.startsWith("Bearer ")) throw new ApplicationError("authentication required", 401);
-  return application.authenticate(authorization.slice(7).trim());
 }
 
 function serializeStory(story: unknown) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hashSceneRenderInput, sceneRenderStorageKey, type SceneRenderInput } from "./index.js";
+import { hashSceneRenderInput, sceneFrameDependency, sceneRenderFileType, sceneRenderStorageKey, type SceneRenderInput } from "./index.js";
 
 const input: SceneRenderInput = {
   rendererId: "still-image",
@@ -23,6 +23,22 @@ test("scene render input hash is deterministic", () => {
 test("render artifact key is scoped to profile, story, scene and hash", () => {
   assert.equal(sceneRenderStorageKey({ profileId: "p", storyId: "s", sceneId: "c", inputHash: "abc" }),
     "projects/p/s/scenes/c/renders/abc.mp4");
+});
+
+test("scene frame has its own cache fingerprint, S3 collection and dependency snapshot", () => {
+  const frame: SceneRenderInput = { ...input, artifact: "scene-frame", frame: {
+    rendererVersion: 1, format: "png", compressionLevel: 6, intermediateCodec: "h264-lossless", layerPolicy: "base-visual",
+  } };
+  assert.notEqual(hashSceneRenderInput(frame), hashSceneRenderInput(input));
+  assert.equal(sceneRenderStorageKey({ profileId: "p", storyId: "s", sceneId: "c", inputHash: "abc", input: frame }),
+    "projects/p/s/scenes/c/frames/abc.png");
+  assert.deepEqual(sceneRenderFileType(frame), { extension: "png", mimeType: "image/png" });
+  const dependency = sceneFrameDependency({ sceneId: "scene-a", inputHash: "a".repeat(64), storageKey: "frame-a.png", contentHash: "b".repeat(64) });
+  const dependent: SceneRenderInput = { ...input, dependencies: [dependency] };
+  assert.notEqual(hashSceneRenderInput(dependent), hashSceneRenderInput({ ...dependent, dependencies: [{
+    ...dependency, contentHash: "c".repeat(64), parameters: { sceneId: "scene-a", inputHash: "d".repeat(64) },
+  }] }));
+  assert.throws(() => sceneFrameDependency({ sceneId: "scene-a", inputHash: "a".repeat(64) }), /storage and content hash/);
 });
 
 test("video render cache distinguishes tracks, trim, crop and export mode", () => {

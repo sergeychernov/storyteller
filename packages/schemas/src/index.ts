@@ -87,6 +87,28 @@ export const storySchema = z.object({
   revision: z.number().int().positive(),
 });
 export const reorderSceneMaterialsSchema = z.object({ materialIds: z.array(z.string().uuid()) });
+export const reorderStoryScenesSchema = z.object({
+  sceneIds: z.array(z.string().uuid()), expectedRevision: z.number().int().positive(),
+}).strict();
+export const moveSceneMaterialsSchema = z.object({
+  materialIds: z.array(z.string().uuid()).min(1), targetSceneId: z.string().uuid(),
+  targetIndex: z.number().int().nonnegative(), expectedRevision: z.number().int().positive(),
+}).strict();
+export const storyTimelineSchema = z.object({
+  storyId: z.string().uuid(), revision: z.number().int().positive(), sceneOrder: z.array(z.string().uuid()),
+  scenes: z.array(z.object({
+    sceneId: z.string().uuid(), index: z.number().int().nonnegative(), materialIds: z.array(z.string().uuid()),
+    startSeconds: z.number().nonnegative().nullable(), endSeconds: z.number().nonnegative().nullable(),
+    durationSeconds: z.number().nonnegative().nullable(), durationSource: z.enum(["empty", "scene", "video", "trim", "unknown"]),
+  })),
+  totalDurationSeconds: z.number().nonnegative().nullable(), knownDurationSeconds: z.number().nonnegative(),
+  transitionOverlapSeconds: z.literal(0),
+  warnings: z.array(z.object({ code: z.enum(["empty_scene", "unknown_video_duration"]), sceneId: z.string().uuid() })),
+  formatLimits: z.array(z.object({
+    formatId: z.string(), maxDurationSeconds: z.number().positive(), requiresVerifiedAccount: z.boolean(),
+    status: z.enum(["within_limit", "exceeded", "unknown"]), excessSeconds: z.number().nonnegative(), isLowerBound: z.boolean(),
+  })),
+});
 export const deleteSceneSchema = z.object({ expectedRevision: z.number().int().positive().optional() }).strict();
 export const configureSceneSchema = z.object({
   durationSeconds: z.number().min(3).max(15).optional(), layoutId: z.string().nullable().optional(),
@@ -96,15 +118,19 @@ export const sceneRenderStatusSchema = z.enum(["queued", "running", "ready", "fa
 export const sceneRenderRequestSchema = z.object({ mode: z.enum(["video", "audio", "combined"]).optional() }).nullish().default({});
 export const sceneRenderSchema = z.object({
   id: z.string().uuid(), status: sceneRenderStatusSchema,
+  artifact: z.literal("scene-render"),
   current: z.boolean(), inputHash: z.string().regex(/^[a-f0-9]{64}$/),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), createdAt: z.iso.datetime().optional(),
   mode: z.enum(["video", "audio", "combined"]), parameters: z.record(z.string(), z.unknown()),
   dependencies: z.array(z.object({
-    role: z.enum(["original", "image-edit", "video-track", "audio-track"]),
+    role: z.enum(["original", "image-edit", "video-track", "audio-track", "scene-frame"]),
     storageKey: z.string(), contentHash: z.string().regex(/^[a-f0-9]{64}$/),
     parents: z.array(z.string()), parameters: z.record(z.string(), z.unknown()),
   })),
   sizeBytes: z.number().int().nonnegative().optional(), error: z.string().optional(),
+});
+export const sceneFrameSchema = sceneRenderSchema.omit({ artifact: true, mode: true }).extend({
+  artifact: z.literal("scene-frame"),
 });
 
 export const platformProviderSchema = z.enum(["telegram", "tiktok", "instagram"]);
@@ -124,6 +150,9 @@ export type RegisterRequest = z.infer<typeof registerSchema>;
 export type LoginRequest = z.infer<typeof loginSchema>;
 export type CreateStoryRequest = z.infer<typeof createStorySchema>;
 export type DeleteSceneRequest = z.infer<typeof deleteSceneSchema>;
+export type ReorderStoryScenesRequest = z.infer<typeof reorderStoryScenesSchema>;
+export type MoveSceneMaterialsRequest = z.infer<typeof moveSceneMaterialsSchema>;
+export type StoryTimelineResponse = z.infer<typeof storyTimelineSchema>;
 export interface CreateSceneRequest { readonly id: string }
 export interface SelectSceneRendererRequest { readonly rendererId: string }
 export interface SetSceneTitleRequest { readonly title: string | null }

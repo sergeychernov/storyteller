@@ -2,6 +2,7 @@ import type { AuthSession, Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneRendererPreview } from "./SceneRenderer.js";
+import { SceneFrameImage } from "./SceneFrameImage.js";
 import styles from "./SceneCanvas.module.css";
 import type { SceneChange } from "./story-editor-view.js";
 
@@ -34,15 +35,17 @@ export function SceneCanvas({
         scene.layoutId === "overlap-stack" && styles.overlapStack,
         styles[presentation],
       )}>
-        <SceneRendererPreview
-          scene={scene}
-          copy={copy}
-          storyId={storyId}
-          session={session}
-          active={!inactive && !dimmed}
-          saving={saving}
-          onChange={inactive || dimmed ? undefined : onChange}
-        />
+        {inactive || dimmed
+          ? <SceneFrameImage scene={scene} storyId={storyId} session={session} presentation="canvas" />
+          : <SceneRendererPreview
+            scene={scene}
+            copy={copy}
+            storyId={storyId}
+            session={session}
+            active
+            saving={saving}
+            onChange={onChange}
+          />}
       </div>
     </div>
   );

@@ -19,3 +19,9 @@
   min-height: 0;
   overflow: hidden;
 }
+
+.timelineStage {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: #f7f5ef;
+}

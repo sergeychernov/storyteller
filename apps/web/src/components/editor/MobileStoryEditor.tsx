@@ -1,15 +1,18 @@
+import { useState } from "react";
 import { classNames } from "../../class-names.js";
 import sharedStyles from "./editor-shared.module.css";
 import styles from "./MobileStoryEditor.module.css";
 import type { StoryEditorViewProps } from "./story-editor-view.js";
 import { SceneCarousel } from "./SceneCarousel.js";
-import { SceneEditorHeader } from "./SceneEditorHeader.js";
+import { SceneEditorHeader, type MobileEditorMode } from "./SceneEditorHeader.js";
 import { SceneEditorTabs } from "./SceneEditorTabs.js";
+import { SceneRail } from "./SceneRail.js";
 
 export function MobileStoryEditor(props: StoryEditorViewProps) {
+  const [mode, setMode] = useState<MobileEditorMode>("scene");
   const {
     story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, deleteDisabled,
-    onSelect, onAdd, onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange, onDeleteScene,
+    onSelect, onAdd, onUpload, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
   } = props;
 
   return (
@@ -20,13 +23,12 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
         selectedId={selected?.id ?? ""}
         copy={copy}
         saving={saving}
-        adding={adding}
-        onSelect={onSelect}
-        onAdd={onAdd}
+        mode={mode}
+        onModeChange={setMode}
       />
       {operationErrorMessage && <div className={classNames(sharedStyles.operationError, styles.operationError)} role="alert">{operationErrorMessage}</div>}
-      <div className={styles.stage}>
-        <SceneCarousel
+      <div className={classNames(styles.stage, mode === "timeline" && styles.timelineStage)}>
+        {mode === "scene" ? <SceneCarousel
           scenes={story.scenes}
           selectedId={selected?.id ?? ""}
           copy={copy}
@@ -39,7 +41,19 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
           onSelect={onSelect}
           onAdd={onAdd}
           onChange={onChange}
-        />
+        /> : <SceneRail
+          scenes={story.scenes}
+          storyId={story.id}
+          session={session}
+          selectedId={selected?.id ?? ""}
+          copy={copy}
+          adding={adding}
+          saving={saving}
+          onSelect={onSelect}
+          onAdd={onAdd}
+          onReorder={onReorderScenes}
+          variant="mobileTimeline"
+        />}
       </div>
       {selected && <SceneEditorTabs
         scene={selected}
@@ -51,6 +65,7 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
         uploadCount={uploadCount}
         onUpload={onUpload}
         onDeleteMaterial={onDeleteMaterial}
+        onMoveMaterial={onMoveMaterial}
         onEditMaterial={onEditMaterial}
         onReorder={onReorder}
         onChange={onChange}

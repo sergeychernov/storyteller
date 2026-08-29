@@ -1,12 +1,6 @@
 import type { Scene } from "../../api.js";
-
-export function getSceneDurationSeconds(scene: Scene): number | undefined {
-  const material = scene.materials[0];
-  // Configured scene duration controls photos/layouts, not the selected video range.
-  if (scene.materials.length !== 1 || material?.kind !== "video") return scene.durationSeconds;
-  const trim = material.edit?.trim;
-  return trim ? trim.endSeconds - trim.startSeconds : material.sourceDurationSeconds ?? material.videoTrack?.durationSeconds;
-}
+import { getSceneDurationSeconds } from "@storyteller/domain";
+export { getSceneDurationSeconds } from "@storyteller/domain";
 
 export function formatSceneDuration(scene: Scene): string {
   const duration = getSceneDurationSeconds(scene);

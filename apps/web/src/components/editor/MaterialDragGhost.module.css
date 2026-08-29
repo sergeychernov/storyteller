@@ -23,6 +23,28 @@
   transition: transform 0.17s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.17s ease-out, box-shadow 0.17s ease-out;
 }
 
+.movingToScene {
+  border-color: #7f9148;
+  background: #f3f8e6;
+  box-shadow: 0 14px 32px #53612642;
+}
+
+.destination {
+  position: absolute;
+  right: -9px;
+  top: -9px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #71833a;
+  box-shadow: 0 3px 9px #29292330;
+  font-size: 15px;
+  font-weight: 800;
+}
+
 .thumb {
   margin: 0;
 }

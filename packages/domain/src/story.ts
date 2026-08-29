@@ -68,6 +68,63 @@ export function reorderMaterials(story: Story, sceneId: string, materialIds: rea
   });
 }
 
+/** The persisted scenes array is the authoritative editorial order. */
+export function reorderScenes(story: Story, sceneIds: readonly string[]): Story {
+  assertEditable(story);
+  if (sceneIds.length !== story.scenes.length || new Set(sceneIds).size !== sceneIds.length) {
+    throw new DomainError("scene order must contain every scene exactly once");
+  }
+  const byId = new Map(story.scenes.map((scene) => [scene.id, scene]));
+  const scenes = sceneIds.map((id) => {
+    const scene = byId.get(id);
+    if (!scene) throw new DomainError(`unknown scene: ${id}`);
+    return scene;
+  });
+  // Reordering does not change individual scene renders or narration anchors.
+  return { ...changed(story, { scenes }), music: { ...story.music, applied: false } };
+}
+
+export interface MoveSceneMaterialsInput {
+  readonly materialIds: readonly string[];
+  readonly targetSceneId: string;
+  /** Zero-based insertion index in the destination before this operation. */
+  readonly targetIndex: number;
+}
+
+/** Move references in one revision; never copy, delete or regenerate media files. */
+export function moveSceneMaterials(story: Story, sourceSceneId: string, input: MoveSceneMaterialsInput): Story {
+  assertEditable(story);
+  assertScene(story, sourceSceneId);
+  assertScene(story, input.targetSceneId);
+  if (sourceSceneId === input.targetSceneId) throw new DomainError("source and target scenes must differ; use material-order within a scene");
+  const source = story.scenes.find(({ id }) => id === sourceSceneId)!;
+  const target = story.scenes.find(({ id }) => id === input.targetSceneId)!;
+  const movingIds = new Set(input.materialIds);
+  if (!movingIds.size || movingIds.size !== input.materialIds.length) {
+    throw new DomainError("materialIds must contain distinct materials");
+  }
+  if (!Number.isInteger(input.targetIndex) || input.targetIndex < 0 || input.targetIndex > target.materials.length) {
+    throw new DomainError("targetIndex must be an insertion position in the target scene");
+  }
+  const byId = new Map(source.materials.map((material) => [material.id, material]));
+  const moving = input.materialIds.map((id) => {
+    const material = byId.get(id);
+    if (!material) throw new DomainError(`unknown material: ${id}`);
+    if (target.materials.some((existing) => existing.id === id)) throw new DomainError(`material already exists in target: ${id}`);
+    return material;
+  });
+  const scenes = story.scenes.map((scene) => {
+    if (scene.id === source.id) return resetMaterialPresentation({
+      ...scene, materials: scene.materials.filter(({ id }) => !movingIds.has(id)),
+    });
+    if (scene.id === target.id) return resetMaterialPresentation({
+      ...scene, materials: [...scene.materials.slice(0, input.targetIndex), ...moving, ...scene.materials.slice(input.targetIndex)],
+    });
+    return scene;
+  });
+  return { ...changed(story, { scenes }), music: { ...story.music, applied: false } };
+}
+
 export function configureScene(story: Story, sceneId: string, input: {
   durationSeconds?: number;
   layoutId?: string | null;
@@ -161,7 +218,7 @@ function resetMaterialPresentation(scene: Scene): Scene {
     return { ...withoutRenderer, motion: "none" };
   }
   const material = reset.materials[0]!;
-  const { focusPoint: _focusPoint, ...withoutFocus } = reset;
+  const { focusPoint: _focusPoint, rendererId: _rendererId, ...withoutFocus } = reset;
   return {
     ...withoutFocus,
     layoutId: "full-frame",

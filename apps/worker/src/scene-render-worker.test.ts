@@ -27,6 +27,32 @@ test("worker renders a claimed scene and stores the reusable artifact", async (c
   assert.equal((await readFile(join(root, queue.ready!.storageKey))).toString(), "rendered-mp4");
 });
 
+test("worker stores the final base visual frame separately as lossless PNG", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-frame-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/photo.jpg", { body: Readable.from(Buffer.from("photo")), contentType: "image/jpeg", contentLength: 5 });
+  const input = { ...renderJob().input, artifact: "scene-frame" as const, frame: {
+    rendererVersion: 1, format: "png" as const, compressionLevel: 6,
+    intermediateCodec: "h264-lossless" as const, layerPolicy: "base-visual" as const,
+  } };
+  const job = { ...renderJob(), input, inputHash: "frame-hash" };
+  const queue = new MemoryQueue(job);
+  const worker = new SceneRenderWorker("worker-1", queue, storage,
+    async (spec) => { assert.equal(spec.lossless, true); await writeFile(spec.outputPath, "base-video"); },
+    10_000, { info() {}, error() {} }, undefined,
+    async (spec) => {
+      assert.equal((await readFile(spec.sourcePath)).toString(), "base-video");
+      assert.equal(spec.compressionLevel, 6);
+      await writeFile(spec.outputPath, "last-frame-png");
+    });
+
+  assert.equal(await worker.runOnce(), true);
+  assert.match(queue.ready!.storageKey, /\/frames\/frame-hash-.+\.png$/);
+  assert.equal(queue.ready?.contentHash, createHash("sha256").update("last-frame-png").digest("hex"));
+  assert.equal((await readFile(join(root, queue.ready!.storageKey))).toString(), "last-frame-png");
+});
+
 test("worker processes object deletion jobs", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "storyteller-worker-delete-test-"));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -60,6 +86,7 @@ test("worker logs the failing render stage and persists the error", async (conte
     message: "scene render failed",
     details: {
       renderId: "render", storyId: "story", sceneId: "scene", rendererId: "still-image",
+      artifact: "scene-render",
       motion: "pan-left", durationSeconds: 5, sourceWidth: 1600, sourceHeight: 900,
       outputWidth: 1080, outputHeight: 1920, stage: "render", error: "ffmpeg test failure",
     },

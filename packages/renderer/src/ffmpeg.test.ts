@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createStillImageMotionPlan } from "@storyteller/domain";
-import { buildStillImageFilter, PcmWaveform, prepareVideoAudio, probeMedia, renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner } from "./index.js";
+import { buildStillImageFilter, PcmWaveform, prepareVideoAudio, probeMedia, renderLastFrame, renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner } from "./index.js";
 
 test("probeMedia uses an argument array and parses JSON", async () => {
   let received: readonly string[] = [];
@@ -173,4 +173,76 @@ test("reports the signal when ffmpeg is killed by the container", async () => {
     sourcePath: "wide.jpg", outputPath: "wide.mp4", sourceSize: { width: 3648, height: 2736 },
     orientation: "landscape", durationSeconds: 3, motion: "pan-left",
   }, runner), /ffmpeg failed \(signal SIGKILL\)/);
+});
+
+test("extracts the final decoded frame into one lossless PNG", async () => {
+  const calls: { executable: string; args: readonly string[] }[] = [];
+  await renderLastFrame({ sourcePath: "base.mp4", outputPath: "frame.png", compressionLevel: 6 }, {
+    async run(executable, received) {
+      calls.push({ executable, args: received });
+      return executable === "ffprobe"
+        ? { exitCode: 0, stdout: '{"streams":[{"codec_type":"video","nb_frames":"4"}]}', stderr: "" }
+        : { exitCode: 0, stdout: "", stderr: "" };
+    },
+  });
+  assert.equal(calls[0]?.executable, "ffprobe");
+  assert.deepEqual(calls[1]?.args, [
+    "-y", "-v", "error", "-i", "base.mp4", "-map", "0:v:0", "-an", "-map_metadata", "-1",
+    "-vf", "select=eq(n\\,3)", "-frames:v", "1", "-compression_level", "6", "frame.png",
+  ]);
+  await assert.rejects(renderLastFrame({ sourcePath: "base.mp4", outputPath: "frame.png", compressionLevel: 10 }, {
+    run: () => Promise.resolve({ exitCode: 0, stdout: "", stderr: "" }),
+  }), /compression level/);
+  await assert.rejects(renderLastFrame({ sourcePath: "base.mp4", outputPath: "frame.png" }, {
+    run: (executable) => Promise.resolve(executable === "ffprobe"
+      ? { exitCode: 0, stdout: '{"streams":[{"codec_type":"video"}]}', stderr: "" }
+      : { exitCode: 0, stdout: "", stderr: "" }),
+  }), /indexed video frames/);
+});
+
+test("scene-frame intermediates use lossless H.264 instead of CRF compression", async () => {
+  const calls: string[][] = [];
+  const runner: MediaProcessRunner = {
+    async run(executable, args) {
+      if (executable === "ffmpeg") calls.push([...args]);
+      return executable === "ffprobe"
+        ? { exitCode: 0, stdout: '{"streams":[],"format":{"duration":"3"}}', stderr: "" }
+        : { exitCode: 0, stdout: "", stderr: "" };
+    },
+  };
+  await renderStillImage({
+    sourcePath: "photo.png", outputPath: "base.mp4", sourceSize: { width: 100, height: 200 },
+    orientation: "portrait", durationSeconds: 3, motion: "none", lossless: true,
+  }, runner);
+  await renderVideo({
+    sourcePath: "clip.mp4", outputPath: "base-video.mp4", sourceSize: { width: 100, height: 200 },
+    sourceDurationSeconds: 3, hasAudio: false, mode: "video", lossless: true,
+    edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } },
+  }, runner);
+  for (const args of calls) {
+    assert.deepEqual(args.slice(args.indexOf("-preset"), args.indexOf("-preset") + 4), ["-preset", "ultrafast", "-qp", "0"]);
+    assert.equal(args.includes("-crf"), false);
+  }
+});
+
+test("lossless scene frame contains the actual last frame rather than the first", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-last-frame-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const runner = new SpawnMediaProcessRunner();
+  const video = join(root, "red-then-blue.mp4");
+  const create = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-f", "lavfi", "-i", "color=red:s=16x16:r=2:d=1",
+    "-f", "lavfi", "-i", "color=blue:s=16x16:r=2:d=1",
+    "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[v]", "-map", "[v]", "-c:v", "libx264", video,
+  ]);
+  assert.equal(create.exitCode, 0, create.stderr);
+  const frame = join(root, "frame.png");
+  await renderLastFrame({ sourcePath: video, outputPath: frame }, runner);
+  const pixel = join(root, "pixel.rgb");
+  const decode = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-i", frame, "-vf", "scale=1:1", "-pix_fmt", "rgb24", "-f", "rawvideo", pixel,
+  ]);
+  assert.equal(decode.exitCode, 0, decode.stderr);
+  const [red = 0, _green = 0, blue = 0] = await readFile(pixel);
+  assert.ok(blue > red * 3, `expected the final blue frame, received rgb(${red},${_green},${blue})`);
 });

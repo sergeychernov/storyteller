@@ -5,6 +5,7 @@ import { MobileStoryEditor } from "./MobileStoryEditor.js";
 import { useMediaQuery } from "./use-media-query.js";
 import { useStoryEditor } from "./use-story-editor.js";
 import { SceneDeleteDialog } from "./SceneDeleteDialog.js";
+import { MaterialSceneDragProvider } from "./MaterialSceneDragContext.js";
 import sharedStyles from "./editor-shared.module.css";
 
 interface StoryEditorProps {
@@ -20,10 +21,10 @@ export function StoryEditor({ story, session, selectedId, onSelect }: StoryEdito
   const panels = useMediaQuery("(min-width: 768px)");
   const compactPanels = useMediaQuery("(max-width: 1199px)");
 
-  return <>
+  return <MaterialSceneDragProvider>
     <div ref={editorRef} tabIndex={-1} className={sharedStyles.focusRoot} inert={Boolean(deletion.target)}>
       {panels ? <DesktopStoryEditor {...editor} compact={compactPanels} /> : <MobileStoryEditor {...editor} />}
     </div>
     <SceneDeleteDialog deletion={deletion} copy={editor.copy} returnFocusRef={editorRef} />
-  </>;
+  </MaterialSceneDragProvider>;
 }

@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { mergeMaterialOrder } from "@storyteller/domain";
 import type { SceneMaterial } from "../../api.js";
+import { useMaterialSceneDrag } from "./MaterialSceneDragContext.js";
+import { lockPageScroll, unlockPageScroll } from "./pointer-drag-page-lock.js";
 
 export interface MaterialDragVisual {
   readonly material: SceneMaterial;
@@ -11,6 +13,7 @@ export interface MaterialDragVisual {
   readonly width: number;
   readonly height: number;
   readonly dropping: boolean;
+  readonly movingToScene: boolean;
 }
 
 interface DragListeners {
@@ -21,18 +24,24 @@ interface DragListeners {
 
 interface UseMaterialDragOptions {
   readonly materials: readonly SceneMaterial[];
+  readonly sceneId: string;
   readonly saving: boolean;
   readonly onReorder: (ids: readonly string[]) => void;
+  readonly onMoveToScene: (materialId: string, targetSceneId: string) => void;
 }
 
-export function useMaterialDrag({ materials, saving, onReorder }: UseMaterialDragOptions) {
+export function useMaterialDrag({ materials, sceneId, saving, onReorder, onMoveToScene }: UseMaterialDragOptions) {
+  const sceneDrop = useMaterialSceneDrag();
   const [orderedMaterials, setOrderedMaterials] = useState<readonly SceneMaterial[]>(materials);
   const [draggingId, setDraggingId] = useState<string>();
   const [dragVisual, setDragVisual] = useState<MaterialDragVisual>();
   const orderedRef = useRef<readonly SceneMaterial[]>(materials);
   const latestMaterialsRef = useRef<readonly SceneMaterial[]>(materials);
-  const dragRef = useRef<{ id: string; pointerId: number; lastTargetId: string } | undefined>(undefined);
+  const dragRef = useRef<{
+    id: string; pointerId: number; lastTargetId: string; targetSceneId: string | undefined;
+  } | undefined>(undefined);
   const dropTimerRef = useRef<number | undefined>(undefined);
+  const pageLockOwnerRef = useRef(Symbol("material-drag"));
   const stripRef = useRef<HTMLDivElement>(null);
   const dragListenersRef = useRef<DragListeners | undefined>(undefined);
 
@@ -46,21 +55,23 @@ export function useMaterialDrag({ materials, saving, onReorder }: UseMaterialDra
   useEffect(() => () => {
     window.clearTimeout(dropTimerRef.current);
     detachDragListeners(dragListenersRef);
-    unlockPageScroll();
+    unlockPageScroll(pageLockOwnerRef.current);
+    sceneDrop.end();
   }, []);
 
   function startDrag(event: ReactPointerEvent<HTMLElement>, material: SceneMaterial) {
     if (saving) return;
     event.preventDefault();
     window.clearTimeout(dropTimerRef.current);
-    lockPageScroll();
+    lockPageScroll(pageLockOwnerRef.current);
     const bounds = event.currentTarget.getBoundingClientRect();
-    dragRef.current = { id: material.id, pointerId: event.pointerId, lastTargetId: material.id };
+    dragRef.current = { id: material.id, pointerId: event.pointerId, lastTargetId: material.id, targetSceneId: undefined };
+    sceneDrop.begin(sceneId, material.id);
     setDraggingId(material.id);
     if (bounds) setDragVisual({
       material, x: event.clientX, y: event.clientY,
       offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
-      width: bounds.width, height: bounds.height, dropping: false,
+      width: bounds.width, height: bounds.height, dropping: false, movingToScene: false,
     });
     const listeners: DragListeners = {
       move: updateDrag,
@@ -78,6 +89,20 @@ export function useMaterialDrag({ materials, saving, onReorder }: UseMaterialDra
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     setDragVisual((current) => current ? { ...current, x: event.clientX, y: event.clientY } : current);
+    const hoveredScene = findSceneAtPoint(event.clientX, event.clientY);
+    if (hoveredScene) {
+      const targetSceneId = hoveredScene.id === sceneId ? undefined : hoveredScene.id;
+      drag.targetSceneId = targetSceneId;
+      sceneDrop.hover(targetSceneId);
+      setDragVisual((current) => current ? { ...current, movingToScene: targetSceneId !== undefined } : current);
+      autoScrollVertically(hoveredScene.scrollContainer, event.clientY);
+      return;
+    }
+    if (drag.targetSceneId) {
+      drag.targetSceneId = undefined;
+      sceneDrop.hover(undefined);
+      setDragVisual((current) => current ? { ...current, movingToScene: false } : current);
+    }
     const strip = stripRef.current;
     if (strip) {
       const bounds = strip.getBoundingClientRect();
@@ -102,7 +127,15 @@ export function useMaterialDrag({ materials, saving, onReorder }: UseMaterialDra
     event.preventDefault();
     dragRef.current = undefined;
     detachDragListeners(dragListenersRef);
-    unlockPageScroll();
+    unlockPageScroll(pageLockOwnerRef.current);
+    sceneDrop.end();
+    if (drag.targetSceneId) {
+      orderedRef.current = latestMaterialsRef.current;
+      setOrderedMaterials(latestMaterialsRef.current);
+      animateDropToScene(drag.targetSceneId);
+      onMoveToScene(drag.id, drag.targetSceneId);
+      return;
+    }
     animateDrop(drag.id);
     const completeOrder = mergeMaterialOrder(orderedRef.current, latestMaterialsRef.current);
     orderedRef.current = completeOrder;
@@ -131,13 +164,37 @@ export function useMaterialDrag({ materials, saving, onReorder }: UseMaterialDra
     }, 170);
   }
 
+  function animateDropToScene(targetSceneId: string) {
+    const destination = Array.from(document.querySelectorAll<HTMLElement>("[data-scene-drop-id]"))
+      .find((element) => element.dataset.sceneDropId === targetSceneId)?.getBoundingClientRect();
+    if (!destination) {
+      setDragVisual(undefined);
+      setDraggingId(undefined);
+      return;
+    }
+    setDragVisual((current) => current ? {
+      ...current,
+      x: destination.left + destination.width / 2,
+      y: destination.top + destination.height / 2,
+      offsetX: current.width / 2,
+      offsetY: current.height / 2,
+      dropping: true,
+      movingToScene: true,
+    } : current);
+    dropTimerRef.current = window.setTimeout(() => {
+      setDragVisual(undefined);
+      setDraggingId(undefined);
+    }, 170);
+  }
+
   function cancelDrag(event: PointerEvent) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     dragRef.current = undefined;
     detachDragListeners(dragListenersRef);
-    unlockPageScroll();
+    unlockPageScroll(pageLockOwnerRef.current);
+    sceneDrop.end();
     orderedRef.current = latestMaterialsRef.current;
     setOrderedMaterials(latestMaterialsRef.current);
     setDraggingId(undefined);
@@ -155,6 +212,22 @@ export function useMaterialDrag({ materials, saving, onReorder }: UseMaterialDra
   }
 
   return { orderedMaterials, draggingId, dragVisual, stripRef, startDrag, moveWithKeyboard };
+}
+
+function findSceneAtPoint(clientX: number, clientY: number): {
+  readonly id: string; readonly scrollContainer: HTMLElement | null;
+} | undefined {
+  const row = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-scene-drop-id]");
+  const id = row?.dataset.sceneDropId;
+  return id ? { id, scrollContainer: row.closest<HTMLElement>("[data-scene-drop-scroll]") } : undefined;
+}
+
+function autoScrollVertically(container: HTMLElement | null, clientY: number) {
+  if (!container) return;
+  const bounds = container.getBoundingClientRect();
+  const edge = Math.min(52, bounds.height / 4);
+  if (clientY < bounds.top + edge) container.scrollTop -= 18;
+  else if (clientY > bounds.bottom - edge) container.scrollTop += 18;
 }
 
 function moveMaterial<T>(items: readonly T[], from: number, to: number): readonly T[] {
@@ -184,41 +257,4 @@ function detachDragListeners(ref: { current: DragListeners | undefined }) {
   window.removeEventListener("pointermove", listeners.move, { capture: true });
   window.removeEventListener("pointerup", listeners.finish, { capture: true });
   window.removeEventListener("pointercancel", listeners.cancel, { capture: true });
-}
-
-interface PageScrollLock {
-  readonly bodyTouchAction: string;
-  readonly rootOverscrollBehavior: string;
-}
-
-let pageScrollLock: PageScrollLock | undefined;
-
-function preventPageScroll(event: Event) {
-  event.preventDefault();
-}
-
-function lockPageScroll() {
-  if (pageScrollLock) return;
-  const body = document.body;
-  const root = document.documentElement;
-  pageScrollLock = {
-    bodyTouchAction: body.style.touchAction,
-    rootOverscrollBehavior: root.style.overscrollBehavior,
-  };
-  body.style.touchAction = "none";
-  root.style.overscrollBehavior = "none";
-  document.addEventListener("touchmove", preventPageScroll, { passive: false });
-  document.addEventListener("wheel", preventPageScroll, { passive: false });
-}
-
-function unlockPageScroll() {
-  const lock = pageScrollLock;
-  if (!lock) return;
-  pageScrollLock = undefined;
-  const body = document.body;
-  body.style.touchAction = lock.bodyTouchAction;
-  const root = document.documentElement;
-  root.style.overscrollBehavior = lock.rootOverscrollBehavior;
-  document.removeEventListener("touchmove", preventPageScroll);
-  document.removeEventListener("wheel", preventPageScroll);
 }

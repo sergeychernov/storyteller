@@ -6,3 +6,4 @@ export * from "./scene-motion.js";
 export * from "./state-machine.js";
 export * from "./still-image-motion.js";
 export * from "./story.js";
+export * from "./story-timeline.js";

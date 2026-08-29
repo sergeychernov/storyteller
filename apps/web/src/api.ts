@@ -52,6 +52,11 @@ export interface SceneRender {
   sizeBytes?: number;
   error?: string;
 }
+export interface SceneFrame extends SceneRender {
+  artifact: "scene-frame";
+  inputHash: string;
+  contentHash?: string;
+}
 export interface SceneRenderVersion extends SceneRender {
   inputHash: string;
   contentHash?: string;
@@ -130,6 +135,21 @@ export async function getMaterialAudioContent(token: string, storyId: string, ma
 export function reorderSceneMaterials(token: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}/material-order`, { method: "PUT", body: JSON.stringify({ materialIds }) }, token);
 }
+export function reorderStoryScenes(token: string, storyId: string, sceneIds: readonly string[], expectedRevision: number): Promise<Story> {
+  return request(`/stories/${storyId}/scene-order`, {
+    method: "PUT", body: JSON.stringify({ sceneIds, expectedRevision }),
+  }, token);
+}
+export function moveSceneMaterials(token: string, storyId: string, sourceSceneId: string, input: {
+  readonly materialIds: readonly string[];
+  readonly targetSceneId: string;
+  readonly targetIndex: number;
+  readonly expectedRevision: number;
+}): Promise<Story> {
+  return request(`/stories/${storyId}/scenes/${sourceSceneId}/materials/move`, {
+    method: "POST", body: JSON.stringify(input),
+  }, token);
+}
 export function configureStoryScene(token: string, storyId: string, sceneId: string, settings: {
   durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint;
 }): Promise<Story> {
@@ -146,6 +166,19 @@ export function listSceneRenderVersions(token: string, storyId: string, sceneId:
 }
 export async function downloadSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<Blob> {
   const response = await fetch(`${apiUrl}/stories/${storyId}/scenes/${sceneId}/renders/${renderId}/content`, {
+    cache: "no-store", headers: { authorization: `Bearer ${token}` }, ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) await throwResponseError(response);
+  return response.blob();
+}
+export function requestSceneFrame(token: string, storyId: string, sceneId: string, signal?: AbortSignal): Promise<SceneFrame> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/frames`, { method: "POST", ...(signal ? { signal } : {}) }, token);
+}
+export function getSceneFrame(token: string, storyId: string, sceneId: string, frameId: string, signal?: AbortSignal): Promise<SceneFrame> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/frames/${frameId}`, signal ? { signal } : {}, token);
+}
+export async function downloadSceneFrame(token: string, storyId: string, sceneId: string, frameId: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await fetch(`${apiUrl}/stories/${storyId}/scenes/${sceneId}/frames/${frameId}/content`, {
     cache: "no-store", headers: { authorization: `Bearer ${token}` }, ...(signal ? { signal } : {}),
   });
   if (!response.ok) await throwResponseError(response);

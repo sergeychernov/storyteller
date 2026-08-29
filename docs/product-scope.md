@@ -12,6 +12,8 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 | Upload original photo/video to scene (multipart) | `POST /stories/{storyId}/scenes/{sceneId}/materials` |
 | Read authenticated material content | `GET /stories/{storyId}/materials/{materialId}/content` |
 | Reorder scene materials | `PUT /stories/{storyId}/scenes/{sceneId}/material-order` |
+| Reorder all story scenes (required expected revision) | `PUT /stories/{storyId}/scene-order` |
+| Move materials between scenes atomically (required expected revision) | `POST /stories/{storyId}/scenes/{sceneId}/materials/move` |
 | Configure scene duration, layout, motion and normalized focus point | `PATCH /stories/{storyId}/scenes/{sceneId}` |
 | Remove material | `DELETE /stories/{storyId}/scenes/{sceneId}/materials/{assetId}` |
 | Select renderer | `PUT /stories/{storyId}/scenes/{sceneId}/renderer` |
@@ -29,3 +31,5 @@ This is the proposed HTTP surface. Paths describe product capabilities, not a co
 Preview, music generation and publication endpoints create asynchronous jobs. Their status/resource endpoints will be designed with the first vertical slice so idempotency and persistence are not guessed prematurely.
 
 The implemented scene-deletion contract, current file-cleanup semantics and Web integration are documented in [B05 — scene deletion](b05-scene-deletion.md). Deleting a scene is not archive preservation; F10.1 and its dependent editorial journal F10.2 are planned after MVP in milestone P3 for Web, Mobile and MCP. MVP allows re-uploading source files from the user's device; scene deletion can clean up server files without affecting those local originals.
+
+The implemented timeline, scene-order and material-transfer contracts are documented in [F01.2 — timeline API](f01-2-timeline-api.md). This server work does not complete the Web, native Mobile or MCP interfaces.

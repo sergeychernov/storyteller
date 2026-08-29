@@ -17,6 +17,7 @@ export interface StillImageRenderSpec {
   readonly width?: number;
   readonly height?: number;
   readonly fps?: number;
+  readonly lossless?: boolean;
   readonly overwrite?: boolean;
 }
 
@@ -53,7 +54,9 @@ export async function renderStillImage(
     normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "2", "-filter_complex_threads", "2",
     "-loop", "1", "-t", normalized.durationSeconds.toFixed(3),
     "-i", normalized.sourcePath, "-filter_complex", buildStillImageFilter(normalized), "-map", "[v0]", "-an",
-    "-c:v", "libx264", "-threads", "2", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", String(normalized.fps),
+    "-c:v", "libx264", "-threads", "2",
+    ...(normalized.lossless ? ["-preset", "ultrafast", "-qp", "0"] : ["-preset", "veryfast", "-crf", "20"]),
+    "-pix_fmt", "yuv420p", "-r", String(normalized.fps),
     "-movflags", "+faststart", normalized.outputPath,
   ]);
   if (result.exitCode !== 0) {
@@ -68,6 +71,7 @@ function normalizeSpec(spec: StillImageRenderSpec): Required<StillImageRenderSpe
   const height = spec.height ?? 1920;
   const fps = spec.fps ?? 30;
   const overwrite = spec.overwrite ?? false;
+  const lossless = spec.lossless ?? false;
   const focusPoint = spec.focusPoint ?? { x: 0.5, y: 0.5 };
   if (![width, height, fps, spec.durationSeconds, spec.sourceSize.width, spec.sourceSize.height]
     .every((value) => Number.isFinite(value) && value > 0)) {
@@ -76,7 +80,7 @@ function normalizeSpec(spec: StillImageRenderSpec): Required<StillImageRenderSpe
   if (![focusPoint.x, focusPoint.y].every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) {
     throw new Error("focus point coordinates must be between 0 and 1");
   }
-  return { ...spec, width, height, fps, focusPoint, overwrite };
+  return { ...spec, width, height, fps, focusPoint, lossless, overwrite };
 }
 
 function panCropX(plan: StillImagePanPlan, durationSeconds: number): string {

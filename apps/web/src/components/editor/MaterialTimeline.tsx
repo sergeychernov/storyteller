@@ -14,15 +14,22 @@ interface MaterialTimelineProps {
   readonly variant: "default" | "mobilePanel" | "desktopPanel";
   readonly onUpload: (files: readonly File[]) => void; readonly onDeleteMaterial: (materialId: string) => void;
   readonly onReorder: (ids: readonly string[]) => void;
+  readonly onMoveToScene: (sourceSceneId: string, materialId: string, targetSceneId: string) => void;
   readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
 }
 
 export function MaterialTimeline({
   scene, copy, saving, uploading, uploadCount, storyId, session, variant,
-  onUpload, onDeleteMaterial, onReorder, onEditMaterial,
+  onUpload, onDeleteMaterial, onReorder, onMoveToScene, onEditMaterial,
 }: MaterialTimelineProps) {
   const materials = scene.materials;
-  const { orderedMaterials, draggingId, dragVisual, stripRef, startDrag, moveWithKeyboard } = useMaterialDrag({ materials, saving, onReorder });
+  const { orderedMaterials, draggingId, dragVisual, stripRef, startDrag, moveWithKeyboard } = useMaterialDrag({
+    materials,
+    sceneId: scene.id,
+    saving,
+    onReorder,
+    onMoveToScene: (materialId, targetSceneId) => onMoveToScene(scene.id, materialId, targetSceneId),
+  });
 
   return (
     <section className={classNames(styles.section, variant !== "default" && styles[variant])}>

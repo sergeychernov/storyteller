@@ -3,7 +3,8 @@ import test from "node:test";
 import {
   addMaterial, addNarration, addScene, configureScene, createStillImageMotionPlan, createStory, evaluateStillImageMotion,
   focusDwellProgress, getLayoutOptions, mergeMaterialOrder, removeMaterial, removeScene, reorderMaterials, replaceMaterial, selectRenderer, setSceneTitle,
-  transitionStory, verticalStoryFrame,
+  buildStoryTimeline, getSceneDurationSeconds, moveSceneMaterials, reorderScenes, transitionStory, verticalStoryFrame,
+  type Story, type VideoMaterial,
 } from "./index.js";
 
 test("a render starts only when every scene has material and a renderer", () => {
@@ -178,3 +179,126 @@ test("removing a scene also removes narrations anchored to it", () => {
   assert.deepEqual(changed.scenes.map(({ id }) => id), ["scene-2"]);
   assert.deepEqual(changed.narrations, []);
 });
+
+test("scene order persists explicitly without invalidating independent renders or narration anchors", () => {
+  let story = addScene(addScene(createStory({ id: "story", profileId: "profile" }), "a"), "b");
+  story = addNarration(story, { id: "voice", assetId: "audio", fromSceneId: "a" });
+  story = { ...story, status: "ready", music: { generationStatus: "ready", assetId: "music", applied: true } };
+  const changed = reorderScenes(story, ["b", "a"]);
+  assert.deepEqual(changed.scenes, [story.scenes[1], story.scenes[0]]);
+  assert.equal(changed.scenes[0], story.scenes[1]);
+  assert.equal(changed.narrations, story.narrations);
+  assert.equal(changed.revision, story.revision + 1);
+  assert.equal(changed.status, "draft");
+  assert.deepEqual(changed.music, { ...story.music, applied: false });
+  assert.deepEqual(story.scenes.map(({ id }) => id), ["a", "b"]);
+  for (const order of [[], ["a"], ["a", "a"], ["a", "missing"], ["a", "b", "c"]]) {
+    assert.throws(() => reorderScenes(story, order));
+  }
+  assert.throws(() => reorderScenes({ ...story, status: "rendering" }, ["b", "a"]), /cannot be edited/);
+  assert.deepEqual(reorderScenes(createStory({ id: "empty", profileId: "profile" }), []).scenes, []);
+});
+
+test("batch transfer preserves media metadata and resets only the two affected presentations in one revision", () => {
+  let story = addScene(addScene(addScene(createStory({ id: "story", profileId: "profile" }), "a"), "b"), "c");
+  for (const id of ["p1", "p2", "p3"]) story = addMaterial(story, "a", imageMaterial(id, "portrait"));
+  story = addMaterial(story, "b", imageMaterial("p4", "portrait"));
+  story = addNarration(story, { id: "voice", assetId: "audio", fromSceneId: "a" });
+  const original = structuredClone(story);
+  const changed = moveSceneMaterials(story, "a", { materialIds: ["p3", "p1"], targetSceneId: "b", targetIndex: 1 });
+  assert.deepEqual(changed.scenes[0]!.materials.map(({ id }) => id), ["p2"]);
+  assert.deepEqual(changed.scenes[1]!.materials.map(({ id }) => id), ["p4", "p3", "p1"]);
+  assert.equal(changed.scenes[1]!.materials[1], story.scenes[0]!.materials[2]);
+  assert.equal(changed.scenes[2], story.scenes[2]);
+  assert.equal(changed.scenes[0]!.rendererId, "still-image");
+  assert.equal(changed.scenes[1]!.rendererId, undefined);
+  assert.deepEqual(changed.scenes.slice(0, 2).map(({ render }) => render), [{ status: "idle" }, { status: "idle" }]);
+  assert.equal(changed.revision, story.revision + 1);
+  assert.equal(changed.narrations, story.narrations);
+  assert.deepEqual(story, original);
+  const input = { materialIds: ["p1"], targetSceneId: "b", targetIndex: 0 };
+  for (const invalid of [
+    { ...input, materialIds: [] }, { ...input, materialIds: ["p1", "p1"] }, { ...input, materialIds: ["p1", "missing"] },
+    { ...input, targetSceneId: "a" }, { ...input, targetSceneId: "missing" },
+    ...[-1, 2, 0.5, NaN].map((targetIndex) => ({ ...input, targetIndex })),
+  ]) assert.throws(() => moveSceneMaterials(story, "a", invalid));
+  assert.deepEqual(story, original);
+});
+
+test("moving the last image away leaves the source and its narration, and never leaves a photo renderer on video", () => {
+  let story = addScene(addScene(createStory({ id: "story", profileId: "profile" }), "a"), "b");
+  story = addMaterial(story, "a", imageMaterial("image", "portrait"));
+  story = addMaterial(story, "a", timelineVideo("video", 42));
+  story = selectRenderer(story, "a", "still-image");
+  story = addNarration(story, { id: "voice", assetId: "audio", fromSceneId: "b" });
+  const moved = moveSceneMaterials(story, "a", { materialIds: ["image"], targetSceneId: "b", targetIndex: 0 });
+  assert.equal(moved.scenes[0]!.rendererId, undefined);
+  assert.equal(moved.scenes[0]!.focusPoint, undefined);
+  assert.equal(moved.scenes[1]!.rendererId, "still-image");
+  const emptied = moveSceneMaterials(moved, "b", { materialIds: ["image"], targetSceneId: "a", targetIndex: 0 });
+  assert.deepEqual(emptied.scenes[1]!.materials, []);
+  assert.equal(emptied.narrations[0]!.fromSceneId, "b");
+  assert.equal(emptied.scenes.length, 2);
+});
+
+test("timeline uses configured photo/layout timing, original video duration and trims without shortening", () => {
+  let story = timelineStory();
+  story = addMaterial(story, "photo", imageMaterial("another", "portrait"));
+  const timeline = buildStoryTimeline(story);
+  assert.deepEqual(timeline.scenes.map(({ startSeconds, endSeconds, durationSource }) => [startSeconds, endSeconds, durationSource]), [
+    [0, 5, "scene"], [5, 185.25, "video"], [185.25, 187.75, "trim"],
+  ]);
+  assert.equal(timeline.totalDurationSeconds, 187.75);
+  assert.equal(timeline.transitionOverlapSeconds, 0);
+  assert.deepEqual(timeline.warnings, []);
+  assert.equal(buildStoryTimeline(reorderScenes(story, ["trim", "photo", "video"])).totalDurationSeconds, 187.75);
+  assert.equal(story.scenes[1]!.durationSeconds, 5);
+});
+
+test("empty and unknown-duration scenes never fabricate footage or downstream timestamps", () => {
+  const story = addScene(timelineStory(), "empty");
+  const video = timelineVideo("legacy");
+  const unknown: Story = { ...story, scenes: story.scenes.map((scene) => scene.id === "video" ? { ...scene, materials: [video] } : scene) };
+  const timeline = buildStoryTimeline(unknown, [{ formatId: "test", maxDurationSeconds: 6, requiresVerifiedAccount: false }]);
+  assert.equal(timeline.totalDurationSeconds, null);
+  assert.equal(timeline.knownDurationSeconds, 7.5);
+  assert.equal(timeline.scenes[1]!.startSeconds, 5);
+  assert.equal(timeline.scenes[1]!.endSeconds, null);
+  assert.equal(timeline.scenes[2]!.startSeconds, null);
+  assert.equal(timeline.scenes[3]!.durationSeconds, 0);
+  assert.deepEqual(timeline.warnings, [
+    { code: "unknown_video_duration", sceneId: "video" }, { code: "empty_scene", sceneId: "empty" },
+  ]);
+  assert.equal(timeline.formatLimits[0]!.status, "exceeded");
+  assert.equal(timeline.formatLimits[0]!.excessSeconds, 1.5);
+  assert.equal(timeline.formatLimits[0]!.isLowerBound, true);
+  assert.equal(buildStoryTimeline(unknown, [{ formatId: "test", maxDurationSeconds: 180, requiresVerifiedAccount: false }]).formatLimits[0]!.status, "unknown");
+  const trackVideo = { ...video, videoTrack: { storageKey: "track.mp4", mimeType: "video/mp4", sizeBytes: 100, durationSeconds: 12.5 } };
+  assert.equal(getSceneDurationSeconds({ ...unknown.scenes[1]!, materials: [trackVideo] }), 12.5);
+});
+
+test("duration warnings are advisory, include exact excess and accept a duration exactly at the limit", () => {
+  const story = timelineStory();
+  const before = structuredClone(story);
+  const limits = [180, 187.75, 900].map((maxDurationSeconds) => ({ formatId: String(maxDurationSeconds), maxDurationSeconds, requiresVerifiedAccount: false }));
+  assert.deepEqual(buildStoryTimeline(story, limits).formatLimits.map(({ status, excessSeconds }) => [status, excessSeconds]), [
+    ["exceeded", 7.75], ["within_limit", 0], ["within_limit", 0],
+  ]);
+  assert.deepEqual(story, before);
+  assert.equal(buildStoryTimeline(createStory({ id: "empty", profileId: "profile" })).totalDurationSeconds, 0);
+});
+
+function timelineVideo(id: string, sourceDurationSeconds?: number): VideoMaterial {
+  return { ...fileMetadata(id, "landscape"), kind: "video", hasAudio: false, audioTags: [],
+    ...(sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds }) };
+}
+
+function timelineStory(): Story {
+  let story = createStory({ id: "story", profileId: "profile" });
+  for (const id of ["photo", "video", "trim"]) story = addScene(story, id);
+  story = addMaterial(story, "photo", imageMaterial("image", "portrait"));
+  story = addMaterial(story, "video", timelineVideo("full", 180.25));
+  return addMaterial(story, "trim", { ...timelineVideo("trimmed", 20), edit: {
+    rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 3.25, endSeconds: 5.75 },
+  } });
+}

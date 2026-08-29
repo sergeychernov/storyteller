@@ -18,6 +18,7 @@ interface SceneEditorTabsProps {
   readonly session: AuthSession;
   readonly onUpload: (files: readonly File[]) => void;
   readonly onDeleteMaterial: (materialId: string) => void;
+  readonly onMoveMaterial: (sourceSceneId: string, materialId: string, targetSceneId: string) => void;
   readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onChange: (change: SceneChange) => void;
@@ -27,7 +28,7 @@ type EditorTab = "materials" | "composition";
 
 export function SceneEditorTabs({
   scene, copy, saving, uploading, uploadCount, storyId, session,
-  onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange,
+  onUpload, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onChange,
 }: SceneEditorTabsProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>("materials");
   const singleVideo = isSingleVideoScene(scene);
@@ -69,6 +70,7 @@ export function SceneEditorTabs({
           variant="mobilePanel"
           onUpload={onUpload}
           onDeleteMaterial={onDeleteMaterial}
+          onMoveToScene={onMoveMaterial}
           onEditMaterial={onEditMaterial}
           onReorder={onReorder}
         />}

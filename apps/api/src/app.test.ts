@@ -12,6 +12,7 @@ import { Readable } from "node:stream";
 import type { LightMyRequestResponse } from "fastify";
 import type { OpenAPIV3 } from "openapi-types";
 import { sceneRenderFileType, sceneRenderStorageKey } from "@storyteller/render-queue";
+import type { StoryTimelineResponse } from "@storyteller/schemas";
 import sharp from "sharp";
 import { normalizeStoredStory } from "./database.js";
 import { buildApi } from "./server.js";
@@ -733,6 +734,45 @@ test("render versions invalidate locally, reject stale downloads, survive reopen
   assert.equal((await api.inject({ method: "GET", url: `${rendersUrl}/${first.id}/content`, headers })).statusCode, 404);
 });
 
+test("scene frames are separate lossless base-visual PNG artifacts and follow scene cache invalidation", async (context) => {
+  const { api, application, queue, storage, storyId, profileId, headers, sceneId } = await versionFixture(context);
+  const framesUrl = `/stories/${storyId}/scenes/${sceneId}/frames`;
+  const firstResponse = await api.inject({ method: "POST", url: framesUrl, headers });
+  assert.equal(firstResponse.statusCode, 202, firstResponse.body);
+  const first = firstResponse.json<{
+    id: string; artifact: string; current: boolean; inputHash: string;
+    mode?: string; parameters: { artifact?: string; frame?: { layerPolicy?: string } };
+  }>();
+  assert.equal(first.artifact, "scene-frame");
+  assert.equal(first.current, true);
+  assert.equal(first.mode, undefined);
+  assert.equal(first.parameters.artifact, "scene-frame");
+  assert.equal(first.parameters.frame?.layerPolicy, "base-visual");
+  assert.deepEqual((await api.inject({ method: "GET", url: `/stories/${storyId}/scenes/${sceneId}/renders`, headers })).json(), []);
+
+  const bytes = Buffer.from("png-last-base-frame");
+  const contentHash = createHash("sha256").update(bytes).digest("hex");
+  const storageKey = `projects/${profileId}/${storyId}/scenes/${sceneId}/frames/${first.inputHash}.png`;
+  await storage.put(storageKey, { body: Readable.from(bytes), contentType: "image/png", contentLength: bytes.length });
+  await queue.complete(first.id, "worker", storageKey, bytes.length, contentHash);
+  const content = await api.inject({ method: "GET", url: `${framesUrl}/${first.id}/content`, headers });
+  assert.equal(content.statusCode, 200, content.body);
+  assert.equal(content.headers["content-type"], "image/png");
+  assert.match(content.headers["content-disposition"]!, /^inline;/);
+  assert.deepEqual(content.rawPayload, bytes);
+
+  await application.configureScene(profileId, storyId, sceneId, { durationSeconds: 8 });
+  const stale = await api.inject({ method: "GET", url: `${framesUrl}/${first.id}/content`, headers });
+  assert.equal(stale.statusCode, 409);
+  assert.equal(stale.json<{ code: string }>().code, "scene_frame_stale");
+  const changed = await api.inject({ method: "POST", url: framesUrl, headers });
+  assert.equal(changed.statusCode, 202, changed.body);
+  assert.notEqual(changed.json<{ id: string }>().id, first.id);
+  assert.equal((await api.inject({ method: "GET", url: `${framesUrl}/${first.id}`, headers: {
+    authorization: `Bearer ${(await application.register({ name: "Frame Other", email: "frame-other@example.com", password: "long-test-password" })).accessToken}`,
+  } })).statusCode, 404);
+});
+
 test("legacy material hashes come from bytes and match new uploads; legacy renders are not current", async (context) => {
   const { api, application, queue, storage, storyId, profileId, headers, sceneId } = await versionFixture(context);
   const url = `/stories/${storyId}/scenes/${sceneId}/renders`;
@@ -789,6 +829,172 @@ test("video dependencies preserve audio after visual edits and invalidate every 
   assert.equal((await api.inject({ method: "POST", url, headers, payload: { mode: "audio" } })).json<{ id: string }>().id, ids.get("audio"));
   await api.inject({ method: "PATCH", url: editUrl, headers, payload: { ...visualEdit, trim: { startSeconds: 1, endSeconds: 9 } } });
   for (const id of ids.values()) assert.equal((await api.inject({ method: "GET", url: `${url}/${id}`, headers })).json<{ current: boolean }>().current, false);
+});
+
+test("timeline API recalculates trimmed video timing and warnings from the stored order", async (context) => {
+  const { api, application, story: initial, headers } = await sceneDeletionFixture(context);
+  const [photo, video, empty] = initial.scenes;
+  const metadata = { name: "photo.png", storageKey: "photo.png", mimeType: "image/png", orientation: "portrait" as const, width: 100, height: 200, sizeBytes: 100 };
+  await application.addSceneMaterial(initial.profileId, initial.id, photo!.id, { ...metadata, kind: "image" });
+  let story = await application.addSceneMaterial(initial.profileId, initial.id, video!.id, {
+    ...metadata, kind: "video", hasAudio: false, audioTags: [], sourceDurationSeconds: 200,
+    edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 1.25, endSeconds: 190 } },
+  });
+  const url = `/stories/${story.id}/timeline`;
+  const response = await api.inject({ method: "GET", url, headers });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.headers["cache-control"], "private, no-store");
+  const timeline = response.json<StoryTimelineResponse>();
+  assert.equal(timeline.totalDurationSeconds, 193.75);
+  assert.equal(timeline.revision, story.revision);
+  assert.deepEqual(timeline.warnings, [{ code: "empty_scene", sceneId: empty!.id }]);
+  assert.equal(timeline.formatLimits.find(({ formatId }) => formatId === "youtube-shorts")!.excessSeconds, 13.75);
+  assert.equal(timeline.formatLimits.find(({ formatId }) => formatId === "youtube-video")!.status, "within_limit");
+  assert.equal(timeline.formatLimits.find(({ formatId }) => formatId === "youtube-video-verified")!.requiresVerifiedAccount, true);
+  const sceneIds = [video!.id, empty!.id, photo!.id];
+  const reordered = await api.inject({ method: "PUT", url: `/stories/${story.id}/scene-order`, headers,
+    payload: { sceneIds, expectedRevision: story.revision } });
+  assert.equal(reordered.statusCode, 200, reordered.body);
+  story = reordered.json<Story>();
+  assert.deepEqual((await api.inject({ method: "GET", url: `/stories/${story.id}`, headers })).json<Story>(), story);
+  const changed = (await api.inject({ method: "GET", url, headers })).json<StoryTimelineResponse>();
+  assert.deepEqual(changed.sceneOrder, sceneIds);
+  assert.deepEqual(changed.scenes.map(({ startSeconds }) => startSeconds), [0, 188.75, 188.75]);
+  assert.equal(changed.totalDurationSeconds, timeline.totalDurationSeconds);
+  await application.configureScene(story.profileId, story.id, photo!.id, { durationSeconds: 10 });
+  assert.equal((await api.inject({ method: "GET", url, headers })).json<StoryTimelineResponse>().totalDurationSeconds, 198.75);
+});
+
+test("moving uploaded materials preserves content after source deletion and invalidates only affected render inputs", async (context) => {
+  const { api, application, repository, storyId, profileId, headers, sceneId, otherSceneId } = await versionFixture(context);
+  const renderUrl = (id: string) => `/stories/${storyId}/scenes/${id}/renders`;
+  for (const id of [sceneId, otherSceneId]) assert.equal((await api.inject({ method: "POST", url: renderUrl(id), headers })).statusCode, 202);
+  let story = await application.getStory(profileId, storyId);
+  const reordered = await api.inject({ method: "PUT", url: `/stories/${storyId}/scene-order`, headers,
+    payload: { sceneIds: [otherSceneId, sceneId], expectedRevision: story.revision } });
+  assert.equal(reordered.statusCode, 200, reordered.body);
+  story = reordered.json<Story>();
+  for (const id of [sceneId, otherSceneId]) {
+    assert.equal((await api.inject({ method: "GET", url: renderUrl(id), headers })).json<{ current: boolean }[]>()[0]!.current, true);
+  }
+  const material = story.scenes.find(({ id }) => id === sceneId)!.materials[0]!;
+  const contentUrl = `/stories/${storyId}/materials/${material.id}/content`;
+  const bytes = (await api.inject({ method: "GET", url: contentUrl, headers })).rawPayload;
+  const response = await api.inject({ method: "POST", url: `/stories/${storyId}/scenes/${sceneId}/materials/move`, headers,
+    payload: { materialIds: [material.id], targetSceneId: otherSceneId, targetIndex: 0, expectedRevision: story.revision } });
+  assert.equal(response.statusCode, 200, response.body);
+  const moved = response.json<Story>();
+  assert.equal(moved.revision, story.revision + 1);
+  assert.deepEqual(moved.scenes.find(({ id }) => id === sceneId)!.materials, []);
+  assert.deepEqual(moved.scenes.find(({ id }) => id === otherSceneId)!.materials[0], material);
+  for (const id of [sceneId, otherSceneId]) {
+    assert.equal((await api.inject({ method: "GET", url: renderUrl(id), headers })).json<{ current: boolean }[]>()[0]!.current, false);
+  }
+  assert.deepEqual(repository.deletedSceneStorageKeys, []);
+  assert.equal((await api.inject({ method: "DELETE", url: `/stories/${storyId}/scenes/${sceneId}`, headers,
+    payload: { expectedRevision: moved.revision } })).statusCode, 200);
+  assert.deepEqual(repository.deletedSceneStorageKeys, []);
+  const retained = await api.inject({ method: "GET", url: contentUrl, headers });
+  assert.equal(retained.statusCode, 200);
+  assert.deepEqual(retained.rawPayload, bytes);
+});
+
+test("timeline endpoints validate access, complete orders and batch transfer inputs without partial changes", async (context) => {
+  const { api, application, repository, story: empty, headers } = await sceneDeletionFixture(context, 2);
+  const [source, target] = empty.scenes;
+  const story = await application.addSceneMaterial(empty.profileId, empty.id, source!.id, {
+    kind: "image", name: "photo.png", storageKey: "photo.png", mimeType: "image/png", orientation: "portrait", width: 100, height: 200, sizeBytes: 100,
+  });
+  const materialId = story.scenes[0]!.materials[0]!.id;
+  const orderUrl = `/stories/${story.id}/scene-order`;
+  const moveUrl = `/stories/${story.id}/scenes/${source!.id}/materials/move`;
+  const order = { sceneIds: [target!.id, source!.id], expectedRevision: story.revision };
+  const move = { materialIds: [materialId], targetSceneId: target!.id, targetIndex: 0, expectedRevision: story.revision };
+  const requests = [{ method: "GET" as const, url: `/stories/${story.id}/timeline` },
+    { method: "PUT" as const, url: orderUrl, payload: order }, { method: "POST" as const, url: moveUrl, payload: move }];
+  const other = await application.register({ name: "Other", email: "timeline-other@example.com", password: "long-test-password" });
+  for (const request of requests) {
+    assert.equal((await api.inject(request)).statusCode, 401);
+    assert.equal((await api.inject({ ...request, headers: { authorization: "Bearer invalid" } })).statusCode, 401);
+    assert.equal((await api.inject({ ...request, headers: { authorization: `Bearer ${other.accessToken}` } })).statusCode, 404);
+    assert.equal((await api.inject({ ...request, url: request.url.replace(story.id, randomUUID()), headers })).statusCode, 404);
+  }
+  for (const sceneIds of [[], [source!.id], [source!.id, source!.id], [source!.id, randomUUID()]]) {
+    assert.equal((await api.inject({ method: "PUT", url: orderUrl, headers, payload: { ...order, sceneIds } })).statusCode, 422);
+  }
+  for (const payload of [{ sceneIds: order.sceneIds }, { ...order, sceneIds: ["bad"] }, { ...order, expectedRevision: 0 }, { ...order, typo: true }]) {
+    assert.equal((await api.inject({ method: "PUT", url: orderUrl, headers, payload })).statusCode, 400);
+  }
+  for (const payload of [{ ...move, materialIds: [] }, { ...move, expectedRevision: undefined }, { ...move, targetIndex: -1 },
+    { ...move, targetIndex: 0.5 }, { ...move, unexpected: true }]) {
+    assert.equal((await api.inject({ method: "POST", url: moveUrl, headers, payload })).statusCode, 400);
+  }
+  for (const payload of [{ ...move, materialIds: [materialId, materialId] }, { ...move, targetIndex: 1 }, { ...move, targetSceneId: source!.id }]) {
+    const invalid = await api.inject({ method: "POST", url: moveUrl, headers, payload });
+    assert.equal(invalid.statusCode, 422, invalid.body);
+    assert.equal(invalid.json<{ code: string }>().code, "invalid_timeline_edit");
+  }
+  const otherStory = await application.createStory(story.profileId, { title: "Other story" });
+  const foreignScene = (await application.createScene(story.profileId, otherStory.id)).scenes[0]!;
+  for (const payload of [{ ...move, materialIds: [materialId, randomUUID()] }, { ...move, targetSceneId: randomUUID() }, { ...move, targetSceneId: foreignScene.id }]) {
+    assert.equal((await api.inject({ method: "POST", url: moveUrl, headers, payload })).statusCode, 404);
+  }
+  for (const request of requests.slice(1)) {
+    const stale = await api.inject({ ...request, headers, payload: { ...request.payload, expectedRevision: story.revision - 1 } });
+    assert.equal(stale.statusCode, 409);
+    assert.equal(stale.json<{ code: string }>().code, "story_revision_conflict");
+  }
+  assert.deepEqual(repository.stories.get(story.id), story);
+  for (const status of ["rendering", "publishing", "published"] as const) {
+    const locked = { ...story, status };
+    repository.stories.set(story.id, locked);
+    for (const request of requests.slice(1)) {
+      const response = await api.inject({ ...request, headers });
+      assert.equal(response.statusCode, 409);
+      assert.equal(response.json<{ code: string }>().code, "story_not_editable");
+    }
+    assert.deepEqual(repository.stories.get(story.id), locked);
+  }
+  assert.deepEqual(repository.deletedSceneStorageKeys, []);
+});
+
+test("timeline compare-and-swap rejects concurrent saves without overwriting or moving files", async (context) => {
+  const { api, repository, application, story: initial, headers } = await sceneDeletionFixture(context, 2);
+  const story = await application.addSceneMaterial(initial.profileId, initial.id, initial.scenes[0]!.id, {
+    kind: "image", name: "photo.png", storageKey: "photo.png", mimeType: "image/png", orientation: "portrait", width: 100, height: 200, sizeBytes: 100,
+  });
+  const concurrent = { ...story, revision: story.revision + 1 };
+  const persist = repository.updateStory.bind(repository);
+  repository.updateStory = async (changed) => { repository.stories.set(story.id, concurrent); await persist(changed); };
+  for (const request of [
+    { method: "PUT" as const, url: `/stories/${story.id}/scene-order`, payload: { sceneIds: story.scenes.map(({ id }) => id).reverse(), expectedRevision: story.revision } },
+    { method: "POST" as const, url: `/stories/${story.id}/scenes/${story.scenes[0]!.id}/materials/move`, payload: {
+      materialIds: [story.scenes[0]!.materials[0]!.id], targetSceneId: story.scenes[1]!.id, targetIndex: 0, expectedRevision: story.revision,
+    } },
+  ]) {
+    repository.stories.set(story.id, story);
+    const response = await api.inject({ ...request, headers });
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json<{ code: string }>().code, "story_revision_conflict");
+    assert.deepEqual(repository.stories.get(story.id), concurrent);
+  }
+  assert.deepEqual(repository.deletedSceneStorageKeys, []);
+});
+
+test("OpenAPI exposes timeline contracts with required revision guards and documented errors", async (context) => {
+  const { api } = await sceneDeletionFixture(context, 0);
+  await api.ready();
+  const document = api.swagger() as OpenAPIV3.Document;
+  assert.equal(document.paths["/stories/{storyId}/timeline"]?.get?.operationId, "getStoryTimeline");
+  for (const operation of [document.paths["/stories/{storyId}/scene-order"]?.put,
+    document.paths["/stories/{storyId}/scenes/{sceneId}/materials/move"]?.post]) {
+    assert.ok(operation?.requestBody && "content" in operation.requestBody);
+    assert.equal(operation.requestBody.required, true);
+    const schema = operation.requestBody.content["application/json"]?.schema;
+    assert.ok(schema && "required" in schema && schema.required?.includes("expectedRevision"));
+    assert.deepEqual(Object.keys(operation.responses).sort(), ["200", "400", "401", "404", "409", "422"]);
+    assert.deepEqual(operation.security, [{ bearerAuth: [] }]);
+  }
 });
 
 async function versionFixture(context: TestContext) {

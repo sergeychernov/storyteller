@@ -14,6 +14,7 @@ export interface VideoRenderSpec {
   readonly hasAudio: boolean;
   readonly mode: VideoExportMode;
   readonly edit: MaterialEdit;
+  readonly lossless?: boolean;
 }
 
 export async function renderVideo(spec: VideoRenderSpec, runner: MediaProcessRunner = new SpawnMediaProcessRunner()): Promise<void> {
@@ -44,7 +45,8 @@ export async function renderVideo(spec: VideoRenderSpec, runner: MediaProcessRun
       : spec.edit.rotation === 180 ? ["hflip", "vflip"] : spec.edit.rotation === 270 ? ["transpose=cclock"] : [];
     args.push("-map", "0:v:0", "-vf", [
       ...rotation, `crop=${crop.width}:${crop.height}:${crop.left}:${crop.top}`, "setsar=1", "setpts=PTS-STARTPTS",
-    ].join(","), "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p");
+    ].join(","), "-c:v", "libx264", ...(spec.lossless
+      ? ["-preset", "ultrafast", "-qp", "0"] : ["-preset", "veryfast", "-crf", "20"]), "-pix_fmt", "yuv420p");
   } else args.push("-vn");
   if (includeAudio) {
     args.push("-map", `${includeVideo ? 1 : 0}:a:0`, "-af",

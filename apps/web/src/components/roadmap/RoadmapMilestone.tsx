@@ -20,6 +20,11 @@ export function RoadmapMilestone({ milestone, locale, copy }: RoadmapMilestonePr
         <span className={styles.state}>{milestone.state === "complete" && <span aria-hidden="true">✓ </span>}{label}</span>
       </div>
       <h3 className={styles.title}>{title}</h3>
+      {milestone.estimatedCompletion && (
+        <p className={styles.estimate}>
+          <time dateTime={milestone.estimatedCompletion.month}>{milestone.estimatedCompletion.label[locale]}</time>
+        </p>
+      )}
       <progress className={styles.progress} max={milestone.total || 1} value={milestone.completed} aria-label={`${milestone.id} · ${title}`} />
       <p className={styles.count}>{milestone.total > 0 ? `${milestone.completed} / ${milestone.total} ${copy.tasks}` : copy.scopePending}</p>
     </li>

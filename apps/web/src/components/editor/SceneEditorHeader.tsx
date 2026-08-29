@@ -1,10 +1,10 @@
-import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
-import { SceneSwitcherSheet } from "./SceneSwitcherSheet.js";
 import styles from "./SceneEditorHeader.module.css";
+
+export type MobileEditorMode = "scene" | "timeline";
 
 interface SceneEditorHeaderProps {
   readonly storyTitle: string | undefined;
@@ -12,36 +12,32 @@ interface SceneEditorHeaderProps {
   readonly selectedId: string;
   readonly copy: EditorCopy;
   readonly saving: boolean;
-  readonly adding: boolean;
-  readonly onSelect: (id: string) => void;
-  readonly onAdd: () => void;
+  readonly mode: MobileEditorMode;
+  readonly onModeChange: (mode: MobileEditorMode) => void;
 }
 
-export function SceneEditorHeader({ storyTitle, scenes, selectedId, copy, saving, adding, onSelect, onAdd }: SceneEditorHeaderProps) {
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  const closeSwitcher = useCallback(() => setSwitcherOpen(false), []);
+export function SceneEditorHeader({
+  storyTitle, scenes, selectedId, copy, saving, mode, onModeChange,
+}: SceneEditorHeaderProps) {
   const selectedIndex = scenes.findIndex(({ id }) => id === selectedId);
   const selected = selectedIndex >= 0 ? scenes[selectedIndex] : undefined;
-  return <>
+  const selectedTitle = selected ? selected.title || `${copy.scene} ${selectedIndex + 1}` : copy.noScenes;
+  const context = mode === "scene"
+    ? `${selectedTitle}${scenes.length ? ` · ${selectedIndex + 1}/${scenes.length}` : ""}`
+    : `${storyTitle || copy.untitledStory} · ${scenes.length} ${copy.scenes.toLocaleLowerCase()}`;
+  return (
     <header className={styles.header}>
       <Link className={styles.back} to="/stories" aria-label={copy.allStories}>‹</Link>
-      <button type="button" className={styles.title} aria-haspopup="dialog" onClick={() => setSwitcherOpen(true)}>
-        <strong>{selected ? selected.title || `${copy.scene} ${selectedIndex + 1}` : copy.noScenes} <span>⌄</span></strong>
-        <small>{storyTitle || copy.untitledStory}{scenes.length ? ` · ${selectedIndex + 1}/${scenes.length}` : ""}</small>
-      </button>
+      <div className={styles.center}>
+        <div className={styles.modeSwitch} role="group" aria-label={copy.editorModes}>
+          <button type="button" aria-pressed={mode === "scene"} onClick={() => onModeChange("scene")}>{copy.scene}</button>
+          <button type="button" aria-pressed={mode === "timeline"} onClick={() => onModeChange("timeline")}>{copy.timeline}</button>
+        </div>
+        <span className={styles.context}>{context}</span>
+      </div>
       <span className={classNames(styles.saveState, saving && styles.saving)} role="status" aria-label={saving ? copy.saving : copy.saved}>
         {saving ? "●" : "✓"}
       </span>
     </header>
-    <SceneSwitcherSheet
-      open={switcherOpen}
-      scenes={scenes}
-      selectedId={selectedId}
-      copy={copy}
-      adding={adding}
-      onClose={closeSwitcher}
-      onSelect={onSelect}
-      onAdd={onAdd}
-    />
-  </>;
+  );
 }

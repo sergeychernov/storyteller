@@ -1,7 +1,7 @@
 import { ApplicationError } from "@storyteller/application";
 import { centeredFocusPoint, getMaterialPresentation, getMaterialSource, type Scene, type VideoExportMode } from "@storyteller/domain";
 import type { RenderDependency, SceneRenderInput } from "@storyteller/render-queue";
-import { stillImageRendererVersion, videoRendererVersion } from "@storyteller/renderer";
+import { lastFrameRendererVersion, sceneFramePngCompressionLevel, stillImageRendererVersion, videoRendererVersion } from "@storyteller/renderer";
 import type { MediaStorage } from "./media-storage.js";
 
 export async function buildSceneRenderInput(scene: Scene, media: Pick<MediaStorage, "contentHash">, mode?: VideoExportMode): Promise<SceneRenderInput> {
@@ -58,5 +58,21 @@ export async function buildSceneRenderInput(scene: Scene, media: Pick<MediaStora
     } } : {}),
     durationSeconds: presentation.durationSeconds ?? sourceDurationSeconds ?? scene.durationSeconds,
     output: { ...common.output, width: presentation.width, height: presentation.height },
+  };
+}
+
+export async function buildSceneFrameInput(scene: Scene, media: Pick<MediaStorage, "contentHash">): Promise<SceneRenderInput> {
+  const input = await buildSceneRenderInput(scene, media, scene.materials[0]?.kind === "video" ? "video" : undefined);
+  return {
+    ...input,
+    artifact: "scene-frame",
+    frame: {
+      rendererVersion: lastFrameRendererVersion,
+      format: "png",
+      compressionLevel: sceneFramePngCompressionLevel,
+      intermediateCodec: "h264-lossless",
+      // Titles, captions and future overlays deliberately stay outside this recipe.
+      layerPolicy: "base-visual",
+    },
   };
 }

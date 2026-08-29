@@ -22,8 +22,10 @@ export interface StoryEditorViewProps {
   readonly onSelect: (id: string) => void;
   readonly onAdd: () => void;
   readonly onDeleteScene: (sceneId: string) => void;
+  readonly onReorderScenes: (ids: readonly string[]) => void;
   readonly onUpload: (files: readonly File[]) => void;
   readonly onDeleteMaterial: (materialId: string) => void;
+  readonly onMoveMaterial: (sourceSceneId: string, materialId: string, targetSceneId: string) => void;
   readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onChange: (change: SceneChange) => void;

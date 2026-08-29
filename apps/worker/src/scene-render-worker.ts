@@ -5,10 +5,13 @@ import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { sceneRenderFileType, sceneRenderStorageKey, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
-import { renderStillImage, renderVideo, type StillImageRenderSpec, type VideoRenderSpec } from "@storyteller/renderer";
+import {
+  renderLastFrame, renderStillImage, renderVideo, type LastFrameRenderSpec, type StillImageRenderSpec, type VideoRenderSpec,
+} from "@storyteller/renderer";
 import { hashFileContent, type ObjectStorage } from "@storyteller/storage";
 
 export type StillImageRender = (spec: StillImageRenderSpec) => Promise<unknown>;
+export type LastFrameRender = (spec: LastFrameRenderSpec) => Promise<unknown>;
 
 export interface SceneRenderWorkerLogger {
   info(message: string, details: Record<string, unknown>): void;
@@ -24,6 +27,7 @@ export class SceneRenderWorker {
     private readonly leaseMilliseconds = 10 * 60 * 1_000,
     private readonly logger: SceneRenderWorkerLogger = console,
     private readonly renderMotionVideo: (spec: VideoRenderSpec) => Promise<unknown> = renderVideo,
+    private readonly renderFrame: LastFrameRender = renderLastFrame,
   ) {}
 
   async runOnce(): Promise<boolean> {
@@ -51,6 +55,7 @@ export class SceneRenderWorker {
     const sourcePath = join(temporaryDirectory, `source${safeExtension(job.input.material.name)}`);
     const file = sceneRenderFileType(job.input);
     const outputPath = join(temporaryDirectory, `scene.${file.extension}`);
+    const visualOutputPath = job.input.artifact === "scene-frame" ? join(temporaryDirectory, "base.mp4") : outputPath;
     // A worker whose lease expires must never overwrite/delete another attempt's result.
     const storageKey = sceneRenderStorageKey(job, randomUUID());
     let uploaded = false;
@@ -58,6 +63,9 @@ export class SceneRenderWorker {
     this.logger.info("scene render started", renderLogDetails(job));
     try {
       const input = job.input;
+      const frame = input.artifact === "scene-frame" ? input.frame : undefined;
+      if (input.artifact === "scene-frame" && (!frame || frame.layerPolicy !== "base-visual" || frame.format !== "png"
+        || frame.intermediateCodec !== "h264-lossless")) throw new Error("scene frame manifest is incomplete");
       const needsVideoSource = input.rendererId !== "video" || input.mode !== "audio" || !input.audio;
       if (needsVideoSource) await pipeline(await this.storage.open(input.material.storageKey), createWriteStream(sourcePath, { flags: "wx" }));
       if (needsVideoSource) await verifySource(sourcePath, input.material.contentHash);
@@ -69,14 +77,14 @@ export class SceneRenderWorker {
       }
       stage = "render";
       if (input.rendererId === "video") await this.renderMotionVideo({
-        ...(needsVideoSource ? { sourcePath } : {}), ...(audioPath ? { audioPath } : {}), outputPath,
+        ...(needsVideoSource ? { sourcePath } : {}), ...(audioPath ? { audioPath } : {}), outputPath: visualOutputPath,
         sourceSize: { width: input.material.width, height: input.material.height },
         ...(input.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: input.sourceDurationSeconds }),
-        hasAudio: input.hasAudio, mode: input.mode, edit: input.edit,
+        hasAudio: input.hasAudio, mode: input.mode, edit: input.edit, lossless: input.artifact === "scene-frame",
       });
       else await this.render({
         sourcePath,
-        outputPath,
+        outputPath: visualOutputPath,
         sourceSize: { width: job.input.material.width, height: job.input.material.height },
         orientation: job.input.material.orientation,
         durationSeconds: job.input.durationSeconds,
@@ -85,8 +93,10 @@ export class SceneRenderWorker {
         width: job.input.output.width,
         height: job.input.output.height,
         fps: job.input.output.fps,
+        lossless: input.artifact === "scene-frame",
         overwrite: true,
       });
+      if (frame) await this.renderFrame({ sourcePath: visualOutputPath, outputPath, compressionLevel: frame.compressionLevel });
       const output = await stat(outputPath);
       const contentHash = await hashFileContent(outputPath);
       stage = "upload";
@@ -118,6 +128,7 @@ function renderLogDetails(job: SceneRenderJob): Record<string, unknown> {
     storyId: job.storyId,
     sceneId: job.sceneId,
     rendererId: job.input.rendererId,
+    artifact: job.input.artifact ?? "scene-render",
     motion: job.input.motion,
     durationSeconds: job.input.durationSeconds,
     sourceWidth: job.input.material.width,

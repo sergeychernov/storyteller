@@ -1,0 +1,35 @@
+.image,
+.placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.image {
+  object-fit: cover;
+}
+
+.placeholder {
+  background: linear-gradient(135deg, #45483d, #25271f);
+}
+
+.loading {
+  animation: frame-pulse 1.4s ease-in-out infinite alternate;
+}
+
+.timeline {
+  position: absolute;
+  inset: 0;
+}
+
+.failed {
+  background: #34352f;
+}
+
+@keyframes frame-pulse {
+  to { opacity: 0.72; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placeholder { animation: none; }
+}

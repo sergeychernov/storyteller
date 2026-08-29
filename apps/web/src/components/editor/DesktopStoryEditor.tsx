@@ -17,7 +17,7 @@ interface DesktopStoryEditorProps extends StoryEditorViewProps {
 export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
   const {
     story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, deleteDisabled,
-    onSelect, onAdd, onUpload, onDeleteMaterial, onEditMaterial, onReorder, onChange, onDeleteScene,
+    onSelect, onAdd, onUpload, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
   } = props;
   const showInspector = !!selected && !isSingleVideoScene(selected);
 
@@ -26,7 +26,19 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
       <DesktopEditorHeader storyTitle={story.title} scenes={story.scenes} selected={selected} copy={copy} saving={saving} compact={props.compact} />
       {operationErrorMessage && <div className={classNames(sharedStyles.operationError, styles.operationError)} role="alert">{operationErrorMessage}</div>}
       <div className={classNames(styles.body, props.compact && styles.compact, !showInspector && styles.withoutInspector)}>
-        <SceneRail scenes={story.scenes} selectedId={selected?.id ?? ""} copy={copy} adding={adding} onSelect={onSelect} onAdd={onAdd} variant="desktop" />
+        <SceneRail
+          scenes={story.scenes}
+          storyId={story.id}
+          session={session}
+          selectedId={selected?.id ?? ""}
+          copy={copy}
+          adding={adding}
+          saving={saving}
+          onSelect={onSelect}
+          onAdd={onAdd}
+          onReorder={onReorderScenes}
+          variant="desktop"
+        />
         {selected ? <>
           <main className={styles.workspace}>
             <ScenePreview
@@ -56,6 +68,7 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
                 variant="desktopPanel"
                 onUpload={onUpload}
                 onDeleteMaterial={onDeleteMaterial}
+                onMoveToScene={onMoveMaterial}
                 onEditMaterial={onEditMaterial}
                 onReorder={onReorder}
               />

@@ -16,8 +16,10 @@ test("PostgreSQL: scene deletion commits the story, render removal and cleanup t
   const ready = await enqueueRender(fixture);
   const running = await enqueueRender(fixture);
   const queued = await enqueueRender(fixture);
+  const frame = await enqueueFrame(fixture);
   const retained = await enqueueRender(fixture, otherSceneId);
   await pool.query("UPDATE scene_renders SET status = 'ready', storage_key = 'ready.mp4' WHERE id = $1", [ready.id]);
+  await pool.query("UPDATE scene_renders SET status = 'ready', storage_key = 'frame.png' WHERE id = $1", [frame.id]);
   await pool.query("UPDATE scene_renders SET status = 'running', worker_id = 'worker' WHERE id = $1", [running.id]);
   await pool.query("INSERT INTO object_deletion_jobs (storage_key, status, attempts) VALUES ('ready.mp4', 'failed', 10)");
 
@@ -27,6 +29,7 @@ test("PostgreSQL: scene deletion commits the story, render removal and cleanup t
   assert.equal(changed.revision, story.revision + 1);
   assert.deepEqual((await pool.query("SELECT id FROM scene_renders")).rows, [{ id: retained.id }]);
   assert.deepEqual((await pool.query("SELECT storage_key, status, attempts FROM object_deletion_jobs ORDER BY storage_key")).rows, [
+    { storage_key: "frame.png", status: "queued", attempts: 0 },
     { storage_key: "original.png", status: "queued", attempts: 0 },
     { storage_key: "ready.mp4", status: "queued", attempts: 0 },
   ]);
@@ -189,6 +192,44 @@ test("PostgreSQL: retry refreshes source locations without changing the content 
   assert.equal((await queue.claim("retry-worker", 60_000))?.id, job.id);
 });
 
+test("PostgreSQL: timeline order and material transfer survive reopening and source deletion", options, async (context) => {
+  const { application, repository, pool, story, sceneId, otherSceneId } = await createFixture(context);
+  const ordered = await application.reorderStoryScenes(story.profileId, story.id, [otherSceneId, sceneId], story.revision);
+  const material = story.scenes[0]!.materials[0]!;
+  const moved = await application.moveSceneMaterials(story.profileId, story.id, sceneId, {
+    materialIds: [material.id], targetSceneId: otherSceneId, targetIndex: 0, expectedRevision: ordered.revision,
+  });
+  const reopened = new PostgresStoryRepository(pool, Buffer.alloc(32));
+  assert.deepEqual(await reopened.findStory(story.profileId, story.id), moved);
+  assert.equal(moved.revision, story.revision + 2);
+  assert.deepEqual(moved.scenes[0]!.materials, [material]);
+  assert.deepEqual(moved.scenes[1]!.materials, []);
+  assert.equal((await pool.query("SELECT * FROM object_deletion_jobs")).rowCount, 0);
+  await application.deleteScene(story.profileId, story.id, sceneId, moved.revision);
+  assert.deepEqual((await repository.findStory(story.profileId, story.id))!.scenes[0]!.materials, [material]);
+  assert.equal((await pool.query("SELECT * FROM object_deletion_jobs")).rowCount, 0);
+});
+
+test("PostgreSQL: competing timeline edits commit exactly one complete revision", options, async (context) => {
+  const { application, repository, pool, story, sceneId, otherSceneId } = await createFixture(context);
+  const results = await Promise.allSettled([
+    application.reorderStoryScenes(story.profileId, story.id, [otherSceneId, sceneId], story.revision),
+    application.moveSceneMaterials(story.profileId, story.id, sceneId, {
+      materialIds: [story.scenes[0]!.materials[0]!.id], targetSceneId: otherSceneId, targetIndex: 0, expectedRevision: story.revision,
+    }),
+  ]);
+  assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
+  const rejected = results.find((result) => result.status === "rejected");
+  assert.ok(rejected?.status === "rejected");
+  assert.equal(rejected.reason.code, "story_revision_conflict");
+  const winner = results.find((result) => result.status === "fulfilled");
+  assert.ok(winner?.status === "fulfilled");
+  assert.deepEqual(await repository.findStory(story.profileId, story.id), winner.value);
+  assert.equal(winner.value.revision, story.revision + 1);
+  assert.equal(winner.value.scenes.flatMap(({ materials }) => materials).length, 1);
+  assert.equal((await pool.query("SELECT * FROM object_deletion_jobs")).rowCount, 0);
+});
+
 async function createFixture(context: TestContext) {
   const { pool } = await createPostgresTestPool(context);
   await migrateDatabase(pool);
@@ -219,6 +260,15 @@ async function enqueueRender(fixture: Awaited<ReturnType<typeof createFixture>>,
   const job = await fixture.queue.enqueue(renderJob(fixture.story.profileId, fixture.story.id, sceneId));
   assert.ok(job);
   return job;
+}
+
+async function enqueueFrame(fixture: Awaited<ReturnType<typeof createFixture>>) {
+  const job = renderJob(fixture.story.profileId, fixture.story.id, fixture.sceneId);
+  const frame = await fixture.queue.enqueue({ ...job, input: { ...job.input, artifact: "scene-frame", frame: {
+    rendererVersion: 1, format: "png", compressionLevel: 6, intermediateCodec: "h264-lossless", layerPolicy: "base-visual",
+  } } });
+  assert.ok(frame);
+  return frame;
 }
 
 async function waitForBlockedQuery(pool: Pool, blockerPid: number) {
