@@ -1,3 +1,4 @@
+import { analytics } from "@storyteller/analytics";
 import { sanitizeContinuePath, type AuthSession } from "@storyteller/auth-client";
 import { useSearchParams } from "react-router-dom";
 import { ExternalRedirect } from "../components/ExternalRedirect.js";
@@ -14,7 +15,10 @@ export function SignInPage({ sessionState }: { readonly sessionState: SignInSess
   const continuePath = sanitizeContinuePath(searchParams.get("continue"));
   if (sessionState.session) return <ExternalRedirect to={continuePath} />;
 
-  const authenticated = (session: AuthSession) => {
+  const authenticated = async (session: AuthSession, accountCreated: boolean): Promise<void> => {
+    analytics.setUser(session.profile.id);
+    analytics.track(accountCreated ? "account created" : "account signed in", {});
+    await analytics.flush().catch(() => undefined);
     sessionState.authenticate(session);
     window.location.assign(continuePath);
   };

@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/domain" },
+    { "path": "packages/analytics" },
     { "path": "packages/auth-client" },
     { "path": "packages/schemas" },
     { "path": "packages/application" },

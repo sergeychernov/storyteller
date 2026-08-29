@@ -70,6 +70,8 @@ See [`docs/product-scope.md`](docs/product-scope.md) for the first API surface a
 
 See [`docs/product-roadmap.md`](docs/product-roadmap.md) for the product roadmap with milestones, independent Web, Mobile, and MCP task statuses, and completion criteria for functional parity with Hermes Story Skills.
 
+See [`docs/product-analytics.md`](docs/product-analytics.md) for the Amplitude event taxonomy, privacy boundary, environment variables, and first dashboard.
+
 The frontend split and milestone P5/P6 Music Clip Studio architecture are documented in [`docs/frontend-products-and-clip-studio-plan.md`](docs/frontend-products-and-clip-studio-plan.md) and [ADR 0004](docs/adr/0004-separate-product-frontends.md). P5 covers one simultaneous performance from several camera angles; P6 adds separate takes and musician parts with independent audio and video editing. `apps/site`, `apps/story-web`, and `apps/clip-web` now build independently and are served by one frontend host on the `makeitastory.app` origin.
 
 The public homepage at `/` shows milestone progress computed from that document on every Site build. Run `yarn test:roadmap` to check progress calculation and build-time refresh. For document-only redeploys, include the roadmap and its generators in the frontend service's [Railway watch paths](docs/deploy-railway.md#web).

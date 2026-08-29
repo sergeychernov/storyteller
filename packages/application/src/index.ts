@@ -40,6 +40,7 @@ export interface StoryRepository {
 }
 export interface AuthenticationResult {
   readonly accessToken: string;
+  readonly accountCreated: boolean;
   readonly expiresAt: string;
   readonly profile: Profile;
 }
@@ -65,7 +66,12 @@ export class StoryApplication {
     if (!await this.repository.createProfileWithSession(profile, issued.record)) {
       throw new ApplicationError("email is already registered", 409);
     }
-    return { accessToken: issued.accessToken, expiresAt: issued.record.expiresAt.toISOString(), profile: publicProfile(profile) };
+    return {
+      accessToken: issued.accessToken,
+      accountCreated: true,
+      expiresAt: issued.record.expiresAt.toISOString(),
+      profile: publicProfile(profile),
+    };
   }
 
   async login(input: { email: string; password: string }): Promise<AuthenticationResult> {
@@ -78,7 +84,12 @@ export class StoryApplication {
     if (!await verifyPassword(password, authentication.passwordHash)) throw new ApplicationError("invalid email or password", 401);
     const issued = issueSession(authentication.id);
     await this.repository.createSession(issued.record);
-    return { accessToken: issued.accessToken, expiresAt: issued.record.expiresAt.toISOString(), profile: publicProfile(authentication) };
+    return {
+      accessToken: issued.accessToken,
+      accountCreated: false,
+      expiresAt: issued.record.expiresAt.toISOString(),
+      profile: publicProfile(authentication),
+    };
   }
 
   async authenticate(accessToken: string): Promise<Profile> {

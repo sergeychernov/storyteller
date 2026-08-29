@@ -6,11 +6,13 @@ import { AuthenticatedLayout } from "./layouts/AuthenticatedLayout.js";
 import { StoriesPage } from "./pages/StoriesPage.js";
 import { StoryPage } from "./pages/StoryPage.js";
 import { usePersistentSession } from "./use-persistent-session.js";
+import { useStoryWebAnalytics } from "./use-story-web-analytics.js";
 
 export function App() {
   const { session } = usePersistentSession();
   const location = useLocation();
   const editingStory = useMatch("/:storyId/*");
+  useStoryWebAnalytics(session?.profile.id, session ? editingStory ? "story-editor" : "story-library" : "authentication-redirect");
 
   if (!session) {
     return <ExternalRedirect to={createSignInPath(`/app/stories${location.pathname}${location.search}`)} />;

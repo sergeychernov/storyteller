@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { analytics, type MaterialKind } from "@storyteller/analytics";
 import {
   configureStoryScene,
   createScene,
@@ -34,6 +35,7 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
   const addSceneMutation = useMutation({
     mutationFn: () => createScene(session.accessToken, story.id),
     onSuccess: (changed) => {
+      analytics.track("scene created", {});
       update(changed);
       const created = changed.scenes.at(-1);
       if (created) onSelect(created.id);
@@ -44,6 +46,7 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
       let changed: Story | undefined;
       for (const file of files) {
         changed = await uploadSceneMaterial(session.accessToken, story.id, sceneId, file);
+        analytics.track("material uploaded", { material_kind: materialKind(file) });
         update(changed);
       }
       if (!changed) throw new Error("at least one media file is required");
@@ -141,4 +144,8 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
       if (selected && !deletion.target && !deletion.pending) configureMutation.mutate({ sceneId: selected.id, change });
     },
   } };
+}
+
+function materialKind(file: File): MaterialKind {
+  return file.type.startsWith("video/") ? "video" : "image";
 }

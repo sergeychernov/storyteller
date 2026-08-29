@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node ../../node_modules/typescript/bin/tsc -b ../../packages/auth-client ../../packages/localization && vite build",
+    "build": "node ../../node_modules/typescript/bin/tsc -b ../../packages/analytics ../../packages/auth-client ../../packages/localization && vite build",
     "dev": "vite --host 0.0.0.0 --port 3003",
     "preview": "vite preview --host 0.0.0.0 --port 3003"
   },
   "dependencies": {
+    "@storyteller/analytics": "workspace:*",
     "@storyteller/auth-client": "workspace:*",
     "@storyteller/localization": "workspace:*",
     "react": "19.2.3",

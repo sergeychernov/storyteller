@@ -14,6 +14,11 @@ export interface AuthSession {
   readonly profile: Profile;
 }
 
+export interface SignInResult {
+  readonly accountCreated: boolean;
+  readonly session: AuthSession;
+}
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly code?: string) {
     super(message);
@@ -21,7 +26,7 @@ export class ApiError extends Error {
 }
 
 export interface AuthClient {
-  readonly signIn: (email: string, password: string, name?: string) => Promise<AuthSession>;
+  readonly signIn: (email: string, password: string, name?: string) => Promise<SignInResult>;
   readonly getProfile: (token: string) => Promise<Profile>;
 }
 
@@ -40,10 +45,16 @@ export function createAuthClient(apiUrl: string): AuthClient {
   };
 
   return {
-    signIn: (email, password, name) => request("/auth/sign-in", {
-      method: "POST",
-      body: JSON.stringify({ email, password, ...(name ? { name } : {}) }),
-    }),
+    signIn: async (email, password, name) => {
+      const response = await request<AuthSession & { readonly accountCreated: boolean }>("/auth/sign-in", {
+        method: "POST",
+        body: JSON.stringify({ email, password, ...(name ? { name } : {}) }),
+      });
+      return {
+        accountCreated: response.accountCreated,
+        session: { accessToken: response.accessToken, expiresAt: response.expiresAt, profile: response.profile },
+      };
+    },
     getProfile: (token) => request("/profile", {}, token),
   };
 }

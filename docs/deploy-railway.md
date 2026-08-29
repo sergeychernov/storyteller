@@ -42,9 +42,11 @@ Generate public domains for `api` and `web`. Then add this variable to the `web`
 
 ```dotenv
 VITE_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
+VITE_AMPLITUDE_API_KEY=<browser project API key>
+VITE_AMPLITUDE_SERVER_ZONE=US
 ```
 
-`VITE_API_URL` is compiled into all three browser bundles, so changing it triggers a new frontend deployment. No `PORT` variable needs to be created: Railway injects it for public services.
+These `VITE_` variables are compiled into all three browser bundles, so changing one requires a new frontend deployment. The Amplitude server zone must match the organization's US or EU data region; omit the API key to disable analytics. No `PORT` variable needs to be created: Railway injects it for public services. See the [event and privacy contract](product-analytics.md) before enabling it.
 
 The public English homepage lives at `/`; Russian and Serbian use `/ru` and `/sr`. Scenario and feature pages follow the same localized URL structure. Site owns `/sign-in` and `/app`; Story Studio uses `/app/stories/*`, and Clip Studio uses `/app/clips/*`. The frontend build generates route-specific public HTML, canonical and hreflang links, structured metadata, `robots.txt`, and `sitemap.xml` for `https://makeitastory.app`. Both application prefixes remain `noindex`, and legacy `/stories/*` links redirect to `/app/stories/*` with IDs and query strings intact. Point the Railway custom domain at the `web` service before submitting that sitemap to search engines.
 
@@ -125,6 +127,7 @@ Railway's automatic monorepo import may initially watch only the application dir
 /apps/site/**
 /apps/story-web/**
 /apps/clip-web/**
+/packages/analytics/**
 /packages/auth-client/**
 /packages/domain/**
 /packages/localization/**

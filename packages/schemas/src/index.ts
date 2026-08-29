@@ -8,7 +8,9 @@ export const registerSchema = z.object({
 });
 export const loginSchema = registerSchema.pick({ email: true, password: true });
 export const signInSchema = loginSchema.extend({ name: registerSchema.shape.name.optional() });
-export const authenticationSchema = z.object({ accessToken: z.string(), expiresAt: z.iso.datetime(), profile: profileSchema });
+export const authenticationSchema = z.object({
+  accessToken: z.string(), accountCreated: z.boolean(), expiresAt: z.iso.datetime(), profile: profileSchema,
+});
 export const updateProfileSchema = z.object({ name: z.string().trim().min(1).max(80) });
 
 export const createStorySchema = z.object({ title: z.string().trim().min(1).max(120) });

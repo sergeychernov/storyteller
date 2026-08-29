@@ -49,9 +49,18 @@ test("protects a profile, uploads media and stores its stories", async (context)
     method: "POST", url: "/auth/sign-in", payload: { name: "Sergej", email: "sergej@example.com", password: "long-test-password" },
   });
   assert.equal(registration.statusCode, 200);
-  const auth = registration.json<{ accessToken: string; profile: Profile }>();
+  const auth = registration.json<{ accessToken: string; accountCreated: boolean; profile: Profile }>();
+  assert.equal(auth.accountCreated, true);
   const headers = { authorization: `Bearer ${auth.accessToken}` };
   assert.equal((await api.inject({ method: "GET", url: "/profile", headers })).json<Profile>().email, "sergej@example.com");
+
+  const repeatedSignIn = await api.inject({
+    method: "POST", url: "/auth/sign-in",
+    payload: { name: "Ignored retry name", email: "sergej@example.com", password: "long-test-password" },
+  });
+  assert.equal(repeatedSignIn.statusCode, 200);
+  assert.equal(repeatedSignIn.json<{ accountCreated: boolean; profile: Profile }>().accountCreated, false);
+  assert.equal(repeatedSignIn.json<{ accountCreated: boolean; profile: Profile }>().profile.name, "Sergej");
 
   const storyResponse = await api.inject({ method: "POST", url: "/stories", headers, payload: { title: "First story" } });
   assert.equal(storyResponse.statusCode, 201);

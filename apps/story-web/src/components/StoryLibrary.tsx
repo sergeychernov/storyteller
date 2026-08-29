@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { analytics } from "@storyteller/analytics";
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createStory, listStories, type AuthSession } from "../api.js";
@@ -17,6 +18,7 @@ export function StoryLibrary({ session }: { readonly session: AuthSession }) {
   const addStory = useMutation({
     mutationFn: () => createStory(session.accessToken, title),
     onSuccess: async (story) => {
+      analytics.track("story created", {});
       setTitle("");
       await queryClient.invalidateQueries({ queryKey: ["stories", session.profile.id] });
       navigate(`/${story.id}`);

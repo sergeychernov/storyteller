@@ -1,3 +1,4 @@
+import { analytics } from "@storyteller/analytics";
 import { usePersistentSession } from "@storyteller/auth-client";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { authClient } from "./auth.js";
@@ -6,10 +7,16 @@ import { SiteAppHeader } from "./components/SiteAppHeader.js";
 import { publicPages } from "./components/public/public-site-model.js";
 import { PublicPage } from "./pages/PublicPage.js";
 import { SignInPage } from "./pages/SignInPage.js";
+import { useSiteAnalytics } from "./use-site-analytics.js";
 
 export function App() {
   const sessionState = usePersistentSession(authClient);
+  useSiteAnalytics(sessionState.session?.profile.id);
   const studioPath = sessionState.session ? "/app" : "/sign-in?continue=%2Fapp";
+  const signOut = () => {
+    analytics.reset();
+    sessionState.clearSession();
+  };
 
   return (
     <Routes>
@@ -18,7 +25,7 @@ export function App() {
       ))}
       <Route path="/sign-in" element={<SignInPage sessionState={sessionState} />} />
       <Route path="/app" element={sessionState.session
-        ? <><SiteAppHeader /><ProductChooser session={sessionState.session} onSignOut={sessionState.clearSession} /></>
+        ? <><SiteAppHeader /><ProductChooser session={sessionState.session} onSignOut={signOut} /></>
         : <Navigate to="/sign-in?continue=%2Fapp" replace />} />
       <Route path="*" element={<main><h1>Page not found</h1><a href="/">Make It a Story</a></main>} />
     </Routes>

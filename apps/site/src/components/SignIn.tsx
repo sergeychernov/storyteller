@@ -7,7 +7,7 @@ import feedbackStyles from "../styles/feedback.module.css";
 import typographyStyles from "../styles/typography.module.css";
 import styles from "./SignIn.module.css";
 
-interface SignInProps { readonly onAuthenticated: (session: AuthSession) => void }
+interface SignInProps { readonly onAuthenticated: (session: AuthSession, accountCreated: boolean) => Promise<void> }
 
 export function SignIn({ onAuthenticated }: SignInProps) {
   const { t } = useLocalization();
@@ -17,7 +17,7 @@ export function SignIn({ onAuthenticated }: SignInProps) {
   const [requiresName, setRequiresName] = useState(false);
   const mutation = useMutation({
     mutationFn: () => authClient.signIn(email, password, requiresName ? name : undefined),
-    onSuccess: onAuthenticated,
+    onSuccess: async ({ session, accountCreated }) => { await onAuthenticated(session, accountCreated); },
     onError: (error) => { if (isNameRequired(error)) setRequiresName(true); },
   });
 
