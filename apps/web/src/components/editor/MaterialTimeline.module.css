@@ -22,6 +22,17 @@
   transition: opacity 0.15s, border-color 0.15s, transform 0.15s;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Android Chrome opens native media actions when a long press lands on video/img. */
+.card img,
+.card video {
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .card.portrait {

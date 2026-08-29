@@ -7,6 +7,7 @@ import { MaterialUploader } from "./MaterialUploader.js";
 import { MaterialThumbnail } from "./MaterialThumbnail.js";
 import styles from "./MaterialTimeline.module.css";
 import { useMaterialDrag } from "./use-material-drag.js";
+import { preventNativeMediaAction } from "./NativeDragSafeVideo.js";
 
 interface MaterialTimelineProps {
   readonly scene: Scene; readonly copy: EditorCopy; readonly saving: boolean; readonly uploading: boolean; readonly uploadCount: number;
@@ -46,6 +47,8 @@ export function MaterialTimeline({
             )}
             data-material-id={material.id} key={material.id} tabIndex={saving ? -1 : 0}
             aria-label={copy.dragMaterial.replace("{{number}}", String(index + 1))} title={copy.dragMaterialHint}
+            onContextMenu={(event) => preventNativeMediaAction(event.nativeEvent)}
+            onDragStart={(event) => preventNativeMediaAction(event.nativeEvent)}
             onPointerDown={(event) => {
               if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
               if (event.target instanceof Element && event.target.closest("button")) return;
