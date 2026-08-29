@@ -2,7 +2,7 @@ import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { ApplicationError, type StoryApplication } from "@storyteller/application";
+import { ApplicationError, createBaselineAccessControl, type AccessControlService, type StoryApplication } from "@storyteller/application";
 import { getMaterialPresentation, getMaterialSource, materialStorageKeys, type MaterialEdit } from "@storyteller/domain";
 import { sceneRenderFileType, type SceneRenderQueue } from "@storyteller/render-queue";
 import {
@@ -19,17 +19,20 @@ import { SceneRenderService, serializeSceneRender } from "./scene-renders.js";
 import { authenticate } from "./authentication.js";
 import { registerStoryTimelineRoutes } from "./story-timeline-routes.js";
 import { registerAmplitudeRelayRoutes, type AmplitudeRelayOptions } from "./amplitude-relay.js";
+import { accessPolicyForRoute, registerAccessControl } from "./access-control.js";
 
 export async function buildApi(application: StoryApplication, options: {
   readonly mediaStorage?: MediaStorage;
   readonly objectStorage?: ObjectStorage;
   readonly renderQueue?: SceneRenderQueue;
   readonly amplitudeRelay?: AmplitudeRelayOptions;
+  readonly accessControl?: AccessControlService;
 } = {}) {
   const mediaStorage = options.mediaStorage ?? new MediaStorage();
   const renderService = options.renderQueue && new SceneRenderService(application, options.renderQueue, mediaStorage);
   const app = Fastify({ logger: process.env.NODE_ENV !== "test" })
     .setValidatorCompiler(validatorCompiler).setSerializerCompiler(serializerCompiler).withTypeProvider<ZodTypeProvider>();
+  const accessControl = options.accessControl ?? createBaselineAccessControl();
 
   const configuredOrigins = process.env.WEB_ORIGIN?.split(",").map((origin) => origin.trim()).filter(Boolean);
   await app.register(cors, {
@@ -50,6 +53,22 @@ export async function buildApi(application: StoryApplication, options: {
       // Swagger assumes every body schema is required, but this route also accepts bodyless DELETEs.
       const body = document.openapiObject.paths?.["/stories/{storyId}/scenes/{sceneId}"]?.delete?.requestBody;
       if (body && "content" in body) body.required = false;
+      for (const [path, pathItem] of Object.entries(document.openapiObject.paths ?? {})) {
+        for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+          const operation = pathItem?.[method];
+          if (!operation?.security?.length) continue;
+          const routeUrl = path.replaceAll(/\{([^}]+)\}/g, ":$1");
+          const policy = accessPolicyForRoute(method.toUpperCase(), routeUrl);
+          if (policy && policy !== "authenticated") {
+            operation.responses[403] ??= {
+              description: "The authenticated profile does not have the required capability.",
+              content: { "application/json": { schema: { type: "object", required: ["message"], properties: {
+                message: { type: "string" }, code: { type: "string" },
+              } } } },
+            };
+          }
+        }
+      }
       return document.openapiObject;
     },
   });
@@ -68,6 +87,7 @@ export async function buildApi(application: StoryApplication, options: {
 
   app.get("/health", { schema: { response: { 200: healthSchema } } }, async () => ({ status: "ok" as const }));
   registerAmplitudeRelayRoutes(app, options.amplitudeRelay);
+  registerAccessControl(app, application, accessControl);
   app.post("/auth/register", {
     schema: { body: registerSchema, response: { 201: authenticationSchema, 409: errorSchema } },
   }, async (request, reply) => reply.status(201).send(await application.register({

@@ -8,13 +8,20 @@ import feedbackStyles from "../styles/feedback.module.css";
 import typographyStyles from "../styles/typography.module.css";
 import { StoryCard } from "./StoryCard.js";
 import styles from "./StoryLibrary.module.css";
+import { useCapability } from "../access-control.js";
 
 export function StoryLibrary({ session }: { readonly session: AuthSession }) {
   const { t } = useLocalization();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
-  const stories = useQuery({ queryKey: ["stories", session.profile.id], queryFn: () => listStories(session.accessToken) });
+  const canListStories = useCapability("story.list");
+  const canCreateStory = useCapability("story.create");
+  const stories = useQuery({
+    queryKey: ["stories", session.profile.id],
+    queryFn: () => listStories(session.accessToken),
+    enabled: canListStories,
+  });
   const addStory = useMutation({
     mutationFn: () => createStory(session.accessToken, title),
     onSuccess: async (story) => {
@@ -34,12 +41,13 @@ export function StoryLibrary({ session }: { readonly session: AuthSession }) {
     <section className={styles.content}>
       <div className={styles.head}>
         <div><p className={typographyStyles.eyebrow}>{t("web.library.eyebrow")}</p><h1>{t("web.library.title")}</h1></div>
-        <form onSubmit={submit}>
+        {canCreateStory && <form onSubmit={submit}>
           <input aria-label={t("web.library.storyTitle.label")} value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("web.library.storyTitle.placeholder")} />
           <button disabled={addStory.isPending}>{t("web.library.newStory")}</button>
-        </form>
+        </form>}
       </div>
       <div className={styles.grid}>
+        {!canListStories && <div className={feedbackStyles.emptyCard}>{t("web.access.deniedBody")}</div>}
         {stories.data?.map((story) => <StoryCard story={story} key={story.id} />)}
         {!stories.isLoading && stories.data?.length === 0 && <div className={feedbackStyles.emptyCard}>{t("web.library.empty")}</div>}
       </div>

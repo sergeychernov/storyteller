@@ -5,13 +5,15 @@ import {
 } from "../../api.js";
 import { sceneFrameCacheKey, supportsSceneFrame } from "./scene-frame-model.js";
 import { waitForSceneRender } from "./scene-render-polling.js";
+import { useCapability } from "../../access-control.js";
 
 export function useSceneFrameUrl(scene: Scene, storyId: string, session: AuthSession) {
   const [objectUrl, setObjectUrl] = useState<{ readonly blob: Blob; readonly url: string }>();
   const supported = supportsSceneFrame(scene);
+  const canRender = useCapability("scene.render");
   const frame = useQuery({
     queryKey: ["scene-frame", session.profile.id, storyId, scene.id, sceneFrameCacheKey(scene)],
-    enabled: supported,
+    enabled: supported && canRender,
     staleTime: Number.POSITIVE_INFINITY,
     retry: 1,
     queryFn: async ({ signal }) => {
@@ -36,8 +38,8 @@ export function useSceneFrameUrl(scene: Scene, storyId: string, session: AuthSes
 
   return {
     url: frame.data && objectUrl?.blob === frame.data ? objectUrl.url : undefined,
-    loading: supported && frame.isPending,
-    failed: supported && frame.isError,
-    supported,
+    loading: supported && canRender && frame.isPending,
+    failed: supported && canRender && frame.isError,
+    supported: supported && canRender,
   };
 }

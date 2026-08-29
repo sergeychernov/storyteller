@@ -10,6 +10,28 @@ export interface StorySummary {
   id: string; profileId: string; title?: string;
   status: "draft" | "rendering" | "ready" | "publishing" | "published"; sceneCount: number; revision: number;
 }
+export interface EffectiveAccess {
+  readonly planVersionCode: string | null;
+  readonly roles: readonly string[];
+  readonly capabilities: readonly {
+    readonly code: string;
+    readonly allowed: boolean;
+    readonly expiresAt?: string;
+    readonly sources: readonly {
+      readonly kind: "plan_version" | "role" | "cohort" | "user_override" | "operational_switch";
+      readonly key: string;
+      readonly effect: "allow" | "deny" | "base" | "add" | "replace";
+      readonly via?: string;
+      readonly decisive: boolean;
+    }[];
+  }[];
+  readonly limits: readonly {
+    readonly code: string;
+    readonly value: number | "unlimited" | null;
+    readonly expiresAt?: string;
+  }[];
+  readonly evaluatedAt: string;
+}
 export type MaterialOrientation = "portrait" | "landscape";
 export type VideoAudioTag = "voice" | "music" | "ambient";
 export type SceneMotion = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right";
@@ -67,6 +89,9 @@ export interface SceneRenderVersion extends SceneRender {
   dependencies: { role: string; storageKey: string; contentHash: string; parents: string[]; parameters: Record<string, unknown> }[];
 }
 export async function checkHealth(): Promise<boolean> { try { return (await fetch(`${apiUrl}/health`)).ok; } catch { return false; } }
+export function getEffectiveAccess(token: string): Promise<EffectiveAccess> {
+  return request("/access/effective", { cache: "no-store" }, token);
+}
 export function createStory(token: string, title: string): Promise<StorySummary> {
   return request("/stories", { method: "POST", body: JSON.stringify({ title }) }, token);
 }

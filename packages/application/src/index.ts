@@ -5,6 +5,8 @@ import {
 } from "@storyteller/domain";
 import { timelineDurationLimits } from "./timeline-formats.js";
 
+export * from "./access-control.js";
+
 export interface ProfileAuthentication extends Profile { readonly passwordHash: string }
 export interface PlatformCredentialSummary {
   readonly id: string;

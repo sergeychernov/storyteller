@@ -20,7 +20,7 @@ test("PostgreSQL: release migration works on a fresh database, concurrently and 
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 0);
 });
 
-test("PostgreSQL: migrations 4 and 5 preserve legacy rows and accept old API and worker writes", options, async (context) => {
+test("PostgreSQL: migrations 4–7 preserve legacy rows, baseline access and old API/worker writes", options, async (context) => {
   const { pool } = await createPostgresTestPool(context);
   await applyVersion3(pool);
   const profileId = randomUUID(), storyId = randomUUID(), sceneId = randomUUID(), renderId = randomUUID();
@@ -39,6 +39,9 @@ test("PostgreSQL: migrations 4 and 5 preserve legacy rows and accept old API and
 
   await migrateDatabase(pool);
   assert.equal((await pool.query("SELECT language FROM profiles WHERE id = $1", [profileId])).rows[0].language, "en");
+  assert.equal((await pool.query("SELECT access_plan_version_code FROM profiles WHERE id = $1", [profileId])).rows[0].access_plan_version_code, "free-v1");
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_roles")).rows[0].count, 2);
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_capabilities")).rows[0].count, 35);
   await assert.rejects(pool.query("UPDATE profiles SET language = 'unsupported' WHERE id = $1", [profileId]), { code: "23514" });
   assert.deepEqual((await pool.query("SELECT * FROM scene_renders WHERE id = $1", [renderId])).rows[0], { ...before, content_hash: null });
   assert.deepEqual((await pool.query("SELECT payload FROM stories WHERE id = $1", [storyId])).rows[0].payload, payload);
@@ -49,6 +52,52 @@ test("PostgreSQL: migrations 4 and 5 preserve legacy rows and accept old API and
   await pool.query("UPDATE scene_renders SET content_hash = $2 WHERE id = $1", [nextId, "c".repeat(64)]);
   await assert.rejects(pool.query("UPDATE scene_renders SET content_hash = 'invalid' WHERE id = $1", [nextId]), { code: "23514" });
   assert.equal((await pool.query("SELECT content_hash FROM scene_renders WHERE id = $1", [nextId])).rows[0].content_hash, "c".repeat(64));
+});
+
+test("PostgreSQL: migration 7 grants the requested existing profile access_manager exactly once", options, async (context) => {
+  const { pool } = await createPostgresTestPool(context);
+  await applyThroughVersion(pool, 6);
+  const targetProfileId = randomUUID(), otherProfileId = randomUUID();
+  await pool.query(
+    `INSERT INTO profiles (id, name, email, password_hash) VALUES
+      ($1, 'Target', 'Chernov.Sergey@Gmail.com', 'hash'),
+      ($2, 'Other', 'other@example.test', 'hash')`,
+    [targetProfileId, otherProfileId],
+  );
+  await pool.query(
+    `INSERT INTO access_role_assignments
+      (profile_id, role_code, starts_at, expires_at, reason)
+     VALUES ($1, 'access_manager', '2025-01-01T00:00:00Z', '2025-02-01T00:00:00Z', 'expired fixture')`,
+    [targetProfileId],
+  );
+
+  await migrateDatabase(pool);
+  await migrateDatabase(pool);
+
+  const assignments = await pool.query<{ profile_id: string; role_code: string; reason: string }>(
+    `SELECT profile_id, role_code, reason FROM access_role_assignments
+     WHERE profile_id IN ($1, $2)
+       AND (starts_at IS NULL OR starts_at <= now())
+       AND (expires_at IS NULL OR expires_at > now())
+     ORDER BY profile_id`,
+    [targetProfileId, otherProfileId],
+  );
+  assert.deepEqual(assignments.rows, [{
+    profile_id: targetProfileId,
+    role_code: "access_manager",
+    reason: "bootstrap initial access manager requested by product owner",
+  }]);
+  const audit = await pool.query<{ action: string; entity_type: string; reason: string }>(
+    `SELECT action, entity_type, reason FROM access_audit_log
+     WHERE new_data->>'profile_id' = $1
+       AND reason = 'bootstrap initial access manager requested by product owner'`,
+    [targetProfileId],
+  );
+  assert.deepEqual(audit.rows, [{
+    action: "insert",
+    entity_type: "access_role_assignments",
+    reason: "bootstrap initial access manager requested by product owner",
+  }]);
 });
 
 test("PostgreSQL: a failed release migration exits nonzero, rolls back DDL and can be retried", options, async (context) => {
@@ -74,8 +123,12 @@ test("PostgreSQL: a failed release migration exits nonzero, rolls back DDL and c
 });
 
 async function applyVersion3(pool: Pool) {
+  await applyThroughVersion(pool, 3);
+}
+
+async function applyThroughVersion(pool: Pool, version: number) {
   await pool.query("CREATE TABLE schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())");
-  for (const migration of migrations.filter(({ version }) => version <= 3)) {
+  for (const migration of migrations.filter((migration) => migration.version <= version)) {
     await pool.query(migration.sql);
     await pool.query("INSERT INTO schema_migrations (version) VALUES ($1)", [migration.version]);
   }

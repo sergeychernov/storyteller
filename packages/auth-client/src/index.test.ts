@@ -19,7 +19,7 @@ test("builds a privacy-conscious Gravatar URL and derives an initials fallback",
   assert.equal(profileInitials(""), "?");
   assert.equal(
     await createGravatarUrl("MyEmailAddress@example.com ", 128),
-    "https://gravatar.com/avatar/a0d0ec790f1550813f503eb049c8c5a4b763030a0546887a395646ca1094fb66?d=404&s=128",
+    "https://gravatar.com/avatar/84059b07d4be67b806386c0aad8070a23f18836bbaae342275dc0a83414c32ee?d=404&s=128",
   );
 });
 

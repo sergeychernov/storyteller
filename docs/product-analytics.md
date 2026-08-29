@@ -85,6 +85,16 @@ not named `story exported`: full-story master assembly belongs to F04 and is not
 implemented yet. Publication events should be added only with the corresponding
 real adapters and verified results.
 
+### B13 access-control instrumentation decision
+
+B13 does not add an Amplitude event for access resolution, an allowed check or a
+denial. Those checks are security decisions rather than confirmed user outcomes.
+Existing product events continue to be emitted only after the protected operation
+succeeds. Effective-access explanations, denial reasons, plan/cohort/role
+assignments and capability codes are kept out of the external analytics stream;
+their operational history belongs to the access audit trail and the future B14
+read-only admin interface.
+
 ## First Amplitude dashboard
 
 Keep the first dashboard small:

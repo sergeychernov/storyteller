@@ -4,7 +4,18 @@ import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
-import { ApplicationError, StoryApplication, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
+import {
+  AccessControlService,
+  ApplicationError,
+  StoryApplication,
+  createBaselineAccessState,
+  type AccessState,
+  type EffectiveAccess,
+  type PlatformCredentialSummary,
+  type ProfileAuthentication,
+  type SessionRecord,
+  type StoryRepository,
+} from "@storyteller/application";
 import { getMaterialPresentation, materialStorageKeys, type PlatformCredential, type PlatformProvider, type Profile, type ProfileUpdate, type SceneMaterial, type Story } from "@storyteller/domain";
 import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue } from "@storyteller/render-queue";
 import { probeMedia, renderVideo, SpawnMediaProcessRunner } from "@storyteller/renderer";
@@ -18,6 +29,7 @@ import { normalizeStoredStory } from "./database.js";
 import { buildApi } from "./server.js";
 import { detectMediaMetadata, MediaStorage } from "./media-storage.js";
 import { LocalObjectStorage, S3ObjectStorage } from "./object-storage.js";
+import { accessPolicyForRoute } from "./access-control.js";
 
 test("protects a profile, uploads media and stores its stories", async (context) => {
   process.env.NODE_ENV = "test";
@@ -332,7 +344,7 @@ test("documents the backwards-compatible scene deletion contract in OpenAPI", as
   await api.ready();
   const operation = (api.swagger() as OpenAPIV3.Document).paths["/stories/{storyId}/scenes/{sceneId}"]?.delete;
   assert.equal(operation?.operationId, "deleteScene");
-  assert.deepEqual(Object.keys(operation?.responses ?? {}).sort(), ["200", "400", "401", "404", "409"]);
+  assert.deepEqual(Object.keys(operation?.responses ?? {}).sort(), ["200", "400", "401", "403", "404", "409"]);
   assert.ok(operation?.requestBody && "content" in operation.requestBody);
   assert.notEqual(operation.requestBody.required, true);
 });
@@ -1009,8 +1021,78 @@ test("OpenAPI exposes timeline contracts with required revision guards and docum
     assert.equal(operation.requestBody.required, true);
     const schema = operation.requestBody.content["application/json"]?.schema;
     assert.ok(schema && "required" in schema && schema.required?.includes("expectedRevision"));
-    assert.deepEqual(Object.keys(operation.responses).sort(), ["200", "400", "401", "404", "409", "422"]);
+    assert.deepEqual(Object.keys(operation.responses).sort(), ["200", "400", "401", "403", "404", "409", "422"]);
     assert.deepEqual(operation.security, [{ bearerAuth: [] }]);
+  }
+});
+
+test("access control is deny-by-default, explains overrides and preserves resource ownership", async (context) => {
+  process.env.NODE_ENV = "test";
+  const repository = new MemoryRepository();
+  const application = new StoryApplication(repository);
+  const states = new Map<string, AccessState>();
+  const accessControl = new AccessControlService({
+    loadAccessState: async (requestedProfileId) => states.get(requestedProfileId) ?? {
+      profileId: requestedProfileId,
+      memberships: [],
+      roleAssignments: [],
+      capabilityAssignments: [],
+      limitAssignments: [],
+      operationalSwitches: [],
+    },
+  }, () => new Date("2026-08-29T12:00:00.000Z"));
+  const api = await buildApi(application, { accessControl });
+  context.after(() => api.close());
+  const user = await application.register({ name: "Denied", email: "denied@example.com", password: "long-test-password" });
+  const headers = { authorization: `Bearer ${user.accessToken}` };
+
+  assert.equal((await api.inject({ method: "GET", url: "/profile", headers })).statusCode, 200);
+  const deniedAccessResponse = await api.inject({ method: "GET", url: "/access/effective", headers });
+  assert.equal(deniedAccessResponse.statusCode, 200);
+  assert.equal(deniedAccessResponse.headers["cache-control"], "private, no-store");
+  assert.equal(deniedAccessResponse.json<EffectiveAccess>().capabilities.find(({ code }) => code === "studio.access")?.allowed, false);
+  const deniedList = await api.inject({ method: "GET", url: "/stories", headers });
+  assert.equal(deniedList.statusCode, 403);
+  assert.equal(deniedList.json<{ code: string }>().code, "access_denied");
+
+  states.set(user.profile.id, {
+    ...createBaselineAccessState(user.profile.id),
+    capabilityAssignments: [{
+      subject: { kind: "profile", key: user.profile.id },
+      capabilityCode: "story.create",
+      effect: "deny",
+      reason: "fixture",
+    }],
+  });
+  assert.equal((await api.inject({ method: "GET", url: "/stories", headers })).statusCode, 200);
+  const deniedCreate = await api.inject({ method: "POST", url: "/stories", headers, payload: { title: "No" } });
+  assert.equal(deniedCreate.statusCode, 403);
+  const explained = (await api.inject({ method: "GET", url: "/access/effective", headers })).json<EffectiveAccess>();
+  assert.deepEqual(explained.capabilities.find(({ code }) => code === "story.create")?.sources.map(({ kind, decisive }) => ({ kind, decisive })), [
+    { kind: "role", decisive: false },
+    { kind: "user_override", decisive: true },
+  ]);
+
+  const owner = await application.register({ name: "Owner", email: "owner@example.com", password: "long-test-password" });
+  states.set(owner.profile.id, createBaselineAccessState(owner.profile.id));
+  const ownerStory = await application.createStory(owner.profile.id, { title: "Private" });
+  states.set(user.profile.id, createBaselineAccessState(user.profile.id));
+  assert.equal((await api.inject({ method: "GET", url: `/stories/${ownerStory.id}`, headers })).statusCode, 404);
+});
+
+test("every bearer-protected API route has an explicit access policy", async (context) => {
+  const { api } = await sceneDeletionFixture(context, 0);
+  await api.ready();
+  const document = api.swagger() as OpenAPIV3.Document;
+  for (const [path, pathItem] of Object.entries(document.paths)) {
+    for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+      const operation = pathItem?.[method];
+      if (!operation?.security?.length) continue;
+      const routeUrl = path.replaceAll(/\{([^}]+)\}/g, ":$1");
+      const policy = accessPolicyForRoute(method.toUpperCase(), routeUrl);
+      assert.ok(policy, `${method.toUpperCase()} ${path} has no access policy`);
+      if (policy !== "authenticated") assert.ok(operation.responses[403], `${method.toUpperCase()} ${path} does not document 403`);
+    }
   }
 });
 

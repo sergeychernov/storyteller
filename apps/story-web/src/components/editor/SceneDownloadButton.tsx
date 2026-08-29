@@ -4,6 +4,7 @@ import type { EditorCopy } from "./editor-copy.js";
 import styles from "./SceneDownloadButton.module.css";
 import { useSceneDownload } from "./use-scene-download.js";
 import { SceneDownloadOptions } from "./SceneDownloadOptions.js";
+import { useCapability } from "../../access-control.js";
 
 interface SceneDownloadButtonProps {
   readonly scene: Scene;
@@ -13,6 +14,7 @@ interface SceneDownloadButtonProps {
 }
 
 export function SceneDownloadButton({ scene, storyId, session, copy }: SceneDownloadButtonProps) {
+  const canRender = useCapability("scene.render");
   const { supported, state, error, download } = useSceneDownload(scene, storyId, session, copy);
   const [choosing, setChoosing] = useState(false);
   const video = scene.materials.length === 1 && scene.materials[0]?.kind === "video" ? scene.materials[0] : undefined;
@@ -21,6 +23,7 @@ export function SceneDownloadButton({ scene, storyId, session, copy }: SceneDown
   const icon = state === "rendering" ? <span className={styles.spinner} aria-hidden="true" /> : <svg viewBox="0 0 24 24" aria-hidden="true">
     <path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" />
   </svg>;
+  if (!canRender) return null;
   return <span className={styles.control}>
     <button
       type="button"

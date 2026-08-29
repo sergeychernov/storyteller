@@ -3,6 +3,7 @@ import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import sharedStyles from "./editor-shared.module.css";
 import styles from "./MaterialUploader.module.css";
+import { useCapability } from "../../access-control.js";
 
 interface MaterialUploaderProps {
   readonly copy: EditorCopy;
@@ -14,6 +15,9 @@ interface MaterialUploaderProps {
 
 export function MaterialUploader({ copy, disabled, uploading, uploadCount, onUpload }: MaterialUploaderProps) {
   const input = useRef<HTMLInputElement>(null);
+  const canUpload = useCapability("media.upload");
+
+  if (!canUpload) return null;
 
   return (
     <>

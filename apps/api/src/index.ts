@@ -6,6 +6,8 @@ import { migrateDatabase } from "./migrations.js";
 import { MediaStorage } from "./media-storage.js";
 import { PostgresSceneRenderQueue } from "@storyteller/render-queue";
 import { createConfiguredObjectStorage } from "@storyteller/storage";
+import { AccessControlService } from "@storyteller/application";
+import { PostgresAccessRepository } from "./access-control-database.js";
 
 loadLocalEnvironment();
 const { pool, repository } = createPostgresRepository();
@@ -15,6 +17,7 @@ const api = await buildApi(new StoryApplication(repository), {
   mediaStorage: new MediaStorage(objectStorage),
   objectStorage,
   renderQueue: new PostgresSceneRenderQueue(pool),
+  accessControl: new AccessControlService(new PostgresAccessRepository(pool)),
 });
 
 api.addHook("onClose", async () => pool.end());
