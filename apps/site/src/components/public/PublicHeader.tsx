@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
-import { LanguageSwitcher } from "../../localization.js";
-import { useLocalization } from "../../localization.js";
+import { Link, useNavigate } from "react-router-dom";
+import { LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import { getLocalizedVersions, getPageByKey, publicSite } from "./public-site-model.js";
 import type { PublicPageKey, ResolvedPublicPage } from "./public-site-types.js";
 import styles from "./PublicHeader.module.css";
@@ -15,6 +14,7 @@ interface PublicHeaderProps {
 export function PublicHeader({ resolvedPage, profile, studioPath, onLanguageChange }: PublicHeaderProps) {
   const { locale, localeData, page } = resolvedPage;
   const { t } = useLocalization();
+  const navigate = useNavigate();
   const languageVersions = getLocalizedVersions(page.key);
 
   return (
@@ -28,7 +28,7 @@ export function PublicHeader({ resolvedPage, profile, studioPath, onLanguageChan
       </nav>
       <div className={styles.actions}>
         <LanguageSwitcher destinations={Object.fromEntries(languageVersions.map((version) => [version.locale, version.page.path]))}
-          onLocaleChange={onLanguageChange} />
+          onLocaleChange={onLanguageChange} onNavigate={navigate} />
         <Link className={styles.studio} to={studioPath}>{localeData.openStudio}<span aria-hidden="true">↗</span></Link>
         {profile && <Link className={styles.avatarLink} to="/app/profile" aria-label={t("profile.open")}>
           <ProfileAvatar className={styles.avatar} profile={profile} />

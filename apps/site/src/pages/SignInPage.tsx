@@ -1,7 +1,7 @@
 import { analytics } from "@storyteller/analytics";
 import { sanitizeContinuePath, type AuthSession } from "@storyteller/auth-client";
 import { useSearchParams } from "react-router-dom";
-import { ExternalRedirect } from "../components/ExternalRedirect.js";
+import { ExternalRedirect } from "@storyteller/web-ui";
 import { SignIn } from "../components/SignIn.js";
 import { SiteAppHeader } from "../components/SiteAppHeader.js";
 

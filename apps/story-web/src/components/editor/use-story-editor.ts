@@ -10,7 +10,7 @@ import {
   type MaterialEdit,
   type Story,
 } from "../../api.js";
-import { useLocalization } from "../../localization.js";
+import { useLocalization } from "@storyteller/web-ui";
 import { getEditorCopy, getEditorOperationError, getMaterialMoveError, getSceneOrderError } from "./editor-copy.js";
 import type { SceneChange, StoryEditorViewProps } from "./story-editor-view.js";
 import { useReorderSceneMaterials } from "./use-reorder-scene-materials.js";

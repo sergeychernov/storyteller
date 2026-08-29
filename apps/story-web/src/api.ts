@@ -1,73 +1,52 @@
-import type { AudioTrack, VideoTrack, VideoExportMode } from "@storyteller/domain";
-import { ApiError } from "@storyteller/auth-client";
+import { createApiClient } from "@storyteller/api-client";
+import type { EffectiveAccess, StorySummary } from "@storyteller/application";
+import type {
+  AppliedMaterialEdit,
+  AudioTrack,
+  FocusPoint,
+  ImageMaterial,
+  MaterialCrop,
+  MaterialEdit,
+  MaterialEditResult,
+  MaterialOrientation,
+  MaterialRotation,
+  Scene,
+  SceneMaterial,
+  SceneMotion,
+  Story,
+  VideoAudioTag,
+  VideoMaterial,
+  VideoTrack,
+  VideoTrim,
+  VideoExportMode,
+} from "@storyteller/domain";
+export { ApiError } from "@storyteller/api-client";
 export { getMaterialPresentation, getMaterialSource } from "@storyteller/domain";
-export type { AudioTrack, VideoTrack, VideoExportMode } from "@storyteller/domain";
-export { ApiError } from "@storyteller/auth-client";
+export type { EffectiveAccess, StorySummary } from "@storyteller/application";
+export type {
+  AppliedMaterialEdit,
+  AudioTrack,
+  FocusPoint,
+  ImageMaterial,
+  MaterialCrop,
+  MaterialEdit,
+  MaterialEditResult,
+  MaterialOrientation,
+  MaterialRotation,
+  Scene,
+  SceneMaterial,
+  SceneMotion,
+  Story,
+  VideoAudioTag,
+  VideoMaterial,
+  VideoTrack,
+  VideoTrim,
+  VideoExportMode,
+} from "@storyteller/domain";
 export type { AuthSession, Profile } from "@storyteller/auth-client";
 
 export const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-export interface StorySummary {
-  id: string; profileId: string; title?: string;
-  status: "draft" | "rendering" | "ready" | "publishing" | "published"; sceneCount: number; revision: number;
-}
-export interface EffectiveAccess {
-  readonly planVersionCode: string | null;
-  readonly roles: readonly string[];
-  readonly capabilities: readonly {
-    readonly code: string;
-    readonly allowed: boolean;
-    readonly expiresAt?: string;
-    readonly sources: readonly {
-      readonly kind: "plan_version" | "role" | "cohort" | "user_override" | "operational_switch";
-      readonly key: string;
-      readonly effect: "allow" | "deny" | "base" | "add" | "replace";
-      readonly via?: string;
-      readonly decisive: boolean;
-    }[];
-  }[];
-  readonly limits: readonly {
-    readonly code: string;
-    readonly value: number | "unlimited" | null;
-    readonly expiresAt?: string;
-  }[];
-  readonly evaluatedAt: string;
-}
-export type MaterialOrientation = "portrait" | "landscape";
-export type VideoAudioTag = "voice" | "music" | "ambient";
-export type SceneMotion = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right";
-export interface FocusPoint { x: number; y: number }
-export type MaterialRotation = 0 | 90 | 180 | 270;
-export interface MaterialCrop { x: number; y: number; width: number; height: number }
-export interface VideoTrim { startSeconds: number; endSeconds: number }
-export interface MaterialEdit { rotation: MaterialRotation; crop: MaterialCrop; trim?: VideoTrim }
-export interface MaterialEditResult {
-  contentHash?: string;
-  storageKey: string; mimeType: string; sizeBytes: number; width: number; height: number; orientation: MaterialOrientation;
-  durationSeconds?: number;
-}
-export interface AppliedMaterialEdit extends MaterialEdit { result?: MaterialEditResult }
-export type ImageMaterial = {
-  contentHash?: string;
-  id: string; kind: "image"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
-  sizeBytes: number; width: number; height: number; edit?: AppliedMaterialEdit;
-};
-export type VideoMaterial = {
-  contentHash?: string;
-  id: string; kind: "video"; name: string; orientation: MaterialOrientation; storageKey: string; mimeType: string;
-  sizeBytes: number; width: number; height: number; edit?: AppliedMaterialEdit;
-  hasAudio: boolean; sourceDurationSeconds?: number; audioTags: VideoAudioTag[];
-  videoTrack?: VideoTrack; audioTrack?: AudioTrack;
-};
-export type SceneMaterial = ImageMaterial | VideoMaterial;
-export interface Scene {
-  id: string; materials: SceneMaterial[]; durationSeconds: number; layoutId?: string; motion: SceneMotion;
-  focusPoint?: FocusPoint;
-  rendererId?: string; title?: string; render: { status: "idle" | "queued" | "running" | "ready" | "failed"; artifactId?: string };
-}
-export interface Story extends Omit<StorySummary, "sceneCount"> {
-  scenes: Scene[]; narrations: { id: string; assetId: string; fromSceneId: string }[];
-  music: { generationStatus: "idle" | "queued" | "running" | "ready" | "failed"; assetId?: string; applied: boolean };
-}
+const apiClient = createApiClient(apiUrl);
 export interface SceneRender {
   id: string;
   current: boolean;
@@ -124,19 +103,13 @@ export function editSceneMaterial(token: string, storyId: string, sceneId: strin
 }
 export async function getMaterialContent(token: string, storyId: string, materialId: string): Promise<Blob> {
   // This URL follows the current edit, not an immutable storage object.
-  const response = await fetch(`${apiUrl}/stories/${storyId}/materials/${materialId}/content`, {
-    cache: "no-store", headers: { authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) await throwResponseError(response);
-  return response.blob();
+  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/content`, { cache: "no-store" }, token);
 }
 export function getMaterialContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
   return request(`/stories/${storyId}/materials/${materialId}/content-access`, {}, token);
 }
 export async function getMaterialSourceContent(token: string, storyId: string, materialId: string): Promise<Blob> {
-  const response = await fetch(`${apiUrl}/stories/${storyId}/materials/${materialId}/source-content`, { headers: { authorization: `Bearer ${token}` } });
-  if (!response.ok) await throwResponseError(response);
-  return response.blob();
+  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/source-content`, {}, token);
 }
 export function getMaterialSourceContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
   return request(`/stories/${storyId}/materials/${materialId}/source-content-access`, {}, token);
@@ -148,11 +121,7 @@ export function getMaterialAudioContentAccess(token: string, storyId: string, ma
   return request(`/stories/${storyId}/materials/${materialId}/audio-content-access`, {}, token);
 }
 export async function getMaterialAudioContent(token: string, storyId: string, materialId: string): Promise<Blob> {
-  const response = await fetch(`${apiUrl}/stories/${storyId}/materials/${materialId}/audio-content`, {
-    cache: "no-store", headers: { authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) await throwResponseError(response);
-  return response.blob();
+  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/audio-content`, { cache: "no-store" }, token);
 }
 export function reorderSceneMaterials(token: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}/material-order`, { method: "PUT", body: JSON.stringify({ materialIds }) }, token);
@@ -187,11 +156,9 @@ export function listSceneRenderVersions(token: string, storyId: string, sceneId:
   return request(`/stories/${storyId}/scenes/${sceneId}/renders`, { cache: "no-store", ...(signal ? { signal } : {}) }, token);
 }
 export async function downloadSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<Blob> {
-  const response = await fetch(`${apiUrl}/stories/${storyId}/scenes/${sceneId}/renders/${renderId}/content`, {
-    cache: "no-store", headers: { authorization: `Bearer ${token}` }, ...(signal ? { signal } : {}),
-  });
-  if (!response.ok) await throwResponseError(response);
-  return response.blob();
+  return apiClient.blob(`/stories/${storyId}/scenes/${sceneId}/renders/${renderId}/content`, {
+    cache: "no-store", ...(signal ? { signal } : {}),
+  }, token);
 }
 export function requestSceneFrame(token: string, storyId: string, sceneId: string, signal?: AbortSignal): Promise<SceneFrame> {
   return request(`/stories/${storyId}/scenes/${sceneId}/frames`, { method: "POST", ...(signal ? { signal } : {}) }, token);
@@ -200,25 +167,10 @@ export function getSceneFrame(token: string, storyId: string, sceneId: string, f
   return request(`/stories/${storyId}/scenes/${sceneId}/frames/${frameId}`, signal ? { signal } : {}, token);
 }
 export async function downloadSceneFrame(token: string, storyId: string, sceneId: string, frameId: string, signal?: AbortSignal): Promise<Blob> {
-  const response = await fetch(`${apiUrl}/stories/${storyId}/scenes/${sceneId}/frames/${frameId}/content`, {
-    cache: "no-store", headers: { authorization: `Bearer ${token}` }, ...(signal ? { signal } : {}),
-  });
-  if (!response.ok) await throwResponseError(response);
-  return response.blob();
+  return apiClient.blob(`/stories/${storyId}/scenes/${sceneId}/frames/${frameId}/content`, {
+    cache: "no-store", ...(signal ? { signal } : {}),
+  }, token);
 }
-async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
-  const hasJsonBody = init.body !== undefined && init.body !== null && !(init.body instanceof FormData);
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init, headers: {
-      ...(hasJsonBody ? { "content-type": "application/json" } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}), ...init.headers,
-    },
-  });
-  if (!response.ok) await throwResponseError(response);
-  return response.json() as Promise<T>;
-}
-
-async function throwResponseError(response: Response): Promise<never> {
-  const body = await response.json().catch(() => ({ message: response.statusText })) as { message?: string; code?: string };
-  throw new ApiError(body.message ?? "Request failed", response.status, body.code);
+function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+  return apiClient.json(path, init, token);
 }

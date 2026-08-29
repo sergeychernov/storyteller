@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { getStory, type AuthSession } from "../api.js";
-import { useLocalization } from "../localization.js";
-import feedbackStyles from "../styles/feedback.module.css";
+import { useLocalization } from "@storyteller/web-ui";
+import feedbackStyles from "@storyteller/web-ui/feedback.module.css";
 import { StoryEditor } from "./editor/StoryEditor.js";
 import { useStorySceneSelection } from "./editor/use-story-scene-selection.js";
 import styles from "./StoryDetails.module.css";

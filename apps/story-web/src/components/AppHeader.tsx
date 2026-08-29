@@ -3,7 +3,7 @@ import { ProfileAvatar, type Profile } from "@storyteller/auth-client";
 import type { Locale } from "@storyteller/localization";
 import { checkHealth } from "../api.js";
 import { classNames } from "../class-names.js";
-import { LanguageSwitcher, useLocalization } from "../localization.js";
+import { LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import styles from "./AppHeader.module.css";
 
 export function AppHeader({ profile, onLanguageChange }: {

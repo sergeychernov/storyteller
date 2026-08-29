@@ -1,8 +1,13 @@
 import { localeOptions, normalizeLocale, translate, type Locale, type TranslationKey } from "@storyteller/localization";
-import { createContext, type PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import styles from "./localization.module.css";
-
+import {
+  createContext,
+  type PropsWithChildren,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 const storageKey = "storyteller.locale";
 
 interface LocalizationContextValue {
@@ -21,7 +26,10 @@ export function LocalizationProvider({ children }: PropsWithChildren) {
     document.documentElement.lang = locale;
   }, [locale]);
 
-  const t = useCallback((key: TranslationKey, params?: Record<string, string | number>) => translate(locale, key, params), [locale]);
+  const t = useCallback(
+    (key: TranslationKey, params?: Record<string, string | number>) => translate(locale, key, params),
+    [locale],
+  );
   const value = useMemo(() => ({ locale, setLocale, t }), [locale, t]);
 
   return <LocalizationContext.Provider value={value}>{children}</LocalizationContext.Provider>;
@@ -33,14 +41,23 @@ export function useLocalization(): LocalizationContextValue {
   return context;
 }
 
-interface LanguageSwitcherProps {
-  readonly destinations?: Readonly<Partial<Record<Locale, string>>>;
+interface LanguageSwitcherBaseProps {
   readonly onLocaleChange?: ((locale: Locale) => Promise<void>) | undefined;
 }
 
-export function LanguageSwitcher({ destinations, onLocaleChange }: LanguageSwitcherProps) {
+type LanguageSwitcherProps = LanguageSwitcherBaseProps & (
+  | {
+    readonly destinations: Readonly<Partial<Record<Locale, string>>>;
+    readonly onNavigate: (destination: string) => void;
+  }
+  | {
+    readonly destinations?: never;
+    readonly onNavigate?: never;
+  }
+);
+
+export function LanguageSwitcher(props: LanguageSwitcherProps) {
   const { locale, setLocale, t } = useLocalization();
-  const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
 
@@ -49,10 +66,12 @@ export function LanguageSwitcher({ destinations, onLocaleChange }: LanguageSwitc
     setIsSaving(true);
     setSaveFailed(false);
     try {
-      await onLocaleChange?.(nextLocale);
+      await props.onLocaleChange?.(nextLocale);
       setLocale(nextLocale);
-      const destination = destinations?.[nextLocale];
-      if (destination) navigate(destination);
+      if (props.destinations) {
+        const destination = props.destinations[nextLocale];
+        if (destination) props.onNavigate(destination);
+      }
     } catch {
       setSaveFailed(true);
     } finally {
@@ -61,13 +80,36 @@ export function LanguageSwitcher({ destinations, onLocaleChange }: LanguageSwitc
   }
 
   return (
-    <label className={styles.languageSwitcher}>
+    <label className="storyteller-language-switcher">
       <span>{t("language.label")}</span>
-      <select aria-label={t("language.label")} aria-busy={isSaving} disabled={isSaving} value={locale}
-        onChange={(event) => { void changeLocale(event.target.value as Locale); }}>
-        {localeOptions.map((option) => <option key={option.locale} value={option.locale}>{option.label}</option>)}
+      <select
+        aria-label={t("language.label")}
+        aria-busy={isSaving}
+        disabled={isSaving}
+        value={locale}
+        onChange={(event) => {
+          void changeLocale(event.target.value as Locale);
+        }}
+      >
+        {localeOptions.map((option) => (
+          <option key={option.locale} value={option.locale}>
+            {option.label}
+          </option>
+        ))}
       </select>
-      {saveFailed && <span className={styles.languageError} role="alert">{t("language.saveError")}</span>}
+      {saveFailed && (
+        <span className="storyteller-language-error" role="alert">
+          {t("language.saveError")}
+        </span>
+      )}
     </label>
   );
+}
+
+export function ExternalRedirect({ to }: { readonly to: string }) {
+  useEffect(() => {
+    window.location.replace(to);
+  }, [to]);
+
+  return null;
 }

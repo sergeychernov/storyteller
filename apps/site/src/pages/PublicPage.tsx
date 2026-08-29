@@ -6,7 +6,7 @@ import { PublicSections } from "../components/public/PublicSections.js";
 import { PublicSeo } from "../components/public/PublicSeo.js";
 import type { ResolvedPublicPage } from "../components/public/public-site-types.js";
 import { ProductRoadmap } from "../components/roadmap/ProductRoadmap.js";
-import { useLocalization } from "../localization.js";
+import { useLocalization } from "@storyteller/web-ui";
 import styles from "./PublicPage.module.css";
 
 interface PublicPageProps {

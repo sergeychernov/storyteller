@@ -2,11 +2,13 @@
   "files": [],
   "references": [
     { "path": "packages/domain" },
+    { "path": "packages/api-client" },
     { "path": "packages/analytics" },
     { "path": "packages/auth-client" },
     { "path": "packages/schemas" },
     { "path": "packages/application" },
     { "path": "packages/localization" },
+    { "path": "packages/web-ui" },
     { "path": "packages/renderer" },
     { "path": "packages/storage" },
     { "path": "packages/render-queue" },

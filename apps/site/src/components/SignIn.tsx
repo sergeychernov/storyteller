@@ -2,9 +2,9 @@ import { useMutation } from "@tanstack/react-query";
 import { ApiError, type AuthSession } from "@storyteller/auth-client";
 import { type FormEvent, useState } from "react";
 import { authClient } from "../auth.js";
-import { useLocalization } from "../localization.js";
-import feedbackStyles from "../styles/feedback.module.css";
-import typographyStyles from "../styles/typography.module.css";
+import { useLocalization } from "@storyteller/web-ui";
+import feedbackStyles from "@storyteller/web-ui/feedback.module.css";
+import typographyStyles from "@storyteller/web-ui/typography.module.css";
 import styles from "./SignIn.module.css";
 
 interface SignInProps { readonly onAuthenticated: (session: AuthSession, accountCreated: boolean) => Promise<void> }

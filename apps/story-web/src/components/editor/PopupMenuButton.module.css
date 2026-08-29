@@ -19,10 +19,7 @@
 }
 
 .menu {
-  position: fixed;
   z-index: 900;
-  top: var(--menu-top);
-  left: var(--menu-left);
   display: grid;
   width: 196px;
   padding: 5px;
@@ -32,26 +29,31 @@
   box-shadow: 0 14px 40px #17171444;
 }
 
-.menu button {
+.item {
   padding: 9px 10px;
   border-radius: 6px;
   color: #35352f;
   background: transparent;
+  cursor: pointer;
+  outline: none;
   text-align: left;
   font-size: 12px;
+  user-select: none;
 }
 
-.menu button:hover,
-.menu button:focus-visible {
-  outline: none;
+.item[data-highlighted] {
   background: #e8edda;
 }
 
-.menu .danger {
+.item[data-disabled] {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.danger {
   color: #a33f34;
 }
 
-.menu .danger:hover,
-.menu .danger:focus-visible {
+.danger[data-highlighted] {
   background: #f5dfda;
 }

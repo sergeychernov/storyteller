@@ -4,9 +4,8 @@ import type { Locale } from "@storyteller/localization";
 import { useLocation } from "react-router-dom";
 import { authClient } from "./auth.js";
 import { ClipShell } from "./components/ClipShell.js";
-import { ExternalRedirect } from "./components/ExternalRedirect.js";
+import { ExternalRedirect, useLocalization } from "@storyteller/web-ui";
 import { useClipWebAnalytics } from "./use-clip-web-analytics.js";
-import { useLocalization } from "./localization.js";
 
 export function App() {
   const { session, updateProfile } = usePersistentSession(authClient);

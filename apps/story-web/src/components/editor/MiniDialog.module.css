@@ -2,17 +2,19 @@
   position: fixed;
   z-index: 1000;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 20px;
   background: #17171475;
   backdrop-filter: blur(2px);
 }
 
 .dialog {
-  width: min(430px, 100%);
+  position: fixed;
+  z-index: 1001;
+  top: 50%;
+  left: 50%;
+  width: min(430px, calc(100% - 40px));
   max-height: min(640px, 85vh);
   padding: 16px;
+  transform: translate(-50%, -50%);
   overflow: auto;
   border: 1px solid #cfcbc0;
   border-radius: 10px;
@@ -22,7 +24,7 @@
 }
 
 .dialog.wide {
-  width: min(680px, 100%);
+  width: min(680px, calc(100% - 40px));
   max-height: min(760px, 92vh);
 }
 
@@ -74,16 +76,17 @@
 
 @media (max-width: 767px) {
   .editorBackdrop {
-    padding: 0;
     background: #f8f7f2;
     backdrop-filter: none;
   }
 
   .dialog.editorDialog {
+    inset: 0;
     width: 100%;
     height: 100vh;
     height: 100dvh;
     max-height: none;
+    transform: none;
     border: 0;
     border-radius: 0;
     box-shadow: none;

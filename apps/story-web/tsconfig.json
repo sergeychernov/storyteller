@@ -9,9 +9,12 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "references": [
+    { "path": "../../packages/api-client" },
     { "path": "../../packages/analytics" },
+    { "path": "../../packages/application" },
     { "path": "../../packages/auth-client" },
     { "path": "../../packages/localization" },
+    { "path": "../../packages/web-ui" },
     { "path": "../../packages/domain" }
   ],
   "include": ["src/**/*.ts", "src/**/*.tsx"]

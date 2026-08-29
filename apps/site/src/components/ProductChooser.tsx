@@ -1,6 +1,6 @@
 import type { AuthSession } from "@storyteller/auth-client";
 import type { Locale } from "@storyteller/localization";
-import { useLocalization } from "../localization.js";
+import { useLocalization } from "@storyteller/web-ui";
 import styles from "./ProductChooser.module.css";
 
 const copy: Record<Locale, {

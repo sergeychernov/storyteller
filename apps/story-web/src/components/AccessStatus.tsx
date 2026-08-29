@@ -1,4 +1,4 @@
-import { useLocalization } from "../localization.js";
+import { useLocalization } from "@storyteller/web-ui";
 import styles from "./AccessStatus.module.css";
 
 export function AccessStatus({ state }: { readonly state: "loading" | "error" | "denied" }) {

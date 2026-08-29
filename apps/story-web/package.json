@@ -4,24 +4,35 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node ../../node_modules/typescript/bin/tsc -b ../../packages/analytics ../../packages/auth-client ../../packages/domain ../../packages/localization && vite build",
+    "build": "node ../../node_modules/typescript/bin/tsc -b ../../packages/api-client ../../packages/analytics ../../packages/application ../../packages/auth-client ../../packages/domain ../../packages/localization ../../packages/web-ui && vite build",
     "dev": "vite --host 0.0.0.0 --port 3002",
-    "preview": "vite preview --host 0.0.0.0 --port 3002"
+    "preview": "vite preview --host 0.0.0.0 --port 3002",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "1.1.23",
+    "@radix-ui/react-dropdown-menu": "2.1.24",
     "@storyteller/analytics": "workspace:*",
+    "@storyteller/api-client": "workspace:*",
+    "@storyteller/application": "workspace:*",
     "@storyteller/auth-client": "workspace:*",
     "@storyteller/domain": "workspace:*",
     "@storyteller/localization": "workspace:*",
+    "@storyteller/web-ui": "workspace:*",
     "@tanstack/react-query": "5.101.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-router-dom": "7.18.0"
   },
   "devDependencies": {
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.6",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.5",
-    "vite": "8.2.1"
+    "jsdom": "30.0.1",
+    "vite": "8.2.1",
+    "vitest": "4.1.11"
   }
 }

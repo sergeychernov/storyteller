@@ -4,13 +4,12 @@ import { Navigate, Route, Routes, useLocation, useMatch } from "react-router-dom
 import { createSignInPath, useProfileLanguage } from "@storyteller/auth-client";
 import type { Locale } from "@storyteller/localization";
 import { AppHeader } from "./components/AppHeader.js";
-import { ExternalRedirect } from "./components/ExternalRedirect.js";
+import { ExternalRedirect, useLocalization } from "@storyteller/web-ui";
 import { AuthenticatedLayout } from "./layouts/AuthenticatedLayout.js";
 import { StoriesPage } from "./pages/StoriesPage.js";
 import { StoryPage } from "./pages/StoryPage.js";
 import { usePersistentSession } from "./use-persistent-session.js";
 import { useStoryWebAnalytics } from "./use-story-web-analytics.js";
-import { useLocalization } from "./localization.js";
 import { AccessProvider, hasCapability } from "./access-control.js";
 import { getEffectiveAccess } from "./api.js";
 import { AccessStatus } from "./components/AccessStatus.js";

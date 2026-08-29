@@ -3,8 +3,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App.js";
-import { LocalizationProvider } from "./localization.js";
-import "./styles/global.css";
+import { LocalizationProvider } from "@storyteller/web-ui";
+import "@storyteller/web-ui/global.css";
 
 analytics.initialize({
   apiKey: import.meta.env.VITE_AMPLITUDE_API_KEY ?? "",

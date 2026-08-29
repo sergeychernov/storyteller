@@ -1,7 +1,7 @@
 import type { TranslationKey } from "@storyteller/localization";
 import { Link } from "react-router-dom";
 import type { StorySummary } from "../api.js";
-import { useLocalization } from "../localization.js";
+import { useLocalization } from "@storyteller/web-ui";
 import styles from "./StoryCard.module.css";
 
 export function StoryCard({ story }: { readonly story: StorySummary }) {

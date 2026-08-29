@@ -1,6 +1,6 @@
 import { ProfileAvatar, type Profile } from "@storyteller/auth-client";
 import type { Locale } from "@storyteller/localization";
-import { LanguageSwitcher, useLocalization } from "../localization.js";
+import { LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import styles from "./ClipShell.module.css";
 
 const copy: Record<Locale, {

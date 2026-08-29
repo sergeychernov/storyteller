@@ -11,7 +11,8 @@
   "references": [
     { "path": "../../packages/analytics" },
     { "path": "../../packages/auth-client" },
-    { "path": "../../packages/localization" }
+    { "path": "../../packages/localization" },
+    { "path": "../../packages/web-ui" }
   ],
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

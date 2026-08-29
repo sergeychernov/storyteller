@@ -9,7 +9,7 @@ import { publicPages } from "./components/public/public-site-model.js";
 import { PublicPage } from "./pages/PublicPage.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
 import { SignInPage } from "./pages/SignInPage.js";
-import { useLocalization } from "./localization.js";
+import { useLocalization } from "@storyteller/web-ui";
 import { useSiteAnalytics } from "./use-site-analytics.js";
 
 export function App() {

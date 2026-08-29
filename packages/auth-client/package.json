@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "dependencies": {
+    "@storyteller/api-client": "workspace:*",
     "@storyteller/domain": "workspace:*",
     "react": "19.2.3"
   },

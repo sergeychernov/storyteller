@@ -1,7 +1,6 @@
 import { ProfileAvatar, type Profile } from "@storyteller/auth-client";
 import type { Locale } from "@storyteller/localization";
-import { LanguageSwitcher } from "../localization.js";
-import { useLocalization } from "../localization.js";
+import { LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import styles from "./SiteAppHeader.module.css";
 
 interface SiteAppHeaderProps {
