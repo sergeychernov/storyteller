@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "packages/domain" },
+    { "path": "packages/auth-client" },
     { "path": "packages/schemas" },
     { "path": "packages/application" },
     { "path": "packages/localization" },
@@ -12,7 +13,9 @@
     { "path": "apps/api" },
     { "path": "apps/worker" },
     { "path": "apps/mcp" },
-    { "path": "apps/web" },
+    { "path": "apps/site" },
+    { "path": "apps/story-web" },
+    { "path": "apps/clip-web" },
     { "path": "apps/mobile" }
   ]
 }

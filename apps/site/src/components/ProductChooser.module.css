@@ -1,0 +1,94 @@
+.page {
+  width: min(1080px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 72px 0;
+}
+
+.intro {
+  max-width: 680px;
+  margin-bottom: 34px;
+}
+
+.intro p {
+  margin: 0 0 10px;
+  color: #687439;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.intro h1 {
+  margin: 0 0 12px;
+  font-family: "Playfair Display", serif;
+  font-size: clamp(42px, 7vw, 72px);
+  font-style: italic;
+  line-height: 0.98;
+}
+
+.intro span {
+  color: #66665f;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.card {
+  position: relative;
+  min-height: 260px;
+  padding: 32px;
+  border: 1px solid #d7d3c9;
+  border-radius: 22px;
+  background: #fff;
+}
+
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 30px;
+}
+
+.card p {
+  max-width: 42ch;
+  min-height: 72px;
+  color: #66665f;
+  line-height: 1.55;
+}
+
+.card a {
+  display: inline-block;
+  margin-top: 22px;
+  color: #22221d;
+  font-weight: 600;
+}
+
+.badge {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #576129;
+  background: #e9f3c9;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.signOut {
+  margin-top: 28px;
+  color: #55554f;
+  background: transparent;
+}
+
+@media (max-width: 720px) {
+  .page {
+    width: min(100% - 28px, 560px);
+    padding: 48px 0;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,102 @@
+.page {
+  min-height: 100vh;
+  color: #f3f1e9;
+  background: #11110f;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 0 28px;
+  border-bottom: 1px solid #30302a;
+}
+
+.header a {
+  color: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.header a span {
+  color: #d9fb76;
+  font-weight: 400;
+}
+
+.content {
+  width: min(880px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: clamp(80px, 14vw, 160px) 0;
+}
+
+.status {
+  color: #d9fb76;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.content h1 {
+  margin: 18px 0;
+  font-family: "Playfair Display", serif;
+  font-size: clamp(64px, 12vw, 132px);
+  font-style: italic;
+  font-weight: 600;
+  line-height: 0.9;
+}
+
+.lead {
+  max-width: 660px;
+  margin: 30px 0 12px;
+  font-size: clamp(22px, 3vw, 32px);
+  line-height: 1.25;
+}
+
+.detail {
+  max-width: 680px;
+  color: #a9a99f;
+  line-height: 1.65;
+}
+
+.profile {
+  margin: 34px 0;
+  color: #74746c;
+  font-size: 13px;
+}
+
+.content nav {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.content nav a {
+  color: #f3f1e9;
+}
+
+.content nav .primary {
+  padding: 13px 18px;
+  border-radius: 10px;
+  color: #171713;
+  background: #d9fb76;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding: 0 18px;
+  }
+
+  .content {
+    width: min(100% - 28px, 520px);
+  }
+
+  .content nav {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

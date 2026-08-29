@@ -1,0 +1,27 @@
+{
+  "name": "@storyteller/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../node_modules/typescript/bin/tsc -b ../../packages/auth-client ../../packages/localization && vite build && node ../../scripts/prerender-public-site.mjs",
+    "dev": "node server.mjs",
+    "dev:vite": "vite --host 0.0.0.0 --port 3000",
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@storyteller/auth-client": "workspace:*",
+    "@storyteller/localization": "workspace:*",
+    "@tanstack/react-query": "5.101.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-router-dom": "7.18.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.5",
+    "vite": "8.2.1"
+  }
+}

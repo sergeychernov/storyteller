@@ -12,7 +12,7 @@
 - After editing task statuses, run `node scripts/sync-product-roadmap.mjs`. This regenerates local background badges and the next-ten summary without changing completion status or milestone membership. Do not hand-edit generated SVGs or the generated summary.
 - The public widget is generated from this same document by the web build. Keep the milestone table and `product-roadmap-public-titles` (EN/RU/SR) in sync; never hardcode progress, the active milestone, or task totals in the UI. Keep document/generator paths in the web deployment watch configuration. Do not claim a remote deployment or watch-path change unless actually performed and verified.
 - Write public roadmap copy for potential users and investors: describe capabilities and benefits, not internal parity/catch-up work or protocol names. Keep technical milestone goals and acceptance criteria in the internal document, with public labels in its dedicated titles block.
-- Before finishing feature work, run `node scripts/sync-product-roadmap.mjs --check` in addition to the relevant implementation checks. If changing roadmap tooling or public roadmap data, also run `yarn test:roadmap` and `yarn workspace @storyteller/web build`. Never report completion with stale statuses, colors, or priorities; if verification is blocked, keep the task unfinished and record the blocker.
+- Before finishing feature work, run `node scripts/sync-product-roadmap.mjs --check` in addition to the relevant implementation checks. If changing roadmap tooling or public roadmap data, also run `yarn test:roadmap` and `yarn build:web`. Never report completion with stale statuses, colors, or priorities; if verification is blocked, keep the task unfinished and record the blocker.
 
 ## Frontend component boundaries
 

@@ -1,12 +1,14 @@
 # Frontend products and Music Clip Studio plan
 
-Date: 29.08.2026. Status: approved product and architecture plan; implementation
-has not started.
+Date: 29.08.2026. Status: B16 frontend separation implemented locally and its
+Railway build/start/watch configuration saved and read back; F18/F19 product
+functionality remains planned for P5/P6.
 
 Related product roadmap tasks:
 
-- **B16** — perform the early frontend separation before access-control and
-  editor work adds more dependencies to the current combined `apps/web`;
+- **B16** — the completed early frontend separation performed before
+  access-control and further editor work could add more dependencies to the
+  formerly combined `apps/web`;
 - **F18.0** — announce Music Clip Studio through the public product chooser and
   localized prelaunch page in P3;
 - **F18.1–F18.7** — deliver simultaneous multicamera Music Clip Studio in P5;
@@ -65,9 +67,10 @@ packages/
   storage/              Shared object-storage boundary
 ```
 
-`clip-application`, `clip-domain` and `auth-client` are target boundaries, not
-directories that already exist. Create them only in the implementation task that
-uses them. Do not rename the current story packages as part of B16 unless the
+`clip-application` and `clip-domain` are target boundaries, not directories that
+already exist. `packages/auth-client` was created by B16 because all three
+browser applications use the same session format and safe return-path rules.
+Create the clip packages only in the implementation task that uses them. Do not rename the current story packages as part of B16 unless the
 move is mechanical and all import/deployment references are verified; the
 frontend split does not require a risky backend package migration.
 
@@ -298,6 +301,25 @@ current public and authenticated routes work from their new owners.
 - Site owns public SEO; both applications are excluded from indexing.
 - Tests and browser verification are recorded in the B16 product roadmap row.
 - No F18/F19 status is marked done from shell or routing work alone.
+
+### B16 implementation record — 29.08.2026
+
+- The combined `apps/web` workspace was split into independently built
+  `apps/site`, `apps/story-web` and `apps/clip-web`; shared browser session and
+  return-path validation live in `packages/auth-client`.
+- `apps/site/server.mjs` is the single host with explicit public, Story and Clip
+  roots, per-application SPA fallbacks, isolated assets, cache headers,
+  application `noindex` headers and ID/query-preserving legacy redirects.
+- The Clip workspace contains only an authenticated, localized planned-product
+  shell. It accepts no uploads and does not complete F18 or F19.
+- Railway production service `@storyteller/web` was updated without triggering
+  a deployment: build `yarn build:web`, start
+  `yarn workspace @storyteller/site start`, and the watch paths documented in
+  [deploy-railway.md](deploy-railway.md). The saved values and
+  `source.checkSuites: true` were read back through Railway on 29.08.2026.
+- Local automated and browser verification is recorded in the B16 row of the
+  [product roadmap](product-roadmap.md). This record does not claim that the
+  uncommitted B16 code has been deployed to production.
 
 ## Music Clip Studio product definition
 

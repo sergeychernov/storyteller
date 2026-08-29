@@ -1,0 +1,14 @@
+{
+  "name": "@storyteller/auth-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "react": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2"
+  }
+}

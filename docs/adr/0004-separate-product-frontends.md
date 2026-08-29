@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted.
+Accepted and implemented for B16 on 29.08.2026.
 
 ## Context
 
-The current `apps/web` workspace contains both the public site and Story Studio.
+Before B16, the `apps/web` workspace contained both the public site and Story Studio.
 Music Clip Studio has a different product promise, project model and editing UI,
 but it should use the same account, subscription and backend platform. Adding it
 as another mode inside the existing React tree would couple public content,

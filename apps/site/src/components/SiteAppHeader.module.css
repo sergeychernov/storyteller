@@ -1,0 +1,23 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 70px;
+  padding: 0 28px;
+  color: #fff;
+  background: #12120f;
+}
+
+.brand {
+  color: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding: 0 18px;
+  }
+}

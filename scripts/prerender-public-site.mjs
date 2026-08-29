@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { getAlternatePages, listPublicPages, publicSite } from "./public-site.mjs";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
-const outputRoot = join(repositoryRoot, "apps/web/dist");
+const outputRoot = join(repositoryRoot, "apps/site/dist");
 
 function escapeHtml(value) {
   return String(value)
@@ -134,7 +134,7 @@ export async function prerenderPublicSite(outputDirectory = outputRoot) {
   }
 
   await writeFile(join(outputDirectory, "sitemap.xml"), renderSitemap());
-  await writeFile(join(outputDirectory, "robots.txt"), `User-agent: *\nAllow: /\nDisallow: /sign-in\nDisallow: /stories\n\nSitemap: ${publicSite.origin}/sitemap.xml\n`);
+  await writeFile(join(outputDirectory, "robots.txt"), `User-agent: *\nAllow: /\nDisallow: /sign-in\nDisallow: /app\n\nSitemap: ${publicSite.origin}/sitemap.xml\n`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await prerenderPublicSite();

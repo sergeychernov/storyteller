@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  },
+  "references": [
+    { "path": "../../packages/auth-client" },
+    { "path": "../../packages/localization" },
+    { "path": "../../packages/domain" }
+  ],
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

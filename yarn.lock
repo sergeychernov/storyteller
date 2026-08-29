@@ -3087,6 +3087,31 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@storyteller/auth-client@workspace:*, @storyteller/auth-client@workspace:packages/auth-client":
+  version: 0.0.0-use.local
+  resolution: "@storyteller/auth-client@workspace:packages/auth-client"
+  dependencies:
+    "@types/react": "npm:19.2.2"
+    react: "npm:19.2.3"
+  languageName: unknown
+  linkType: soft
+
+"@storyteller/clip-web@workspace:apps/clip-web":
+  version: 0.0.0-use.local
+  resolution: "@storyteller/clip-web@workspace:apps/clip-web"
+  dependencies:
+    "@storyteller/auth-client": "workspace:*"
+    "@storyteller/localization": "workspace:*"
+    "@types/react": "npm:19.2.2"
+    "@types/react-dom": "npm:19.2.3"
+    "@vitejs/plugin-react": "npm:6.0.5"
+    react: "npm:19.2.3"
+    react-dom: "npm:19.2.3"
+    react-router-dom: "npm:7.18.0"
+    vite: "npm:8.2.1"
+  languageName: unknown
+  linkType: soft
+
 "@storyteller/domain@workspace:*, @storyteller/domain@workspace:packages/domain":
   version: 0.0.0-use.local
   resolution: "@storyteller/domain@workspace:packages/domain"
@@ -3162,6 +3187,23 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@storyteller/site@workspace:apps/site":
+  version: 0.0.0-use.local
+  resolution: "@storyteller/site@workspace:apps/site"
+  dependencies:
+    "@storyteller/auth-client": "workspace:*"
+    "@storyteller/localization": "workspace:*"
+    "@tanstack/react-query": "npm:5.101.4"
+    "@types/react": "npm:19.2.2"
+    "@types/react-dom": "npm:19.2.3"
+    "@vitejs/plugin-react": "npm:6.0.5"
+    react: "npm:19.2.3"
+    react-dom: "npm:19.2.3"
+    react-router-dom: "npm:7.18.0"
+    vite: "npm:8.2.1"
+  languageName: unknown
+  linkType: soft
+
 "@storyteller/storage@workspace:*, @storyteller/storage@workspace:packages/storage":
   version: 0.0.0-use.local
   resolution: "@storyteller/storage@workspace:packages/storage"
@@ -3172,10 +3214,11 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@storyteller/web@workspace:apps/web":
+"@storyteller/story-web@workspace:apps/story-web":
   version: 0.0.0-use.local
-  resolution: "@storyteller/web@workspace:apps/web"
+  resolution: "@storyteller/story-web@workspace:apps/story-web"
   dependencies:
+    "@storyteller/auth-client": "workspace:*"
     "@storyteller/domain": "workspace:*"
     "@storyteller/localization": "workspace:*"
     "@tanstack/react-query": "npm:5.101.4"

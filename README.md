@@ -9,8 +9,11 @@ Minimal TypeScript monorepo for designing a story-production product from the UI
 - `apps/api` — Fastify API with OpenAPI docs, authenticated profiles, and story routes
 - `apps/worker` — PostgreSQL-backed scene render and object-cleanup worker
 - `apps/mcp` — empty peer interface to the future application layer
-- `apps/web` — React/Vite studio with account onboarding, story creation, and an editor shell
+- `apps/site` — public React/Vite site, product-neutral sign-in and the one-origin frontend host
+- `apps/story-web` — Story Studio React/Vite application under `/app/stories/*`
+- `apps/clip-web` — isolated Clip Studio React/Vite shell under `/app/clips/*`
 - `apps/mobile` — Expo Router companion app shell
+- `packages/auth-client` — shared same-origin browser session and validated return-path handling
 - `packages/application` — transport-independent use cases shared by API and future MCP tools
 - `packages/localization` — typed English, Russian, and Serbian Latin product copy shared by web and mobile
 - `packages/domain` — first small story model and lifecycle rules
@@ -29,7 +32,7 @@ yarn test
 yarn check
 ```
 
-Run the API, render worker, and web studio together:
+Build the three frontend artifacts, then run the API, render worker, and one-origin frontend host together:
 
 ```bash
 cp .env.example .env
@@ -43,7 +46,7 @@ To apply database migrations explicitly, run `yarn build:backend` followed by `y
 
 Then open [http://localhost:3000](http://localhost:3000). The API runs at [http://localhost:3001](http://localhost:3001), and its interactive documentation is at [http://localhost:3001/docs](http://localhost:3001/docs).
 
-Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mobile app, or `yarn dev:mobile` to start Expo separately. Individual commands remain available as `yarn dev:api`, `yarn dev:web`, `yarn dev:worker`, and `yarn dev:mcp`.
+Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mobile service, or `yarn dev:mobile` to start Expo separately. `yarn dev:web` rebuilds and serves Site, Story Studio, and Clip Studio from one origin. Isolated Vite servers remain available as `yarn dev:site`, `yarn dev:story-web`, and `yarn dev:clip-web`; individual backend commands are `yarn dev:api`, `yarn dev:worker`, and `yarn dev:mcp`.
 
 Scene downloads require the worker and FFmpeg (`ffmpeg` and `ffprobe` on `PATH`). If API and web were started separately, also run `yarn dev:worker`; otherwise render jobs remain queued. When using local storage, API and worker must share the same `MEDIA_ROOT` (the default resolves to the repository's `.storyteller-media` directory).
 
@@ -55,18 +58,18 @@ Video rotation, crop, and trim are saved as metadata, using the original timelin
 
 For a scene containing one video, download offers video only (MP4), audio only (M4A), or video with audio (MP4), applying the selected range and spatial edits at export. The render request accepts `{ "mode": "video" | "audio" | "combined" }`; requests without a mode remain supported. Audio-only jobs do not download or decode the video working track. A video without sound cannot produce an audio-only export. Existing uploads remain readable and editable; their sound is processed during export when a separate track is absent. They are not bulk-migrated.
 
-Production deployment of the web studio, API, worker, and MCP boundary is prepared for Railway. See [`docs/deploy-railway.md`](docs/deploy-railway.md) for service setup, variables, domains, and watch paths. The Expo mobile app is distributed separately through native app stores or EAS.
+Production deployment of the one-origin frontend host, API, worker, and MCP boundary is prepared for Railway. See [`docs/deploy-railway.md`](docs/deploy-railway.md) for service setup, variables, domains, and watch paths. The Expo mobile app is distributed separately through native app stores or EAS.
 
 The API persists profiles, sessions, stories, render jobs, cached artifact keys, and encrypted platform credentials in PostgreSQL. Set `DATABASE_URL` and a base64-encoded 32-byte `PLATFORM_CREDENTIALS_KEY`; the API applies versioned migrations on startup. The worker uses the same `DATABASE_URL` and object-storage configuration.
 
 Generate the credentials encryption key with `openssl rand -base64 32`. It must be kept stable between deployments or existing Telegram, TikTok, and Instagram credentials will become unreadable.
 
-Web and mobile initially follow the system language and expose an in-app selector for English, Russian, and Serbian Latin. The chosen language is persisted locally on each client.
+Site, both Web applications, and Mobile initially follow the system language and expose an in-app selector for English, Russian, and Serbian Latin. The chosen language is persisted locally on each client.
 
 See [`docs/product-scope.md`](docs/product-scope.md) for the first API surface and [`docs/migration-plan.md`](docs/migration-plan.md) for the incremental plan.
 
 See [`docs/product-roadmap.md`](docs/product-roadmap.md) for the product roadmap with milestones, independent Web, Mobile, and MCP task statuses, and completion criteria for functional parity with Hermes Story Skills.
 
-The approved early frontend split and milestone P5/P6 Music Clip Studio architecture are documented in [`docs/frontend-products-and-clip-studio-plan.md`](docs/frontend-products-and-clip-studio-plan.md) and [ADR 0004](docs/adr/0004-separate-product-frontends.md). P5 covers one simultaneous performance from several camera angles; P6 adds separate takes and musician parts with independent audio and video editing. The target frontend workspaces are `apps/site`, `apps/story-web`, and `apps/clip-web` on one `makeitastory.app` origin; they are planned boundaries and do not exist until B16 is implemented.
+The frontend split and milestone P5/P6 Music Clip Studio architecture are documented in [`docs/frontend-products-and-clip-studio-plan.md`](docs/frontend-products-and-clip-studio-plan.md) and [ADR 0004](docs/adr/0004-separate-product-frontends.md). P5 covers one simultaneous performance from several camera angles; P6 adds separate takes and musician parts with independent audio and video editing. `apps/site`, `apps/story-web`, and `apps/clip-web` now build independently and are served by one frontend host on the `makeitastory.app` origin.
 
-The public homepage at `/` shows milestone progress computed from that document on every web build. Run `yarn test:roadmap` to check progress calculation and build-time refresh. For document-only redeploys, include the roadmap and its generators in the web service's [Railway watch paths](docs/deploy-railway.md#web).
+The public homepage at `/` shows milestone progress computed from that document on every Site build. Run `yarn test:roadmap` to check progress calculation and build-time refresh. For document-only redeploys, include the roadmap and its generators in the frontend service's [Railway watch paths](docs/deploy-railway.md#web).

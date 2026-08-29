@@ -73,6 +73,6 @@ test("prerender writes crawlable HTML, sitemap and robots policy", async (contex
 
   const robots = await readFile(join(directory, "robots.txt"), "utf8");
   assert.match(robots, /Allow: \//);
-  assert.match(robots, /Disallow: \/stories/);
+  assert.match(robots, /Disallow: \/app/);
   assert.match(robots, /Sitemap: https:\/\/makeitastory\.app\/sitemap\.xml/);
 });

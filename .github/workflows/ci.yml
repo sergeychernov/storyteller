@@ -91,5 +91,5 @@ jobs:
           exit 1
         env:
           PORT: 3002
-      - run: yarn workspace @storyteller/web vite build
+      - run: yarn build:web
       - run: yarn workspace @storyteller/mobile exec expo export --platform web --output-dir /tmp/storyteller-mobile-export
