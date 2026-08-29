@@ -49,6 +49,7 @@ export interface PublicSiteLocaleData {
   readonly roadmap: string;
   readonly roadmapIntro: string;
   readonly current: string;
+  readonly overall: string;
   readonly planned: string;
   readonly complete: string;
   readonly allComplete: string;

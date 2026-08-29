@@ -15,6 +15,7 @@ test("public site has complete localized page families and stable slugs", () => 
   assert.equal(new Set(pages.map((page) => page.path)).size, pages.length);
 
   for (const locale of Object.values(publicSite.locales)) {
+    assert.ok(locale.overall.length > 0);
     assert.deepEqual(locale.pages.map((page) => page.key).sort(), expectedKeys);
     for (const page of locale.pages) {
       if (locale.code === "en") assert.equal(page.path.startsWith("/en"), false);

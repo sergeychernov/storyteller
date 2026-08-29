@@ -29,6 +29,7 @@ test("counts task/interface pairs separately, excludes n/a and retains completed
   ]);
   assert.equal(data.currentMilestoneId, "P0");
   assert.equal(data.milestones[0].percent, 50);
+  assert.deepEqual(data.overallProgress, { completed: 2, total: 6, percent: 33 });
   assert.match(data.sourceRevision, /^[a-f0-9]{12}$/);
   assert.doesNotMatch(JSON.stringify(data), /PRIVATE_/);
 });
@@ -46,9 +47,25 @@ test("all complete has no current milestone; empty milestones do not claim compl
   const complete = createPublicRoadmap(fixture([["F01", "done (P0)", "n/a", "n/a"]], ["P0"]));
   assert.equal(complete.currentMilestoneId, null);
   assert.equal(complete.milestones[0].state, "complete");
+  assert.deepEqual(complete.overallProgress, { completed: 1, total: 1, percent: 100 });
   const empty = createPublicRoadmap(fixture([["F01", "done (P0)", "n/a", "n/a"]], ["P0", "P5"]));
   assert.equal(empty.currentMilestoneId, "P5");
   assert.equal(empty.milestones[1].percent, 0);
+});
+
+test("overall progress combines every milestone and updates independently from the current milestone", () => {
+  const source = fixture([
+    ["F01", "done (P0)", "P1", "P2"],
+    ["F02", "P0", "done (P3)", "n/a"],
+  ]);
+  const before = createPublicRoadmap(source);
+  assert.equal(before.currentMilestoneId, "P0");
+  assert.equal(before.milestones[0].percent, 50);
+  assert.deepEqual(before.overallProgress, { completed: 2, total: 5, percent: 40 });
+
+  const after = createPublicRoadmap(source.replace("| P0 | done (P3) | n/a |", "| done (P0) | done (P3) | n/a |"));
+  assert.equal(after.currentMilestoneId, "P1");
+  assert.deepEqual(after.overallProgress, { completed: 3, total: 5, percent: 60 });
 });
 
 test("future milestones, rescheduling and partial later completion use document data", () => {

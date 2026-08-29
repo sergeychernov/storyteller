@@ -2,7 +2,7 @@
 
 `hermes-story-skills` stays unchanged and outside this repository. It is consulted only when a specific renderer or media behavior is chosen for migration. No legacy manifest or chatbot workflow is imported into the product model.
 
-This document is architectural context. Release order and product scope follow the [product roadmap](product-roadmap.md): Web YouTube MVP, native Mobile, MCP, further channels, then monetization and built-in AI in milestone P4. MVP creation and publication do not require AI calls or a story brief.
+This document is architectural context. Release order and product scope follow the [product roadmap](product-roadmap.md): Web YouTube MVP, native Mobile, MCP, further channels, monetization and built-in AI in milestone P4, then Music Clip Studio for simultaneous camera angles in P5 and separate takes/musician parts in P6. The early B16 frontend split is described in [frontend-products-and-clip-studio-plan.md](frontend-products-and-clip-studio-plan.md). MVP creation and publication do not require AI calls or a story brief; Music Clip Studio reuses platform infrastructure but not the Story/Scene product model.
 
 ## Phases
 

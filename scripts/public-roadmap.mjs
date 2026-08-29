@@ -63,7 +63,14 @@ export function createPublicRoadmap(source) {
   });
   const current = milestones.find((milestone) => milestone.state !== "complete");
   if (current) current.state = "current";
+  const overallCompleted = milestones.reduce((sum, milestone) => sum + milestone.completed, 0);
+  const overallTotal = milestones.reduce((sum, milestone) => sum + milestone.total, 0);
+  const overallProgress = {
+    completed: overallCompleted,
+    total: overallTotal,
+    percent: overallTotal === 0 ? 0 : Math.floor(overallCompleted / overallTotal * 100),
+  };
 
   // Only this allowlisted summary enters the browser bundle, never task notes or the document itself.
-  return { sourceRevision: createHash("sha256").update(source).digest("hex").slice(0, 12), currentMilestoneId: current?.id ?? null, milestones };
+  return { sourceRevision: createHash("sha256").update(source).digest("hex").slice(0, 12), currentMilestoneId: current?.id ?? null, overallProgress, milestones };
 }

@@ -16,5 +16,10 @@ export interface PublicMilestone {
 export interface PublicRoadmap {
   readonly sourceRevision: string;
   readonly currentMilestoneId: string | null;
+  readonly overallProgress: {
+    readonly completed: number;
+    readonly total: number;
+    readonly percent: number;
+  };
   readonly milestones: readonly PublicMilestone[];
 }

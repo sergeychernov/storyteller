@@ -19,6 +19,7 @@ export function ProductRoadmap({ locale }: ProductRoadmapProps) {
         </div>
         <p className={styles.position} data-complete={!current}>
           {current ? <>{copy.current} <strong>{current.id}</strong> <span>{current.percent}%</span></> : copy.allComplete}
+          <span>{copy.overall} <strong>{publicRoadmap.overallProgress.percent}%</strong></span>
         </p>
       </div>
       <ol className={styles.milestones}>
