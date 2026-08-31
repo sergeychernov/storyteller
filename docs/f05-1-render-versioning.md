@@ -142,8 +142,8 @@ F05.2/F08.1.1/F15.1, а не к статусу `current`. Эти возможн�
 Итог текущей локальной проверки: 182 Node-теста, 46 Web-тестов и 18 PostgreSQL-тестов прошли. Для повторной проверки:
 `yarn check`, `yarn test`, а для отдельной временной базы —
 `STORYTELLER_TEST_DATABASE_URL=... yarn test:api:postgres`.
-Также прошли `yarn check --force`, 22 теста `yarn test:roadmap`,
-`node scripts/sync-product-roadmap.mjs --check` и production-сборка Web.
+Также прошли `yarn check --force`, 22 тогдашних теста `yarn test:roadmap`,
+проверка согласованности прежнего Markdown-roadmap и production-сборка Web.
 
 - Тесты продукта: исходные и производные хеши, локальное устаревание,
   независимость аудио от визуальных правок, влияние trim, неизменность другой сцены,

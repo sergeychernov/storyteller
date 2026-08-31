@@ -25,7 +25,13 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
     writeFixture(clipRoot, "assets/clip.js", "CLIP_ASSET"),
   ]);
 
-  const server = createFrontendHost({ siteRoot, storyRoot, clipRoot });
+  const roadmap = {
+    sourceRevision: "abc123def456",
+    currentMilestoneNumber: 2,
+    overallProgress: { completed: 3, total: 10, percent: 30 },
+    milestones: [],
+  };
+  const server = createFrontendHost({ siteRoot, storyRoot, clipRoot, getProductRoadmap: async () => roadmap });
   const publicPage = await inject(server, "/");
   assert.equal(publicPage.status, 200);
   assert.equal(publicPage.body, "SITE_PUBLIC");
@@ -43,6 +49,15 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
   assert.equal(siteAsset.body, "SITE_ASSET");
   assert.equal(siteAsset.headers["Cache-Control"], "public, max-age=31536000, immutable");
   assert.equal((await inject(server, "/app.html")).status, 404);
+
+  const roadmapResponse = await inject(server, "/product-roadmap.json");
+  assert.equal(roadmapResponse.status, 200);
+  assert.deepEqual(JSON.parse(roadmapResponse.body), roadmap);
+  assert.equal(roadmapResponse.headers["Content-Type"], "application/json; charset=utf-8");
+  assert.match(roadmapResponse.headers["Cache-Control"], /max-age=60/);
+  const roadmapHead = await inject(server, "/product-roadmap.json", "HEAD");
+  assert.equal(roadmapHead.status, 200);
+  assert.equal(roadmapHead.body, "");
 
   const story = await inject(server, "/app/stories/story-1/scenes/scene-2");
   assert.equal(story.body, "STORY_APP");
@@ -66,6 +81,17 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
   assert.equal((await inject(server, "/app/unknown")).status, 404);
   assert.equal((await inject(server, "/ru/not-a-page")).status, 404);
   assert.equal((await inject(server, "/", "POST")).status, 405);
+
+  const unavailableServer = createFrontendHost({
+    siteRoot,
+    storyRoot,
+    clipRoot,
+    getProductRoadmap: async () => { throw new Error("GitHub unavailable"); },
+  });
+  const unavailable = await inject(unavailableServer, "/product-roadmap.json");
+  assert.equal(unavailable.status, 502);
+  assert.deepEqual(JSON.parse(unavailable.body), { error: "product_roadmap_unavailable" });
+  assert.equal(unavailable.headers["Cache-Control"], "no-store");
 });
 
 test("frontend host closes once when shutdown signals repeat", () => {

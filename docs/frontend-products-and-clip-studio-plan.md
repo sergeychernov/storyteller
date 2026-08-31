@@ -299,7 +299,7 @@ current public and authenticated routes work from their new owners.
 - Old Story Studio deep links redirect while preserving IDs.
 - Sign-in and session restoration work for both application prefixes.
 - Site owns public SEO; both applications are excluded from indexing.
-- Tests and browser verification are recorded in the B16 product roadmap row.
+- Tests and browser verification are recorded in the corresponding B16 GitHub issue.
 - No F18/F19 status is marked done from shell or routing work alone.
 
 ### B16 implementation record — 29.08.2026
@@ -317,8 +317,8 @@ current public and authenticated routes work from their new owners.
   `yarn workspace @storyteller/site start`, and the watch paths documented in
   [deploy-railway.md](deploy-railway.md). The saved values and
   `source.checkSuites: true` were read back through Railway on 29.08.2026.
-- Local automated and browser verification is recorded in the B16 row of the
-  [product roadmap](product-roadmap.md). This record does not claim that the
+- Local automated and browser verification is recorded in the corresponding
+  B16 GitHub issue. This record does not claim that the
   uncommitted B16 code has been deployed to production.
 
 ## Music Clip Studio product definition
@@ -642,7 +642,7 @@ After B16 has separated Site from the editors, add localized `/products` and
 `/products/music-clips` pages. The chooser presents Story Studio as available
 and Music Clip Studio as announced; the detail page distinguishes P5
 simultaneous multicamera from P6 separate takes/parts and reads their estimated
-months from the product roadmap source. The call to action may lead to the
+months from GitHub milestone due dates. The call to action may lead to the
 roadmap or an honest product-information flow, but never to a fake upload or
 editor. Preserve canonical/hreflang, sitemap, real `404` behavior, responsive
 layout and the single pricing surface. Completing F18.0 does not complete F18.6

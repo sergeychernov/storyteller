@@ -9,7 +9,7 @@ Create one Railway project from the GitHub repository and keep these detected se
 | Service | Workspace | Public domain | Notes |
 | --- | --- | --- | --- |
 | `web` | `@storyteller/site` host | yes | One origin serving Site, Story Studio, and Clip Studio build artifacts |
-| `admin` | `@storyteller/admin` | yes, after explicit B14 deployment approval | Independent read-only static service at `admin.makeitastory.app`; no database or backend secrets |
+| `admin` | `@storyteller/admin` | yes | Independent read-only static service at `admin.makeitastory.app`; no database or backend secrets |
 | `api` | `@storyteller/api` | yes | Fastify API; attach PostgreSQL; healthcheck is `/health` |
 | `worker` | `@storyteller/worker` | no | FFmpeg scene renderer and object cleanup |
 | `mcp` | `@storyteller/mcp` | only when external MCP clients need it | Placeholder process; it does not expose HTTP yet |
@@ -75,9 +75,22 @@ AMPLITUDE_SERVER_ZONE=US
 
 The public English homepage lives at `/`; Russian and Serbian use `/ru` and `/sr`. Scenario and feature pages follow the same localized URL structure. Site owns `/sign-in` and `/app`; Story Studio uses `/app/stories/*`, and Clip Studio uses `/app/clips/*`. The frontend build generates route-specific public HTML, canonical and hreflang links, structured metadata, `robots.txt`, and `sitemap.xml` for `https://makeitastory.app`. Both application prefixes remain `noindex`, and legacy `/stories/*` links redirect to `/app/stories/*` with IDs and query strings intact. Point the Railway custom domain at the `web` service before submitting that sitemap to search engines. Keep the API on `api.makeitastory.app`: a Railway `*.up.railway.app` API origin is cross-site relative to Site/Admin and therefore cannot carry the required `SameSite=Strict` browser cookie.
 
-The public homepage and features page include a roadmap widget. Every Site build reads `docs/product-roadmap.md` through the [Vite plugin](../scripts/vite-public-roadmap.mjs) and embeds a validated public summary in the content-hashed bundle. There is no manually maintained JSON snapshot or runtime API dependency. Invalid milestone definitions/statuses fail the build. Completed task cells retain their original milestone as `done (Pn)` / the generated badge tooltip.
+The public homepage and features page include a roadmap widget. The browser reads
+`/product-roadmap.json`; the Site server calculates that response from GitHub
+milestone `open_issues`, `closed_issues`, and `due_on` through
+[`public-roadmap.mjs`](../scripts/public-roadmap.mjs). Results are cached in memory
+for five minutes and the previous successful aggregate remains available if a
+later GitHub request fails. The response contains no issue titles, bodies, labels
+or users. The public repository works without credentials; an optional
+server-only `PRODUCT_ROADMAP_GITHUB_TOKEN` increases the GitHub API limit and
+must never use a `VITE_` prefix.
 
-This refreshes the widget on **site deployment**, not on YouTube story publication. The frontend host serves HTML with `no-cache`; new page loads receive the new hashed bundle. An already-open production page needs a reload. Update the web service's watch paths below so a document-only commit triggers deployment as well; editing this guide does not change existing Railway service settings.
+Issue status and milestone date changes appear after the runtime cache expires and
+do not require a site deployment. Changes to the localized public titles in
+`docs/product-roadmap.md`, the aggregator or the UI still require deployment.
+The frontend host serves HTML with `no-cache`; an already-open page refetches when
+the roadmap query becomes stale or the window regains focus. Editing this guide
+does not change existing Railway service settings.
 
 Attach a Railway PostgreSQL service to both the API and worker so both receive the same `DATABASE_URL`. Configure `PLATFORM_CREDENTIALS_KEY` on the API with the output of `openssl rand -base64 32`. Configure browser auth only on the API:
 
@@ -143,22 +156,18 @@ deployed. Connect `admin.makeitastory.app`, DNS and TLS last. Keep legacy bearer
 endpoints for Mobile/MCP. Do not mark B14 `done (P0)` until the production
 acceptance matrix below passes; documentation and local builds are not deployment.
 
-Railway preparation on 31.08.2026 created an empty `@storyteller/admin`
-production service and configured its build/start commands, `/health`, watch
-paths, restart policy and public-only variables without connecting a source or
-triggering a deployment. The API received `BROWSER_ORIGINS`, a generated
-`CSRF_HMAC_KEY`, and `SESSION_COOKIE_SECURE=true` with deploys skipped. Web now
-has the future first-party API/Admin URLs. Railway custom domains were reserved,
-and Railway-managed DNS automatically created the matching CNAME and ownership
-TXT records. Public DNS and TLS were verified on 31.08.2026: the API healthcheck
-returns `200`, while Admin reaches the Railway edge and returns the expected
-fallback `404` until its first deployment. A temporary
-`/__b14_web_release_gate__/**` watch pattern prevents the
-upcoming `main` push from releasing Web before the API. After API and Worker are
-healthy, restore the documented Web watch paths, deploy the exact successful
-`main` commit, then connect the Admin service to the same repository/commit with
-Wait for CI enabled. Connecting the empty service to GitHub triggers its first
-deployment, so do it only after that commit exists remotely.
+The first B14 rollout completed on 31.08.2026. The base release `66426a9`, the
+relation-read fix `0596a15`, and the localization fix `5f838ff` passed CI and
+were deployed; API, Worker, Web, and Admin reached `SUCCESS`. Production
+acceptance confirmed the shared Site/Admin cookie session, `401`/`403`,
+logout/revocation, the complete missing/invalid/valid CSRF matrix, exact CORS
+allow/deny, CSP/frame denial/noindex/robots, read-only data and audit, localized
+empty states, and responsive layouts at 390/320 px. Admin has no database
+credentials. A repeated public read-only check on 31.08.2026 returned `200` from
+the API and Admin healthchecks and the Admin root, with CSP, `DENY`, nosniff,
+permissions/referrer policies, `X-Robots-Tag: noindex, nofollow`, and a fully
+closed `robots.txt`. B14 Web is therefore `done (P0)`; B15 mutations and F17
+billing/usage remain out of scope.
 
 For an ordered rollout, publish a feature branch and verify its exact commit in GitHub CI while keeping the watched `main` branch unchanged. Deploy that explicit commit SHA to worker, API, and Web separately as described below; do not use a redeploy operation that reuses an older image. Once all services run compatible F05.1 code, merge the verified change into `main` and apply the pending Check Suites settings. Applying environment changes can redeploy multiple services, so the source branch must already contain the compatible release. Confirm `source.checkSuites: true` on each service. Alternatively, temporarily disable autodeploy before merging and restore its previous state after the ordered rollout; verify that the setting actually changed before relying on it. Never bypass a failed CI check or mix an old image with commands that exist only in the new commit.
 
@@ -203,7 +212,6 @@ Railway's automatic monorepo import may initially watch only the application dir
 /scripts/public-roadmap.mjs
 /scripts/public-site.mjs
 /scripts/prerender-public-site.mjs
-/scripts/sync-product-roadmap.mjs
 /scripts/vite-public-roadmap.mjs
 /scripts/vite-public-site.mjs
 /package.json

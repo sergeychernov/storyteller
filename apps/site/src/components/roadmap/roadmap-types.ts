@@ -1,7 +1,7 @@
 import type { Locale } from "@storyteller/localization";
 
 export interface PublicMilestone {
-  readonly id: string;
+  readonly number: number;
   readonly title: Readonly<Record<Locale, string>>;
   readonly estimatedCompletion: {
     readonly month: string;
@@ -15,7 +15,7 @@ export interface PublicMilestone {
 
 export interface PublicRoadmap {
   readonly sourceRevision: string;
-  readonly currentMilestoneId: string | null;
+  readonly currentMilestoneNumber: number | null;
   readonly overallProgress: {
     readonly completed: number;
     readonly total: number;

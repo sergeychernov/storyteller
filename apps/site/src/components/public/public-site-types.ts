@@ -57,6 +57,8 @@ export interface PublicSiteLocaleData {
   readonly allComplete: string;
   readonly tasks: string;
   readonly scopePending: string;
+  readonly roadmapLoading: string;
+  readonly roadmapUnavailable: string;
   readonly progressNote: string;
   readonly updated: string;
   readonly pages: readonly PublicSitePageData[];

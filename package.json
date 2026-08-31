@@ -17,7 +17,7 @@
     "db:migrate": "node apps/api/dist/migrate.js",
     "clean": "node ./node_modules/typescript/bin/tsc -b --clean",
     "check": "node ./node_modules/typescript/bin/tsc -b --pretty false",
-    "test:roadmap": "node --test scripts/sync-product-roadmap.test.mjs scripts/public-roadmap.test.mjs",
+    "test:roadmap": "node --test scripts/public-roadmap.test.mjs",
     "test:site": "node --test scripts/public-site.test.mjs scripts/frontend-host.test.mjs",
     "test:story-web": "yarn workspace @storyteller/story-web test",
     "test:api:postgres": "yarn build:backend && node --test apps/api/dist/access-control.postgres.test.js apps/api/dist/admin.postgres.test.js apps/api/dist/migrations.postgres.test.js apps/api/dist/scene-deletion.postgres.test.js",

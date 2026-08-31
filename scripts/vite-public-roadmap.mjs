@@ -1,30 +1,35 @@
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { createPublicRoadmap } from "./public-roadmap.mjs";
+import { loadPublicRoadmap } from "./public-roadmap.mjs";
 
-const moduleId = "virtual:product-roadmap";
-const resolvedId = `\0${moduleId}`;
-const defaultPath = fileURLToPath(new URL("../docs/product-roadmap.md", import.meta.url));
-
-export function publicRoadmapPlugin(roadmapPath = defaultPath) {
+export function publicRoadmapPlugin(getProductRoadmap = loadPublicRoadmap) {
   return {
     name: "vite-plugin-public-roadmap",
-    resolveId(id) {
-      if (id === moduleId) return resolvedId;
-    },
-    async load(id) {
-      if (id !== resolvedId) return;
-      this.addWatchFile(roadmapPath);
-      const source = await readFile(roadmapPath, "utf8");
-      return `export default ${JSON.stringify(createPublicRoadmap(source))};`;
-    },
-    hotUpdate({ file }) {
-      if (file !== roadmapPath) return;
-      const graph = this.environment.moduleGraph;
-      const module = graph.getModuleById(resolvedId);
-      if (module) graph.invalidateModule(module);
-      this.environment.hot.send({ type: "full-reload" });
-      return [];
+    configureServer(server) {
+      server.middlewares.use(async (request, response, next) => {
+        const url = new URL(request.url ?? "/", "http://localhost");
+        if (url.pathname !== "/product-roadmap.json") {
+          next();
+          return;
+        }
+        if (request.method !== "GET" && request.method !== "HEAD") {
+          response.writeHead(405, { Allow: "GET, HEAD" }).end();
+          return;
+        }
+        try {
+          const body = JSON.stringify(await getProductRoadmap());
+          response.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+          });
+          response.end(request.method === "HEAD" ? undefined : body);
+        } catch {
+          response.writeHead(502, {
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+          }).end(request.method === "HEAD" ? undefined : JSON.stringify({ error: "product_roadmap_unavailable" }));
+        }
+      });
     },
   };
 }

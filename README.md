@@ -70,7 +70,7 @@ Site, both Web applications, and Mobile initially follow the system language and
 
 See [`docs/product-scope.md`](docs/product-scope.md) for the first API surface and [`docs/migration-plan.md`](docs/migration-plan.md) for the incremental plan.
 
-See [`docs/product-roadmap.md`](docs/product-roadmap.md) for the product roadmap with milestones, independent Web, Mobile, and MCP task statuses, and completion criteria for functional parity with Hermes Story Skills.
+See [GitHub Issues](https://github.com/sergeychernov/storyteller/issues) and [GitHub Milestones](https://github.com/sergeychernov/storyteller/milestones) for product tasks, independent interface statuses and completion criteria. [`docs/product-roadmap.md`](docs/product-roadmap.md) documents the source rules and localized public milestone labels without duplicating the backlog.
 
 See [`docs/product-analytics.md`](docs/product-analytics.md) for the Amplitude event taxonomy, privacy boundary, environment variables, and first dashboard.
 

@@ -3,6 +3,7 @@ import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadPublicRoadmap } from "../../scripts/public-roadmap.mjs";
 import { listPublicPages } from "../../scripts/public-site.mjs";
 
 const defaultSiteRoot = fileURLToPath(new URL("./dist/", import.meta.url));
@@ -35,6 +36,7 @@ export function createFrontendHost({
   siteRoot = defaultSiteRoot,
   storyRoot = defaultStoryRoot,
   clipRoot = defaultClipRoot,
+  getProductRoadmap = loadPublicRoadmap,
 } = {}) {
   return createServer(async (request, response) => {
     if (request.method !== "GET" && request.method !== "HEAD") {
@@ -45,6 +47,11 @@ export function createFrontendHost({
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
       const pathname = decodeURIComponent(url.pathname);
+
+      if (pathname === "/product-roadmap.json") {
+        await sendProductRoadmap(request, response, getProductRoadmap);
+        return;
+      }
 
       const legacyStoryMatch = pathname.match(/^\/stories(?=\/|$)(.*)$/);
       if (legacyStoryMatch) {
@@ -101,6 +108,27 @@ export function createFrontendHost({
       }).end("Server error");
     }
   });
+}
+
+async function sendProductRoadmap(request, response, getProductRoadmap) {
+  try {
+    const roadmap = await getProductRoadmap();
+    const body = JSON.stringify(roadmap);
+    response.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+      "Content-Length": Buffer.byteLength(body),
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+      "X-Content-Type-Options": "nosniff",
+    });
+    response.end(request.method === "HEAD" ? undefined : body);
+  } catch {
+    response.writeHead(502, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    }).end(request.method === "HEAD" ? undefined : JSON.stringify({ error: "product_roadmap_unavailable" }));
+  }
 }
 
 export function registerFrontendHostShutdown(server, {

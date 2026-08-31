@@ -16,7 +16,6 @@ export function RoadmapMilestone({ milestone, locale, copy }: RoadmapMilestonePr
   return (
     <li className={styles.milestone} data-state={milestone.state} aria-current={milestone.state === "current" ? "step" : undefined}>
       <div className={styles.topline}>
-        <span className={styles.id}>{milestone.id}</span>
         <span className={styles.state}>{milestone.state === "complete" && <span aria-hidden="true">✓ </span>}{label}</span>
       </div>
       <h3 className={styles.title}>{title}</h3>
@@ -25,7 +24,7 @@ export function RoadmapMilestone({ milestone, locale, copy }: RoadmapMilestonePr
           <time dateTime={milestone.estimatedCompletion.month}>{milestone.estimatedCompletion.label[locale]}</time>
         </p>
       )}
-      <progress className={styles.progress} max={milestone.total || 1} value={milestone.completed} aria-label={`${milestone.id} · ${title}`} />
+      <progress className={styles.progress} max={milestone.total || 1} value={milestone.completed} aria-label={title} />
       <p className={styles.count}>{milestone.total > 0 ? `${milestone.completed} / ${milestone.total} ${copy.tasks}` : copy.scopePending}</p>
     </li>
   );

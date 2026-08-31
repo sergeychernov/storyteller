@@ -1,9 +1,8 @@
 # План управления доступом и внутренней админки
 
-Дата решения: 29.08.2026. Статус: B13 Web и код B14 реализованы локально; B15,
-native Mobile, MCP и F17 не реализованы. Railway-managed DNS/TLS для API/Admin
-проверены 31.08.2026, но B14 остаётся P0 до source/deployment Admin service,
-общей production cookie и приёмки реального `admin.makeitastory.app`.
+Дата решения: 29.08.2026. Статус актуализирован 31.08.2026: B13 Web и B14 Web
+реализованы; B14 развёрнут на Railway, принят в production и выполнен в P0.
+B15, B13 для native Mobile и MCP, а также F17 не реализованы.
 
 Связанные задачи product roadmap:
 
@@ -25,9 +24,9 @@ native Mobile, MCP и F17 не реализованы. Railway-managed DNS/TLS �
 провайдер биллинга, окончательные цены и коммерческие лимиты остаются в F17 и не
 блокируют B13–B15.
 
-Реализации B13 Web и локального B14 зафиксированы ниже. В текущую работу не
-входят B15, изменение production DNS, создание Railway service для админки,
-ручная выдача прав реальным пользователям или включение платных AI-вызовов.
+Реализации B13 Web и B14 Web, включая production-приёмку B14, зафиксированы
+ниже. В B14 не входят управляющие операции B15, платёжный lifecycle и usage
+F17, произвольный отзыв пользовательских сессий или включение платных AI-вызовов.
 
 ## Зафиксированные решения
 
@@ -431,13 +430,26 @@ publication.failed
 - Внешнее Amplitude-событие для Admin не добавлено: административное чтение не
   является product outcome и фиксируется внутренним audit. B15 mutations,
   billing/usage F17 и arbitrary session revocation не входят в B14.
-- Пустой Railway Admin service, команды, watch paths, public-only variables,
-  API browser-auth variables и custom domains подготовлены без deployment.
-  Railway-managed CNAME/TXT records и TLS проверены 31.08.2026: API healthcheck
-  отвечает `200`, Admin до первого deployment ожидаемо возвращает fallback
-  `404`. Это не закрывает B14: статус остаётся P0 до подключения source, общей
-  production cookie и проверки `401`/`403`, CORS/CSRF, headers/noindex и
-  read-only данных на домене.
+- На промежуточном этапе Railway Admin service, команды, watch paths,
+  public-only variables, API browser-auth variables и custom domains были
+  подготовлены без deployment. Проверенный тогда fallback `404` был release
+  gate, а не итоговым состоянием B14.
+- Базовый release `66426a9`, исправление relation-read `0596a15` и исправление
+  локализации `5f838ff` прошли CI и развёрнуты в Railway; API, Worker, Web и
+  Admin завершили deployment со статусом `SUCCESS`. В production подтверждены
+  общая авторизованная Site/Admin session, Dashboard, Users, Activity, Sessions,
+  Effective access и Audit, реальные session metadata и audit-записи чтений.
+  Матрица CSRF даёт missing `403`, invalid `403`, valid `200`;
+  неавторизованный `/admin/me` возвращает `401`, пользователь без
+  `admin.console.access` — `403`, а logout — `204` с последующим session `401`.
+  Также проверены точный CORS allow/deny, CSP/`DENY`/noindex/robots, отсутствие
+  DB credentials у Admin, локализованное пустое состояние и отсутствие
+  horizontal overflow на 390/320 px. Relation-read больше не вызывает snackbar
+  и показывает `1–1 из 1`; фильтр без результатов использует русские
+  `ra.navigation.no_filtered_results` и `ra.navigation.clear_filters`. B14 Web
+  принят и выполнен в P0. Повторная публичная read-only проверка 31.08.2026
+  получила `200` от API/Admin healthchecks и корня Admin, подтвердила security
+  headers и полностью закрытый `robots.txt`.
 
 ## Критерии завершения задач
 
@@ -453,13 +465,15 @@ publication.failed
 
 ### B14 Web
 
+Все критерии ниже подтверждены production-приёмкой 31.08.2026.
+
 - админка действительно работает в отдельном container/service на
   `admin.makeitastory.app`;
 - используется общая API-сессия, без второго хранилища пользователей и без
   прямого DB-доступа контейнера;
 - неавторизованный запрос даёт `401`, обычный пользователь — `403`;
 - read-only метрики, список, профиль, activity, session metadata и access
-  explanation проверены на production-like данных без секретов и контента;
+  explanation проверены на production-данных без секретов и контента;
 - security headers, CORS/CSRF, `noindex`, audit и responsive layout проверены.
 
 ### B15 Web

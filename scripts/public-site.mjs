@@ -27,8 +27,10 @@ const shared = {
     allComplete: "All milestones complete",
     tasks: "tasks complete",
     scopePending: "Scope being defined",
+    roadmapLoading: "Loading current progress…",
+    roadmapUnavailable: "Current progress is temporarily unavailable.",
     progressNote: "Development progress based on completed tasks. Dates are estimates and may change.",
-    updated: "Updated with every site release.",
+    updated: "Updated automatically from GitHub Issues.",
   },
   ru: {
     code: "ru",
@@ -56,8 +58,10 @@ const shared = {
     allComplete: "Все milestones завершены",
     tasks: "задач закрыто",
     scopePending: "Состав задач уточняется",
+    roadmapLoading: "Загружаем актуальный прогресс…",
+    roadmapUnavailable: "Актуальный прогресс временно недоступен.",
     progressNote: "Прогресс разработки по завершённым задачам. Сроки ориентировочные и могут измениться.",
-    updated: "Обновляется с каждым релизом сайта.",
+    updated: "Автоматически обновляется из GitHub Issues.",
   },
   "sr-Latn": {
     code: "sr",
@@ -85,8 +89,10 @@ const shared = {
     allComplete: "Svi milestones su završeni",
     tasks: "zadataka završeno",
     scopePending: "Zadaci se definišu",
+    roadmapLoading: "Učitavanje aktuelnog napretka…",
+    roadmapUnavailable: "Aktuelni napredak je privremeno nedostupan.",
     progressNote: "Napredak razvoja prema završenim zadacima. Rokovi su okvirni i mogu se promeniti.",
-    updated: "Ažurira se sa svakim izdanjem sajta.",
+    updated: "Automatski se ažurira iz GitHub Issues.",
   },
   es: {
     code: "es",
@@ -114,8 +120,10 @@ const shared = {
     allComplete: "Todos los milestones están completados",
     tasks: "tareas completadas",
     scopePending: "El alcance está en definición",
+    roadmapLoading: "Cargando el progreso actual…",
+    roadmapUnavailable: "El progreso actual no está disponible temporalmente.",
     progressNote: "Progreso de desarrollo según las tareas completadas. Las fechas son estimaciones y pueden cambiar.",
-    updated: "Se actualiza con cada versión del sitio.",
+    updated: "Se actualiza automáticamente desde GitHub Issues.",
   },
 };
 

@@ -69,6 +69,12 @@
   line-height: 1.7;
 }
 
+.status {
+  margin: 0;
+  color: #6a6e62;
+  font-size: 12px;
+}
+
 @media (max-width: 520px) {
   .roadmap { padding: 18px; }
   .milestones { grid-template-columns: 1fr; }
