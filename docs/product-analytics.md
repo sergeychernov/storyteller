@@ -116,6 +116,18 @@ assignments and capability codes are kept out of the external analytics stream;
 their operational history belongs to the access audit trail and the future B14
 read-only admin interface.
 
+### B14 Admin instrumentation decision
+
+B14 does not add an external Amplitude event. Reading an internal dashboard,
+user metadata, activity, sessions, effective access, or audit history is an
+administrative security operation rather than a confirmed customer product
+outcome. These reads are recorded in the internal fail-closed `admin_audit_log`
+without email, query text, IP address, user-agent, response content, or raw
+errors. The separate 90-day `product_activity_events` read model uses only
+stable outcome codes and profile UUIDs; it is not forwarded to Amplitude and has
+no free-form payload. Existing public product analytics and their privacy
+defaults remain unchanged.
+
 ## First Amplitude dashboard
 
 Keep the first dashboard small:

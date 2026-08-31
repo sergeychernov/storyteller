@@ -20,12 +20,13 @@ test("PostgreSQL: release migration works on a fresh database, concurrently and 
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 0);
 });
 
-test("PostgreSQL: migrations 4–9 preserve the retained legacy row, baseline access and old API/worker writes", options, async (context) => {
+test("PostgreSQL: migrations 4–10 preserve legacy rows, baseline access, and old API/worker writes", options, async (context) => {
   const { pool } = await createPostgresTestPool(context);
   await applyVersion3(pool);
   const profileId = randomUUID(), storyId = randomUUID(), sceneId = randomUUID(), renderId = randomUUID();
   const payload = { id: storyId, profileId, revision: 1, scenes: [{ id: sceneId, materials: [] }] };
   await pool.query("INSERT INTO profiles (id, name, email, password_hash) VALUES ($1, 'Legacy', 'legacy@example.test', 'hash')", [profileId]);
+  await pool.query("INSERT INTO sessions (token_hash, profile_id, expires_at, created_at) VALUES ($1, $2, '2027-01-01T00:00:00Z', '2026-01-01T00:00:00Z')", ["a".repeat(64), profileId]);
   await pool.query(
     "INSERT INTO stories (id, profile_id, title, status, scene_count, payload) VALUES ($1, $2, 'Legacy story', 'draft', 1, $3)",
     [storyId, profileId, payload],
@@ -42,6 +43,11 @@ test("PostgreSQL: migrations 4–9 preserve the retained legacy row, baseline ac
   assert.equal((await pool.query("SELECT access_plan_version_code FROM profiles WHERE id = $1", [profileId])).rows[0].access_plan_version_code, "free-v1");
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_roles")).rows[0].count, 2);
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_capabilities")).rows[0].count, 35);
+  const migratedSession = (await pool.query("SELECT id, last_seen_at, revoked_at FROM sessions WHERE token_hash = $1", ["a".repeat(64)])).rows[0];
+  assert.match(migratedSession.id, /^[0-9a-f-]{36}$/);
+  assert.equal(new Date(migratedSession.last_seen_at).toISOString(), "2026-01-01T00:00:00.000Z");
+  assert.equal(migratedSession.revoked_at, null);
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM product_activity_event_types")).rows[0].count, 11);
   await assert.rejects(pool.query("UPDATE profiles SET language = 'unsupported' WHERE id = $1", [profileId]), { code: "23514" });
   assert.deepEqual((await pool.query("SELECT * FROM scene_renders WHERE id = $1", [renderId])).rows[0], {
     ...before, content_hash: null, progress_percent: 100, progress_phase: "ready", render_slot: "scene-render:video",

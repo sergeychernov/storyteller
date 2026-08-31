@@ -1,7 +1,9 @@
 # План управления доступом и внутренней админки
 
-Дата решения: 29.08.2026. Статус: B13 Web реализована локально; B14, B15,
-native Mobile, MCP и F17 не реализованы. Production deployment не выполнялся.
+Дата решения: 29.08.2026. Статус: B13 Web и код B14 реализованы локально; B15,
+native Mobile, MCP и F17 не реализованы. Railway-managed DNS/TLS для API/Admin
+проверены 31.08.2026, но B14 остаётся P0 до source/deployment Admin service,
+общей production cookie и приёмки реального `admin.makeitastory.app`.
 
 Связанные задачи product roadmap:
 
@@ -23,9 +25,9 @@ native Mobile, MCP и F17 не реализованы. Production deployment н�
 провайдер биллинга, окончательные цены и коммерческие лимиты остаются в F17 и не
 блокируют B13–B15.
 
-Реализация B13 Web зафиксирована ниже. В текущую работу не входят B14/B15,
-изменение production DNS, создание Railway service для админки, ручная выдача
-прав реальным пользователям или включение платных AI-вызовов.
+Реализации B13 Web и локального B14 зафиксированы ниже. В текущую работу не
+входят B15, изменение production DNS, создание Railway service для админки,
+ручная выдача прав реальным пользователям или включение платных AI-вызовов.
 
 ## Зафиксированные решения
 
@@ -46,23 +48,21 @@ native Mobile, MCP и F17 не реализованы. Production deployment н�
 
 ### Общая авторизация Web и Admin
 
-Сейчас Web хранит opaque bearer-токен в `localStorage`. Хранилище origin-scoped,
-поэтому `admin.makeitastory.app` не может безопасно прочитать токен из
-`makeitastory.app`. Перед бесшовным входом требуется серверный путь общей сессии:
+Браузерные приложения используют общую cookie-only сессию API; Mobile и MCP
+сохраняют bearer transport. Старый Web bearer из `localStorage` мигрируется
+одноразовым обменом и после успеха удаляется:
 
 1. Закрепить first-party адрес API, предпочтительно
    `https://api.makeitastory.app`.
-2. При входе API продолжает выпускать существующий opaque token и хранить только
-   его hash в общей таблице `sessions`, но дополнительно устанавливает тот же
-   token в host-only cookie API: `Secure`, `HttpOnly`, `Path=/`, подходящий
-   `SameSite`. Cookie не должна иметь `Domain=.makeitastory.app` и не должна быть
-   доступна JavaScript-коду Web или Admin.
+2. `POST /auth/browser/sign-in` устанавливает `__Host-storyteller-session` с
+   `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/` и без `Domain`; access token
+   в browser response не возвращается. API хранит только hash opaque token.
 3. Web и Admin вызывают один API с `credentials: include`; браузер отправляет одну
    API-cookie из обоих first-party subdomains. Mobile и MCP сохраняют
    `Authorization: Bearer` с тем же форматом токена.
-4. На переходный период API принимает cookie и bearer header. Для существующей
-   Web-сессии предусматривается одноразовый обмен уже валидного bearer-токена на
-   API-cookie без передачи токена в URL.
+4. `POST /auth/browser/exchange` меняет валидный legacy bearer на новую cookie,
+   отзывает старую сессию и не передаёт token в URL. Одновременные bearer и cookie
+   отклоняются как неоднозначная авторизация, кроме того, что сам exchange требует bearer.
 5. CORS перечисляет точные разрешённые origins, включая основной Web и Admin,
    разрешает credentials и никогда не использует wildcard. State-changing
    cookie-запросы дополнительно защищаются проверкой `Origin` и CSRF-механизмом.
@@ -76,12 +76,10 @@ native Mobile, MCP и F17 не реализованы. Production deployment н�
 
 ### Основа UI
 
-Предпочтительный кандидат для отдельного контейнера — React-admin: его
-`authProvider`, `dataProvider` и `canAccess` позволяют оставить аутентификацию и
-все решения доступа в общем API. Перед реализацией нужен короткий технический
-spike совместимости с текущими React/Vite и требуемыми экранами. AdminJS остаётся
-запасным вариантом, но только без прямого доступа UI-контейнера к production БД
-и без второй независимой системы админских сессий.
+Выбран React-admin OSS 5.15.1 (MIT): готовые Dashboard/List/Show, Datagrid и
+SimpleList работают с React 19/Vite, а типизированные `authProvider` и
+`dataProvider` оставляют все решения доступа в общем API. Enterprise-модули,
+AdminJS, второй user store и прямой DB-доступ UI-контейнера не используются.
 
 Справка: [React-admin authorization](https://marmelab.com/react-admin/Permissions.html)
 и [security/authProvider](https://marmelab.com/react-admin/SecurityGuide.html).
@@ -296,9 +294,11 @@ publication.succeeded
 publication.failed
 ```
 
-События не содержат password hashes, raw tokens, token hashes, секреты площадок,
-имена файлов или содержимое историй. Для payload действует allowlist; retention и
-правила удаления фиксируются до production-записи событий.
+События не содержат свободного payload, password hashes, raw tokens, token hashes,
+секреты площадок, имена файлов или содержимое историй. Они записываются
+идемпотентно вместе с подтверждённым результатом; Worker удаляет события и
+завершённые session metadata старше 90 дней. Коды export/publication зарезервированы,
+но до реальных операций события не создаются.
 
 ### Управление B15
 
@@ -401,6 +401,43 @@ publication.failed
   причины deny и внутренние назначения во внешнюю аналитику не передаются.
 - B14/B15, native Mobile, MCP, production deployment, реальные коммерческие
   лимиты, subscription lifecycle и usage ledger этой реализацией не закрыты.
+
+## Запись реализации B14 — 31.08.2026
+
+- Migration 10 добавляет безопасный UUID, `last_seen_at` и `revoked_at` сессии,
+  стабильный каталог внутренних product activity events, 90-дневную read model и
+  отдельный `admin_audit_log`. Token/hash не входит ни в один Admin-контракт.
+- Browser auth использует cookie-only sign-in/session/logout и одноразовый
+  bearer-to-cookie exchange. Cookie host-only, HttpOnly, Strict и Secure в
+  production; unsafe cookie-запросы требуют точный allowlisted Origin и CSRF,
+  криптографически связанный с UUID сессии. Mobile/MCP bearer endpoints сохранены.
+- Подтверждённые registration/login/story/material/render outcomes записываются
+  идемпотентно в той же PostgreSQL-транзакции или SQL CTE, что и результат.
+  Scene frames не считаются пользовательским render outcome; историю до migration
+  10 намеренно не реконструируем.
+- `/admin/me`, overview, POST-only user search, user detail, activity, sessions,
+  effective access и нормализованный audit защищены сочетанием
+  `admin.console.access` и endpoint capability. Чтения users/activity/sessions/
+  access/audit fail closed, если audit insert не сохранился; ответы имеют
+  `private, no-store` и не содержат пользовательского контента или raw ошибок.
+- `apps/admin` — независимая React-admin 5.15.1 сборка с RU/EN fallback,
+  Dashboard/List/Show, desktop Datagrid, mobile SimpleList и только read-only
+  dataProvider. Static runtime выставляет CSP, frame deny, nosniff, strict
+  permissions/referrer policy и `noindex`; healthcheck и закрытый `robots.txt`
+  не требуют backend secrets или DB credentials.
+- Site, Story Studio и Clip Studio переведены на cookie API; legacy bearer
+  удаляется из `localStorage` только после успешного обмена. `continue=admin` —
+  фиксированный target основного sign-in, не произвольный URL.
+- Внешнее Amplitude-событие для Admin не добавлено: административное чтение не
+  является product outcome и фиксируется внутренним audit. B15 mutations,
+  billing/usage F17 и arbitrary session revocation не входят в B14.
+- Пустой Railway Admin service, команды, watch paths, public-only variables,
+  API browser-auth variables и custom domains подготовлены без deployment.
+  Railway-managed CNAME/TXT records и TLS проверены 31.08.2026: API healthcheck
+  отвечает `200`, Admin до первого deployment ожидаемо возвращает fallback
+  `404`. Это не закрывает B14: статус остаётся P0 до подключения source, общей
+  production cookie и проверки `401`/`403`, CORS/CSRF, headers/noindex и
+  read-only данных на домене.
 
 ## Критерии завершения задач
 

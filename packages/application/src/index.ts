@@ -22,18 +22,29 @@ export interface StorySummary {
   readonly sceneCount: number;
   readonly revision: number;
 }
-export interface SessionRecord { readonly profileId: string; readonly tokenHash: string; readonly expiresAt: Date }
+export const productActivityCodes = [
+  "auth.registered", "auth.logged_in", "story.created", "material.uploaded",
+  "scene.render_requested", "scene.render_ready", "story.export_requested", "story.export_ready",
+  "publication.requested", "publication.succeeded", "publication.failed",
+] as const;
+export type ProductActivityCode = typeof productActivityCodes[number];
+export interface ProductActivityRecord { readonly code: ProductActivityCode; readonly dedupeKey: string }
+export interface SessionRecord { readonly id: string; readonly profileId: string; readonly tokenHash: string; readonly expiresAt: Date }
+export interface AuthenticatedSession { readonly id: string; readonly profile: Profile; readonly expiresAt: string }
 export interface StoryRepository {
   createProfileWithSession(input: ProfileAuthentication, session: SessionRecord): Promise<boolean>;
   findProfileAuthenticationByEmail(email: string): Promise<ProfileAuthentication | undefined>;
   createSession(session: SessionRecord): Promise<void>;
-  findProfileBySession(tokenHash: string, now: Date): Promise<Profile | undefined>;
+  findSessionByTokenHash(tokenHash: string, now: Date): Promise<AuthenticatedSession | undefined>;
+  rotateSession(oldTokenHash: string, session: SessionRecord): Promise<void>;
+  revokeSession(tokenHash: string, now: Date): Promise<boolean>;
+  touchSession(sessionId: string, now: Date): Promise<void>;
   updateProfile(profileId: string, input: ProfileUpdate): Promise<Profile>;
   createStory(story: Story): Promise<void>;
   listStories(profileId: string): Promise<readonly Story[]>;
   findStory(profileId: string, storyId: string): Promise<Story | undefined>;
   /** Persist only if the stored revision is story.revision - 1; otherwise reject with a conflict. */
-  updateStory(story: Story): Promise<void>;
+  updateStory(story: Story, activity?: ProductActivityRecord): Promise<void>;
   /** Apply the same revision check and schedule cleanup atomically with the story update. */
   deleteScene(story: Story, sceneId: string, storageKeys: readonly string[]): Promise<void>;
   upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary>;
@@ -96,10 +107,35 @@ export class StoryApplication {
   }
 
   async authenticate(accessToken: string): Promise<Profile> {
+    return (await this.authenticateSession(accessToken)).profile;
+  }
+
+  async authenticateSession(accessToken: string): Promise<AuthenticatedSession> {
     if (!accessToken) throw new ApplicationError("authentication required", 401);
-    const profile = await this.repository.findProfileBySession(hashToken(accessToken), new Date());
-    if (!profile) throw new ApplicationError("invalid or expired access token", 401);
-    return profile;
+    const session = await this.repository.findSessionByTokenHash(hashToken(accessToken), new Date());
+    if (!session) throw new ApplicationError("invalid or expired access token", 401);
+    return session;
+  }
+
+  async exchangeSession(accessToken: string): Promise<AuthenticationResult> {
+    const current = await this.authenticateSession(accessToken);
+    const issued = issueSession(current.profile.id);
+    await this.repository.rotateSession(hashToken(accessToken), issued.record);
+    return {
+      accessToken: issued.accessToken,
+      accountCreated: false,
+      expiresAt: issued.record.expiresAt.toISOString(),
+      profile: current.profile,
+    };
+  }
+
+  revokeSession(accessToken: string): Promise<boolean> {
+    if (!accessToken) throw new ApplicationError("authentication required", 401);
+    return this.repository.revokeSession(hashToken(accessToken), new Date());
+  }
+
+  touchSession(sessionId: string, now = new Date()): Promise<void> {
+    return this.repository.touchSession(sessionId, now);
   }
 
   updateProfile(profileId: string, input: ProfileUpdate): Promise<Profile> {
@@ -158,7 +194,10 @@ export class StoryApplication {
     return changed;
   }
   async addSceneMaterial(profileId: string, storyId: string, sceneId: string, material: NewSceneMaterial): Promise<Story> {
-    return this.changeStory(profileId, storyId, (story) => addMaterial(story, sceneId, { ...material, id: randomUUID() } as SceneMaterial));
+    const stored = { ...material, id: randomUUID() } as SceneMaterial;
+    return this.changeStory(profileId, storyId, (story) => addMaterial(story, sceneId, stored), {
+      code: "material.uploaded", dedupeKey: `material.uploaded:${stored.id}`,
+    });
   }
   async removeSceneMaterial(profileId: string, storyId: string, sceneId: string, materialId: string): Promise<{
     readonly story: Story;
@@ -224,11 +263,16 @@ export class StoryApplication {
     }
   }
 
-  private async changeStory(profileId: string, storyId: string, change: (story: Story) => Story): Promise<Story> {
+  private async changeStory(
+    profileId: string,
+    storyId: string,
+    change: (story: Story) => Story,
+    activity?: ProductActivityRecord,
+  ): Promise<Story> {
     const story = await this.repository.findStory(profileId, storyId);
     if (!story) throw new ApplicationError(`story not found: ${storyId}`, 404);
     const changed = change(story);
-    await this.repository.updateStory(changed);
+    await this.repository.updateStory(changed, activity);
     return changed;
   }
 
@@ -272,7 +316,10 @@ function summarize(story: Story): StorySummary {
 function normalizeEmail(email: string): string { return email.trim().toLowerCase(); }
 function issueSession(profileId: string): { accessToken: string; record: SessionRecord } {
   const accessToken = randomBytes(32).toString("base64url");
-  return { accessToken, record: { profileId, tokenHash: hashToken(accessToken), expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS) } };
+  return {
+    accessToken,
+    record: { id: randomUUID(), profileId, tokenHash: hashToken(accessToken), expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS) },
+  };
 }
 function hashToken(token: string): string { return createHash("sha256").update(token).digest("hex"); }
 async function hashPassword(password: string): Promise<string> {

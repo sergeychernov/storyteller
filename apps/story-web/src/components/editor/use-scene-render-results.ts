@@ -4,7 +4,7 @@ import { listSceneRenderResults, type AuthSession, type Scene } from "../../api.
 export function useSceneRenderResults(scene: Scene, storyId: string, session: AuthSession) {
   return useQuery({
     queryKey: ["scene-render-results", session.profile.id, storyId, scene.id, scene],
-    queryFn: ({ signal }) => listSceneRenderResults(session.accessToken, storyId, scene.id, signal),
+    queryFn: ({ signal }) => listSceneRenderResults(session.csrfToken, storyId, scene.id, signal),
     refetchInterval: (query) => query.state.data?.some(({ status }) => status === "queued" || status === "running") ? 800 : 2_000,
   });
 }

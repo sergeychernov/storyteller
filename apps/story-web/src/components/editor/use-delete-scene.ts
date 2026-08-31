@@ -27,8 +27,8 @@ export function useDeleteScene({ story, session, selectedId, onSelect, copy, sav
   const mutation = useMutation({
     retry: false,
     mutationFn: ({ target, checkOnly }: { target: SceneDeletionTarget; checkOnly: boolean }) => deleteSceneWithRecovery(target, {
-      remove: (sceneId, revision) => deleteScene(session.accessToken, story.id, sceneId, revision),
-      read: () => getStory(session.accessToken, story.id),
+      remove: (sceneId, revision) => deleteScene(session.csrfToken, story.id, sceneId, revision),
+      read: () => getStory(session.csrfToken, story.id),
     }, checkOnly),
     onMutate: () => queryClient.cancelQueries({ queryKey }),
     onSuccess: async (result, { target }) => {

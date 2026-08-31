@@ -1,0 +1,18 @@
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+body { margin: 0; background: #f6f7f8; }
+.admin-dashboard { padding: clamp(1rem, 3vw, 2rem); max-width: 1180px; }
+.metric-section { margin: 1.5rem 0; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.8rem; }
+.metric-card { background: white; border: 1px solid #e2e5e9; border-radius: 12px; padding: 1rem; min-width: 0; }
+.metric-card span { display: block; color: #59636e; overflow-wrap: anywhere; }
+.metric-card strong { display: block; font-size: 1.8rem; margin-top: 0.35rem; }
+.mobile-records { display: none; }
+.access-panel { max-width: 50rem; overflow-wrap: anywhere; }
+.access-panel ul { columns: 2; padding-left: 1.4rem; }
+.admin-login { padding: 2rem; }
+@media (max-width: 600px) {
+  .desktop-records { display: none; }
+  .mobile-records { display: block; }
+  .access-panel ul { columns: 1; }
+  .RaList-main, .RaShow-main { min-width: 0; }
+}

@@ -19,6 +19,7 @@
     { "path": "apps/site" },
     { "path": "apps/story-web" },
     { "path": "apps/clip-web" },
-    { "path": "apps/mobile" }
+    { "path": "apps/mobile" },
+    { "path": "apps/admin" }
   ]
 }

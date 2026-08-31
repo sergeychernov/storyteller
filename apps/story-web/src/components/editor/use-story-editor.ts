@@ -34,7 +34,7 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
   const queryClient = useQueryClient();
   const update = (changed: Story) => queryClient.setQueryData(["story", story.id], changed);
   const addSceneMutation = useMutation({
-    mutationFn: () => createScene(session.accessToken, story.id),
+    mutationFn: () => createScene(session.csrfToken, story.id),
     onSuccess: (changed) => {
       analytics.track("scene created", {});
       update(changed);
@@ -46,7 +46,7 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     mutationFn: async ({ sceneId, files }: { sceneId: string; files: readonly File[] }) => {
       let changed: Story | undefined;
       for (const file of files) {
-        changed = await uploadSceneMaterial(session.accessToken, story.id, sceneId, file);
+        changed = await uploadSceneMaterial(session.csrfToken, story.id, sceneId, file);
         analytics.track("material uploaded", { material_kind: materialKind(file) });
         update(changed);
       }
@@ -55,23 +55,23 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     },
     onSuccess: update,
   });
-  const reorderMutation = useReorderSceneMaterials(session.accessToken, story.id);
-  const backgroundMutation = useCollageBackground(session.accessToken, story.id, update);
-  const reorderScenesMutation = useReorderStoryScenes(session.accessToken, story.id);
-  const moveMaterialMutation = useMoveSceneMaterial(session.accessToken, story.id);
+  const reorderMutation = useReorderSceneMaterials(session.csrfToken, story.id);
+  const backgroundMutation = useCollageBackground(session.csrfToken, story.id, update);
+  const reorderScenesMutation = useReorderStoryScenes(session.csrfToken, story.id);
+  const moveMaterialMutation = useMoveSceneMaterial(session.csrfToken, story.id);
   const deleteMaterialMutation = useMutation({
     mutationFn: ({ sceneId, materialId }: { sceneId: string; materialId: string }) => deleteSceneMaterial(
-      session.accessToken, story.id, sceneId, materialId,
+      session.csrfToken, story.id, sceneId, materialId,
     ),
     onSuccess: update,
   });
   const editMaterialMutation = useMutation({
     mutationFn: ({ sceneId, materialId, edit }: {
       sceneId: string; materialId: string; edit: MaterialEdit;
-    }) => editSceneMaterial(session.accessToken, story.id, sceneId, materialId, edit),
+    }) => editSceneMaterial(session.csrfToken, story.id, sceneId, materialId, edit),
     onSuccess: update,
   });
-  const configureMutation = useConfigureStoryScene(session.accessToken, story.id);
+  const configureMutation = useConfigureStoryScene(session.csrfToken, story.id);
   const selected = story.scenes.find(({ id }) => id === selectedId) ?? story.scenes[0];
   const saving = addSceneMutation.isPending || uploadMaterialsMutation.isPending || deleteMaterialMutation.isPending
     || editMaterialMutation.isPending || reorderMutation.isPending || reorderScenesMutation.isPending

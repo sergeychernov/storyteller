@@ -6,7 +6,7 @@ afterEach(() => {
 });
 
 describe("Story API transport", () => {
-  test("sends JSON with authentication and returns the response body", async () => {
+  test("sends JSON with cookie credentials and CSRF and returns the response body", async () => {
     let request: { readonly url: string; readonly init: RequestInit } | undefined;
     const fetch = vi.fn<typeof globalThis.fetch>(async (input, init = {}) => {
       request = { url: String(input), init };
@@ -17,15 +17,17 @@ describe("Story API transport", () => {
     });
     vi.stubGlobal("fetch", fetch);
 
-    const story = await createStory("access-token", "A story");
+    const story = await createStory("csrf-token", "A story");
 
     expect(story.id).toBe("story-id");
     expect(request?.url).toBe("http://localhost:3001/stories");
     expect(request?.init.method).toBe("POST");
     expect(request?.init.body).toBe(JSON.stringify({ title: "A story" }));
     const headers = new Headers(request?.init.headers);
-    expect(headers.get("authorization")).toBe("Bearer access-token");
+    expect(headers.get("authorization")).toBe(null);
+    expect(headers.get("x-csrf-token")).toBe("csrf-token");
     expect(headers.get("content-type")).toBe("application/json");
+    expect(request?.init.credentials).toBe("include");
   });
 
   test("leaves multipart content type to the browser", async () => {
@@ -39,10 +41,11 @@ describe("Story API transport", () => {
     });
     vi.stubGlobal("fetch", fetch);
 
-    await uploadSceneMaterial("access-token", "story-id", "scene-id", new File(["image"], "photo.png", { type: "image/png" }));
+    await uploadSceneMaterial("csrf-token", "story-id", "scene-id", new File(["image"], "photo.png", { type: "image/png" }));
 
     expect(requestInit?.body).toBeInstanceOf(FormData);
     expect(new Headers(requestInit?.headers).has("content-type")).toBe(false);
+    expect(new Headers(requestInit?.headers).get("x-csrf-token")).toBe("csrf-token");
   });
 
   test("turns structured API failures into the shared error type", async () => {
@@ -51,7 +54,7 @@ describe("Story API transport", () => {
       code: "story_revision_conflict",
     }), { status: 409, headers: { "content-type": "application/json" } })));
 
-    const error = await createStory("access-token", "A story").catch((caught: unknown) => caught);
+    const error = await createStory("csrf-token", "A story").catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ApiError);
     if (!(error instanceof ApiError)) throw error;
     expect(error.message).toBe("Story changed");

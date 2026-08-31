@@ -1,4 +1,7 @@
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
+import csrfProtection from "@fastify/csrf-protection";
+import helmet from "@fastify/helmet";
 import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -16,10 +19,13 @@ import { jsonSchemaTransform, serializerCompiler, validatorCompiler, type ZodTyp
 import { z } from "zod";
 import { MediaStorage, MediaUploadError } from "./media-storage.js";
 import { SceneRenderService, serializeSceneRender } from "./scene-renders.js";
-import { authenticate } from "./authentication.js";
+import { csrfCookieName, getRequestAuthentication, secureCookies, authenticate } from "./authentication.js";
+import { registerBrowserAuthRoutes } from "./browser-auth.js";
 import { registerStoryTimelineRoutes } from "./story-timeline-routes.js";
 import { registerAmplitudeRelayRoutes, type AmplitudeRelayOptions } from "./amplitude-relay.js";
 import { accessPolicyForRoute, registerAccessControl } from "./access-control.js";
+import { registerAdminRoutes } from "./admin-routes.js";
+import type { AdminReadModel } from "./admin-database.js";
 
 export async function buildApi(application: StoryApplication, options: {
   readonly mediaStorage?: MediaStorage;
@@ -27,6 +33,7 @@ export async function buildApi(application: StoryApplication, options: {
   readonly renderQueue?: SceneRenderQueue;
   readonly amplitudeRelay?: AmplitudeRelayOptions;
   readonly accessControl?: AccessControlService;
+  readonly adminReadModel?: AdminReadModel;
 } = {}) {
   const mediaStorage = options.mediaStorage ?? new MediaStorage();
   const renderService = options.renderQueue && new SceneRenderService(application, options.renderQueue, mediaStorage);
@@ -34,10 +41,22 @@ export async function buildApi(application: StoryApplication, options: {
     .setValidatorCompiler(validatorCompiler).setSerializerCompiler(serializerCompiler).withTypeProvider<ZodTypeProvider>();
   const accessControl = options.accessControl ?? createBaselineAccessControl();
 
-  const configuredOrigins = process.env.WEB_ORIGIN?.split(",").map((origin) => origin.trim()).filter(Boolean);
+  const configuredOrigins = resolveBrowserOrigins();
+  const browserOrigins = new Set(configuredOrigins);
   await app.register(cors, {
-    origin: configuredOrigins?.length ? configuredOrigins : true,
+    origin: configuredOrigins,
+    credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["authorization", "content-type", "x-csrf-token"],
+  });
+  await app.register(helmet, { contentSecurityPolicy: false });
+  await app.register(cookie);
+  await app.register(csrfProtection, {
+    cookieKey: csrfCookieName(),
+    cookieOpts: { path: "/", httpOnly: true, sameSite: "strict", secure: secureCookies() },
+    getToken: (request) => typeof request.headers["x-csrf-token"] === "string" ? request.headers["x-csrf-token"] : undefined,
+    getUserInfo: (request) => getRequestAuthentication(request)?.session.id ?? "unauthenticated",
+    csrfOpts: { hmacKey: resolveCsrfHmacKey() },
   });
   await app.register(multipart, {
     limits: { files: 1, fields: 0, parts: 1, fileSize: Number(process.env.MAX_MEDIA_UPLOAD_BYTES ?? 500 * 1024 * 1024) },
@@ -45,7 +64,10 @@ export async function buildApi(application: StoryApplication, options: {
   await app.register(swagger, {
     openapi: {
       info: { title: "Storyteller API", version: "0.2.0" },
-      components: { securitySchemes: { bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "opaque" } } },
+      components: { securitySchemes: {
+        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "opaque" },
+        cookieAuth: { type: "apiKey", in: "cookie", name: secureCookies() ? "__Host-storyteller-session" : "storyteller-session" },
+      } },
     },
     transform: jsonSchemaTransform,
     transformObject: (document) => {
@@ -80,14 +102,17 @@ export async function buildApi(application: StoryApplication, options: {
     if (statusCode >= 500) request.log.error(logContext, "request failed");
     else if (request.url.includes("/materials")) request.log.warn(logContext, "media request failed");
     void reply.status(statusCode).send({
-      message: error instanceof Error ? error.message : "Unexpected error",
+      message: statusCode >= 500 && request.url.startsWith("/admin/")
+        ? "Internal server error" : error instanceof Error ? error.message : "Unexpected error",
       ...(error instanceof ApplicationError && error.code ? { code: error.code } : {}),
     });
   });
 
   app.get("/health", { schema: { response: { 200: healthSchema } } }, async () => ({ status: "ok" as const }));
   registerAmplitudeRelayRoutes(app, options.amplitudeRelay);
-  registerAccessControl(app, application, accessControl);
+  registerAccessControl(app, application, accessControl, browserOrigins);
+  registerBrowserAuthRoutes(app, application, browserOrigins);
+  if (options.adminReadModel) registerAdminRoutes(app, application, accessControl, options.adminReadModel);
   app.post("/auth/register", {
     schema: { body: registerSchema, response: { 201: authenticationSchema, 409: errorSchema } },
   }, async (request, reply) => reply.status(201).send(await application.register({
@@ -489,6 +514,16 @@ export async function buildApi(application: StoryApplication, options: {
     return reply.status(204).send(null);
   });
 
+  app.addHook("onResponse", async (request, reply) => {
+    const authenticated = getRequestAuthentication(request);
+    if (!authenticated || reply.statusCode >= 400) return;
+    try {
+      await application.touchSession(authenticated.session.id);
+    } catch (error) {
+      request.log.warn({ err: error }, "could not update session last-seen timestamp");
+    }
+  });
+
   return app;
 }
 
@@ -535,4 +570,21 @@ async function deleteStoredObject(
       }
     }
   }
+}
+
+function resolveBrowserOrigins(): string[] {
+  const configured = (process.env.BROWSER_ORIGINS ?? process.env.WEB_ORIGIN)?.split(",")
+    .map((origin) => origin.trim().replace(/\/$/, "")).filter(Boolean);
+  if (configured?.length) return [...new Set(configured)];
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("BROWSER_ORIGINS must list the Site, Story, Clip, and Admin origins in production");
+  }
+  return ["http://localhost:3000", "http://localhost:3002", "http://localhost:3003", "http://localhost:3004"];
+}
+
+function resolveCsrfHmacKey(): string {
+  const configured = process.env.CSRF_HMAC_KEY?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") throw new Error("CSRF_HMAC_KEY is required in production");
+  return "storyteller-local-development-csrf-key";
 }

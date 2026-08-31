@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAuthClient, createGravatarUrl, createSignInPath, profileInitials, sanitizeContinuePath } from "./index.js";
+import { createAuthClient, createGravatarUrl, createSignInPath, profileInitials, resolveContinueTarget, sanitizeContinuePath } from "./index.js";
 
 test("continue paths stay on known same-origin application prefixes", () => {
   assert.equal(sanitizeContinuePath("/app"), "/app");
@@ -28,6 +28,11 @@ test("sign-in links encode the validated return path", () => {
   assert.equal(createSignInPath("//example.com"), "/sign-in?continue=%2Fapp");
 });
 
+test("admin is a fixed logical return target, never an arbitrary URL", () => {
+  assert.equal(resolveContinueTarget("admin", "https://admin.makeitastory.app/"), "https://admin.makeitastory.app");
+  assert.equal(resolveContinueTarget("https://evil.example", "https://admin.makeitastory.app"), "/app");
+});
+
 test("uses the server result instead of submitted name to classify account creation", async (context) => {
   const previousFetch = globalThis.fetch;
   context.after(() => { globalThis.fetch = previousFetch; });
@@ -35,7 +40,7 @@ test("uses the server result instead of submitted name to classify account creat
   globalThis.fetch = async (_input, init) => {
     submittedBody = JSON.parse(String(init?.body));
     return new Response(JSON.stringify({
-      accessToken: "access-token",
+      csrfToken: "csrf-token",
       accountCreated: false,
       expiresAt: "2026-09-28T12:00:00.000Z",
       profile: { id: "profile-id", name: "Existing profile", email: "person@example.com", language: "ru" },
@@ -51,6 +56,7 @@ test("uses the server result instead of submitted name to classify account creat
   });
   assert.equal(result.accountCreated, false);
   assert.equal("accountCreated" in result.session, false);
+  assert.equal("accessToken" in result.session, false);
   assert.equal(result.session.profile.name, "Existing profile");
   assert.equal(result.session.profile.language, "ru");
 });
@@ -66,11 +72,13 @@ test("updates the authenticated profile with a PATCH request", async (context) =
     }), { status: 200, headers: { "content-type": "application/json" } });
   };
 
-  const profile = await createAuthClient("https://api.example.com").updateProfile("access-token", { language: "es" });
+  const profile = await createAuthClient("https://api.example.com").updateProfile("csrf-token", { language: "es" });
 
   assert.equal(request?.input, "https://api.example.com/profile");
   assert.equal(request?.init?.method, "PATCH");
   assert.equal(request?.init?.body, JSON.stringify({ language: "es" }));
-  assert.equal(new Headers(request?.init?.headers).get("authorization"), "Bearer access-token");
+  assert.equal(request?.init?.credentials, "include");
+  assert.equal(new Headers(request?.init?.headers).get("authorization"), null);
+  assert.equal(new Headers(request?.init?.headers).get("x-csrf-token"), "csrf-token");
   assert.equal(profile.language, "es");
 });

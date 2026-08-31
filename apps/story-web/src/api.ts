@@ -1,4 +1,4 @@
-import { createApiClient } from "@storyteller/api-client";
+import { createBrowserApiClient } from "@storyteller/api-client";
 import type { EffectiveAccess, StorySummary } from "@storyteller/application";
 import type {
   AppliedMaterialEdit,
@@ -50,7 +50,7 @@ export type {
 export type { AuthSession, Profile } from "@storyteller/auth-client";
 
 export const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
-const apiClient = createApiClient(apiUrl);
+const apiClient = createBrowserApiClient(apiUrl);
 export interface SceneRender {
   id: string;
   current: boolean;

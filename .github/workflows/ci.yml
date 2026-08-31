@@ -47,6 +47,7 @@ jobs:
       - run: yarn test:roadmap
       - run: yarn check
       - run: yarn test
+      - run: yarn test:admin
       - name: Verify database upgrades and backward compatibility
         run: yarn test:api:postgres
       - name: Apply database migrations with the release command
@@ -92,4 +93,5 @@ jobs:
         env:
           PORT: 3002
       - run: yarn build:web
+      - run: yarn build:admin
       - run: yarn workspace @storyteller/mobile exec expo export --platform web --output-dir /tmp/storyteller-mobile-export

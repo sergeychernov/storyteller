@@ -9,15 +9,15 @@ export type CollageBackgroundAction =
   | { readonly kind: "remove" };
 
 export function useCollageBackground(
-  accessToken: string,
+  csrfToken: string,
   storyId: string,
   onStoryChange: (story: Story) => void,
 ) {
   return useMutation({
     mutationFn: ({ sceneId, action }: { readonly sceneId: string; readonly action: CollageBackgroundAction }) =>
       action.kind === "upload"
-        ? uploadCollageBackgroundMaterial(accessToken, storyId, sceneId, action.file)
-        : removeCollageBackgroundMaterial(accessToken, storyId, sceneId),
+        ? uploadCollageBackgroundMaterial(csrfToken, storyId, sceneId, action.file)
+        : removeCollageBackgroundMaterial(csrfToken, storyId, sceneId),
     onSuccess: (changed, variables) => {
       if (variables.action.kind === "upload") {
         analytics.track("material uploaded", {

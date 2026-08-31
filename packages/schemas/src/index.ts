@@ -17,6 +17,9 @@ export const signInSchema = loginSchema.extend({ name: registerSchema.shape.name
 export const authenticationSchema = z.object({
   accessToken: z.string(), accountCreated: z.boolean(), expiresAt: z.iso.datetime(), profile: profileSchema,
 });
+export const browserSessionSchema = z.object({
+  accountCreated: z.boolean().optional(), expiresAt: z.iso.datetime(), profile: profileSchema, csrfToken: z.string().min(1),
+});
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(), language: profileLanguageSchema.optional(),
 }).refine(({ name, language }) => name !== undefined || language !== undefined, { message: "profile update must not be empty" });
@@ -223,12 +226,84 @@ export const platformCredentialSchema = z.object({
   id: z.string().uuid(), provider: platformProviderSchema, externalAccountId: z.string().optional(), secretHint: z.string(),
 });
 
+export const productActivityCodeSchema = z.enum([
+  "auth.registered", "auth.logged_in", "story.created", "material.uploaded",
+  "scene.render_requested", "scene.render_ready", "story.export_requested", "story.export_ready",
+  "publication.requested", "publication.succeeded", "publication.failed",
+]);
+export const adminPageRequestSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  perPage: z.coerce.number().int().min(1).max(100).default(25),
+});
+export const adminUserSearchSchema = adminPageRequestSchema.extend({
+  query: z.string().trim().max(254).optional(),
+  sort: z.enum(["createdAt", "email", "lastSeenAt", "storyCount"]).default("createdAt"),
+  order: z.enum(["ASC", "DESC"]).default("DESC"),
+}).strict();
+export const adminActivityQuerySchema = adminPageRequestSchema.extend({
+  code: productActivityCodeSchema.optional(),
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+});
+export const adminAuditQuerySchema = adminPageRequestSchema.extend({
+  action: z.string().trim().max(100).optional(),
+});
+export const adminProfileParamsSchema = z.object({ profileId: z.string().uuid() });
+export const adminOverviewSchema = z.object({
+  registrations: z.object({ today: z.number().int().nonnegative(), last7Days: z.number().int().nonnegative(), last30Days: z.number().int().nonnegative(), total: z.number().int().nonnegative() }),
+  sessions: z.object({ active: z.number().int().nonnegative(), observedLast90Days: z.number().int().nonnegative() }),
+  stories: z.object({ draft: z.number().int().nonnegative(), rendering: z.number().int().nonnegative(), ready: z.number().int().nonnegative(), publishing: z.number().int().nonnegative(), published: z.number().int().nonnegative() }),
+  activity: z.array(z.object({ code: productActivityCodeSchema, count: z.number().int().nonnegative() })),
+  eventCoverageStartedAt: z.iso.datetime().nullable(),
+  generatedAt: z.iso.datetime(),
+});
+export const adminUserSummarySchema = z.object({
+  id: z.string().uuid(), name: z.string(), email: z.email(), language: profileLanguageSchema,
+  createdAt: z.iso.datetime(), lastSeenAt: z.iso.datetime().nullable(), storyCount: z.number().int().nonnegative(),
+  activeSessionCount: z.number().int().nonnegative(),
+});
+export const adminUserDetailSchema = adminUserSummarySchema.extend({ updatedAt: z.iso.datetime() });
+export const adminActivityEventSchema = z.object({
+  id: z.string(), profileId: z.string().uuid(), code: productActivityCodeSchema, occurredAt: z.iso.datetime(),
+});
+export const adminSessionMetadataSchema = z.object({
+  id: z.string().uuid(), createdAt: z.iso.datetime(), lastSeenAt: z.iso.datetime(), expiresAt: z.iso.datetime(),
+  revokedAt: z.iso.datetime().nullable(), status: z.enum(["active", "expired", "revoked"]),
+});
+export const adminAuditEntrySchema = z.object({
+  id: z.string(), actorProfileId: z.string().uuid().nullable(), action: z.string(), targetType: z.string(),
+  targetProfileId: z.string().uuid().nullable(), occurredAt: z.iso.datetime(), source: z.enum(["admin_read", "access_change"]),
+});
+export const adminMeSchema = z.object({ profile: profileSchema, capabilities: z.array(z.string()) });
+const adminAccessSourceSchema = z.object({
+  kind: z.enum(["plan_version", "role", "cohort", "user_override", "operational_switch"]), key: z.string(),
+  effect: z.enum(["allow", "deny", "base", "add", "replace"]), via: z.string().optional(), decisive: z.boolean(),
+});
+export const adminEffectiveAccessSchema = z.object({
+  planVersionCode: z.string().nullable(), roles: z.array(z.string()),
+  capabilities: z.array(z.object({ code: z.string(), allowed: z.boolean(), expiresAt: z.iso.datetime().optional(), sources: z.array(adminAccessSourceSchema) })),
+  limits: z.array(z.object({ code: z.string(), value: z.union([z.number(), z.literal("unlimited"), z.null()]), expiresAt: z.iso.datetime().optional(), sources: z.array(adminAccessSourceSchema) })),
+  evaluatedAt: z.iso.datetime(),
+});
+export function adminPageSchema<T extends z.ZodType>(item: T) {
+  return z.object({ data: z.array(item), total: z.number().int().nonnegative(), page: z.number().int().positive(), perPage: z.number().int().positive() });
+}
+
 export const bearerSecurity = [{ bearerAuth: [] }];
+export const browserSecurity = [{ cookieAuth: [] }];
 export const healthSchema = z.object({ status: z.literal("ok") });
 export const errorSchema = z.object({ message: z.string(), code: z.string().optional() });
 
 export type RegisterRequest = z.infer<typeof registerSchema>;
 export type LoginRequest = z.infer<typeof loginSchema>;
+export type BrowserSession = z.infer<typeof browserSessionSchema>;
+export type AdminOverview = z.infer<typeof adminOverviewSchema>;
+export type AdminUserSummary = z.infer<typeof adminUserSummarySchema>;
+export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
+export type AdminActivityEvent = z.infer<typeof adminActivityEventSchema>;
+export type AdminSessionMetadata = z.infer<typeof adminSessionMetadataSchema>;
+export type AdminAuditEntry = z.infer<typeof adminAuditEntrySchema>;
+export type AdminPage<T> = { readonly data: readonly T[]; readonly total: number; readonly page: number; readonly perPage: number };
 export type CreateStoryRequest = z.infer<typeof createStorySchema>;
 export type DeleteSceneRequest = z.infer<typeof deleteSceneSchema>;
 export type ReorderStoryScenesRequest = z.infer<typeof reorderStoryScenesSchema>;

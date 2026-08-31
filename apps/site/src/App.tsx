@@ -28,6 +28,10 @@ export function App() {
     updateProfile: sessionState.updateProfile,
   });
 
+  if (sessionState.isLoading && location.pathname.startsWith("/app")) {
+    return <main aria-busy="true">Checking session…</main>;
+  }
+
   return (
     <Routes>
       {publicPages.map((resolvedPage) => (

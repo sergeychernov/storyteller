@@ -10,24 +10,44 @@ export interface ApiClient {
 }
 
 export function createApiClient(apiUrl: string, fetchRequest?: typeof fetch): ApiClient {
+  return createClient(apiUrl, "bearer", fetchRequest);
+}
+
+export function createBrowserApiClient(apiUrl: string, fetchRequest?: typeof fetch): ApiClient {
+  return createClient(apiUrl, "cookie", fetchRequest);
+}
+
+function createClient(apiUrl: string, transport: "bearer" | "cookie", fetchRequest?: typeof fetch): ApiClient {
   const baseUrl = apiUrl.replace(/\/+$/, "");
 
   async function request(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
     const headers = new Headers(init.headers);
     const hasJsonBody = init.body !== undefined && init.body !== null && !(init.body instanceof FormData);
     if (hasJsonBody && !headers.has("content-type")) headers.set("content-type", "application/json");
-    if (token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
-    const response = await (fetchRequest ?? fetch)(`${baseUrl}${path}`, { ...init, headers });
+    if (transport === "bearer" && token && !headers.has("authorization")) headers.set("authorization", `Bearer ${token}`);
+    if (transport === "cookie" && token && isUnsafeMethod(init.method) && !headers.has("x-csrf-token")) {
+      headers.set("x-csrf-token", token);
+    }
+    const response = await (fetchRequest ?? fetch)(`${baseUrl}${path}`, {
+      ...init,
+      ...(transport === "cookie" ? { credentials: "include" as const } : {}),
+      headers,
+    });
     if (!response.ok) await throwResponseError(response);
     return response;
   }
 
   return {
-    json: async <T>(path: string, init?: RequestInit, token?: string): Promise<T> => (
-      (await request(path, init, token)).json() as Promise<T>
-    ),
+    json: async <T>(path: string, init?: RequestInit, token?: string): Promise<T> => {
+      const response = await request(path, init, token);
+      return response.status === 204 ? undefined as T : response.json() as Promise<T>;
+    },
     blob: async (path, init, token) => (await request(path, init, token)).blob(),
   };
+}
+
+function isUnsafeMethod(method: string | undefined): boolean {
+  return !["GET", "HEAD", "OPTIONS"].includes((method ?? "GET").toUpperCase());
 }
 
 async function throwResponseError(response: Response): Promise<never> {

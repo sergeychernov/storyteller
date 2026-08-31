@@ -20,11 +20,11 @@ export function StoryLibrary({ session }: { readonly session: AuthSession }) {
   const canCreateStory = useCapability("story.create");
   const stories = useQuery({
     queryKey: ["stories", session.profile.id],
-    queryFn: () => listStories(session.accessToken),
+    queryFn: () => listStories(session.csrfToken),
     enabled: canListStories,
   });
   const addStory = useMutation({
-    mutationFn: () => createStory(session.accessToken, title),
+    mutationFn: () => createStory(session.csrfToken, title),
     onSuccess: async (story) => {
       analytics.track("story created", {});
       preloadStoryPage();

@@ -1,12 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { reorderSceneMaterials, type Story } from "../../api.js";
 
-export function useReorderSceneMaterials(accessToken: string, storyId: string) {
+export function useReorderSceneMaterials(csrfToken: string, storyId: string) {
   const queryClient = useQueryClient();
   const queryKey = ["story", storyId] as const;
 
   return useMutation({
-    mutationFn: ({ sceneId, ids }: { sceneId: string; ids: readonly string[] }) => reorderSceneMaterials(accessToken, storyId, sceneId, ids),
+    mutationFn: ({ sceneId, ids }: { sceneId: string; ids: readonly string[] }) => reorderSceneMaterials(csrfToken, storyId, sceneId, ids),
     onMutate: async ({ sceneId, ids }) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<Story>(queryKey);

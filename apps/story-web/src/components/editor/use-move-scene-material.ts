@@ -10,13 +10,13 @@ interface MoveSceneMaterialVariables {
   readonly expectedRevision: number;
 }
 
-export function useMoveSceneMaterial(accessToken: string, storyId: string) {
+export function useMoveSceneMaterial(csrfToken: string, storyId: string) {
   const queryClient = useQueryClient();
   const queryKey = ["story", storyId] as const;
 
   return useMutation({
     mutationFn: ({ sourceSceneId, materialId, targetSceneId, targetIndex, expectedRevision }: MoveSceneMaterialVariables) => (
-      moveSceneMaterials(accessToken, storyId, sourceSceneId, {
+      moveSceneMaterials(csrfToken, storyId, sourceSceneId, {
         materialIds: [materialId], targetSceneId, targetIndex, expectedRevision,
       })
     ),

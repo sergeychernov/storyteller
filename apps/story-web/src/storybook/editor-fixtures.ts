@@ -5,7 +5,7 @@ import {
 import type { AuthSession } from "../api.js";
 
 export const storybookSession: AuthSession = {
-  accessToken: "storybook",
+  csrfToken: "storybook",
   expiresAt: "2099-01-01T00:00:00.000Z",
   profile: {
     id: "storybook",

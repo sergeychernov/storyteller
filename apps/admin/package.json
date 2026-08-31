@@ -1,0 +1,35 @@
+{
+  "name": "@storyteller/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node ../../node_modules/typescript/bin/tsc -b ../../packages/api-client ../../packages/auth-client ../../packages/domain ../../packages/schemas && vite build",
+    "dev": "vite --host 0.0.0.0 --port 3004",
+    "preview": "node server.mjs",
+    "start": "node server.mjs",
+    "test": "vitest run && node --test server.test.mjs"
+  },
+  "dependencies": {
+    "@mui/icons-material": "9.4.0",
+    "@mui/material": "9.4.0",
+    "@storyteller/api-client": "workspace:*",
+    "@storyteller/auth-client": "workspace:*",
+    "@storyteller/domain": "workspace:*",
+    "@storyteller/schemas": "workspace:*",
+    "ra-i18n-polyglot": "5.15.0",
+    "ra-language-english": "5.15.0",
+    "react": "19.2.3",
+    "react-admin": "5.15.1",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.5",
+    "jsdom": "30.0.1",
+    "typescript": "7.0.2",
+    "vite": "8.2.1",
+    "vitest": "4.1.11"
+  }
+}

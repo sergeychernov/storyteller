@@ -16,7 +16,7 @@ export function StoryDetails({ session, storyId, sceneId }: StoryDetailsProps) {
   const canUpdateStory = useCapability("story.update");
   const story = useQuery({
     queryKey: ["story", storyId],
-    queryFn: ({ signal }) => getStory(session.accessToken, storyId, signal),
+    queryFn: ({ signal }) => getStory(session.csrfToken, storyId, signal),
     enabled: canReadStory && canUpdateStory,
   });
   const selection = useStorySceneSelection(storyId, sceneId, story.data);

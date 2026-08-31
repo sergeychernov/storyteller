@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ApiError, createApiClient } from "./index.js";
+import { ApiError, createApiClient, createBrowserApiClient } from "./index.js";
 
 test("adds default JSON and authorization headers without overriding explicit headers", async () => {
   let captured: RequestInit | undefined;
@@ -32,6 +32,23 @@ test("does not set multipart content type", async () => {
   await client.json("/upload", { method: "POST", body: form });
 
   assert.equal(new Headers(captured?.headers).has("content-type"), false);
+});
+
+test("browser transport sends cookies and limits CSRF headers to unsafe requests", async () => {
+  const captured: RequestInit[] = [];
+  const client = createBrowserApiClient("https://api.example.com", async (_input, init) => {
+    captured.push(init ?? {});
+    return Response.json({ ok: true });
+  });
+
+  await client.json("/profile", {}, "csrf-token");
+  await client.json("/profile", { method: "PATCH", body: "{}" }, "csrf-token");
+
+  assert.equal(captured[0]?.credentials, "include");
+  assert.equal(new Headers(captured[0]?.headers).get("x-csrf-token"), null);
+  assert.equal(captured[1]?.credentials, "include");
+  assert.equal(new Headers(captured[1]?.headers).get("x-csrf-token"), "csrf-token");
+  assert.equal(new Headers(captured[1]?.headers).get("authorization"), null);
 });
 
 test("preserves structured API errors", async () => {

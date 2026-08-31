@@ -176,6 +176,12 @@ export class PostgresSceneRenderQueue implements SceneRenderQueue {
          ON CONFLICT (storage_key) DO UPDATE SET status = 'queued', attempts = 0, worker_id = NULL,
            locked_until = NULL, error = NULL, updated_at = now()
          RETURNING storage_key
+       ), activity AS (
+         INSERT INTO product_activity_events (profile_id, code, dedupe_key)
+         SELECT profile_id, 'scene.render_requested', 'scene.render_requested:' || id::text
+         FROM retained WHERE input->>'artifact' IS DISTINCT FROM 'scene-frame'
+         ON CONFLICT (dedupe_key) DO NOTHING
+         RETURNING id
        )
        SELECT id, profile_id, story_id, scene_id, input_hash, input, status, progress_percent, progress_phase,
          storage_key, size_bytes, content_hash, created_at, error FROM retained`,
@@ -237,14 +243,24 @@ export class PostgresSceneRenderQueue implements SceneRenderQueue {
   }
 
   async complete(renderId: string, workerId: string, storageKey: string, sizeBytes: number, contentHash: string): Promise<boolean> {
-    const result = await this.pool.query(
-      `UPDATE scene_renders SET status = 'ready', progress_percent = 100, progress_phase = 'ready',
-       storage_key = $3, size_bytes = $4, content_hash = $5, error = NULL,
-       worker_id = NULL, locked_until = NULL, updated_at = now()
-       WHERE id = $1 AND worker_id = $2 AND status = 'running'`,
+    const result = await this.pool.query<{ accepted: boolean }>(
+      `WITH completed AS (
+         UPDATE scene_renders SET status = 'ready', progress_percent = 100, progress_phase = 'ready',
+           storage_key = $3, size_bytes = $4, content_hash = $5, error = NULL,
+           worker_id = NULL, locked_until = NULL, updated_at = now()
+         WHERE id = $1 AND worker_id = $2 AND status = 'running'
+         RETURNING id, profile_id, input
+       ), activity AS (
+         INSERT INTO product_activity_events (profile_id, code, dedupe_key)
+         SELECT profile_id, 'scene.render_ready', 'scene.render_ready:' || id::text
+         FROM completed WHERE input->>'artifact' IS DISTINCT FROM 'scene-frame'
+         ON CONFLICT (dedupe_key) DO NOTHING
+         RETURNING id
+       )
+       SELECT EXISTS (SELECT 1 FROM completed) AS accepted`,
       [renderId, workerId, storageKey, sizeBytes, contentHash],
     );
-    return result.rowCount === 1;
+    return result.rows[0]?.accepted ?? false;
   }
 
   async fail(renderId: string, workerId: string, error: string): Promise<void> {

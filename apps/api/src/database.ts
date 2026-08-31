@@ -4,7 +4,15 @@ import {
   hasCompleteCollageCardAngles, hasCompleteCollageCardOffsets, resolveCollageSettings, type PlatformCredential, type PlatformProvider,
   type Profile, type ProfileUpdate, type Story,
 } from "@storyteller/domain";
-import { ApplicationError, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
+import {
+  ApplicationError,
+  type AuthenticatedSession,
+  type PlatformCredentialSummary,
+  type ProductActivityRecord,
+  type ProfileAuthentication,
+  type SessionRecord,
+  type StoryRepository,
+} from "@storyteller/application";
 import { sceneMaterialSchema, storySchema } from "@storyteller/schemas";
 import { Pool, type PoolClient } from "pg";
 
@@ -24,6 +32,8 @@ export class PostgresStoryRepository implements StoryRepository {
       );
       if (result.rowCount === 0) { await client.query("ROLLBACK"); return false; }
       await insertSession(client, session);
+      await insertActivity(client, profile.id, { code: "auth.registered", dedupeKey: `auth.registered:${profile.id}` });
+      await insertActivity(client, profile.id, { code: "auth.logged_in", dedupeKey: `auth.logged_in:${session.id}` });
       await client.query("COMMIT");
       return true;
     } catch (error) {
@@ -39,13 +49,56 @@ export class PostgresStoryRepository implements StoryRepository {
     const row = result.rows[0];
     return row && { ...mapProfile(row), passwordHash: row.password_hash };
   }
-  async createSession(session: SessionRecord): Promise<void> { await insertSession(this.pool, session); }
-  async findProfileBySession(tokenHash: string, now: Date): Promise<Profile | undefined> {
-    const result = await this.pool.query<ProfileRow>(
-      `SELECT p.id, p.name, p.email, p.language FROM sessions s JOIN profiles p ON p.id = s.profile_id
-       WHERE s.token_hash = $1 AND s.expires_at > $2`, [tokenHash, now],
+  async createSession(session: SessionRecord): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await insertSession(client, session);
+      await insertActivity(client, session.profileId, { code: "auth.logged_in", dedupeKey: `auth.logged_in:${session.id}` });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+  }
+  async findSessionByTokenHash(tokenHash: string, now: Date): Promise<AuthenticatedSession | undefined> {
+    const result = await this.pool.query<ProfileRow & { session_id: string; expires_at: Date | string }>(
+      `SELECT p.id, p.name, p.email, p.language, s.id AS session_id, s.expires_at
+       FROM sessions s JOIN profiles p ON p.id = s.profile_id
+       WHERE s.token_hash = $1 AND s.expires_at > $2 AND s.revoked_at IS NULL`, [tokenHash, now],
     );
-    return result.rows[0] && mapProfile(result.rows[0]);
+    const row = result.rows[0];
+    return row && { id: row.session_id, profile: mapProfile(row), expiresAt: toIso(row.expires_at) };
+  }
+  async rotateSession(oldTokenHash: string, session: SessionRecord): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const revoked = await client.query(
+        "UPDATE sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now() RETURNING profile_id",
+        [oldTokenHash],
+      );
+      if (revoked.rowCount !== 1) throw new ApplicationError("invalid or expired access token", 401);
+      await insertSession(client, session);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+  }
+  async revokeSession(tokenHash: string, now: Date): Promise<boolean> {
+    const result = await this.pool.query(
+      "UPDATE sessions SET revoked_at = $2 WHERE token_hash = $1 AND revoked_at IS NULL RETURNING id",
+      [tokenHash, now],
+    );
+    return result.rowCount === 1;
+  }
+  async touchSession(sessionId: string, now: Date): Promise<void> {
+    await this.pool.query(
+      `UPDATE sessions SET last_seen_at = $2
+       WHERE id = $1 AND revoked_at IS NULL AND expires_at > $2 AND last_seen_at < $2 - interval '5 minutes'`,
+      [sessionId, now],
+    );
   }
   async updateProfile(profileId: string, input: ProfileUpdate): Promise<Profile> {
     const result = await this.pool.query<ProfileRow>(
@@ -57,10 +110,19 @@ export class PostgresStoryRepository implements StoryRepository {
     return mapProfile(row);
   }
   async createStory(story: Story): Promise<void> {
-    await this.pool.query(
-      "INSERT INTO stories (id, profile_id, title, status, scene_count, revision, payload) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-      [story.id, story.profileId, story.title ?? null, story.status, story.scenes.length, story.revision, story],
-    );
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        "INSERT INTO stories (id, profile_id, title, status, scene_count, revision, payload) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [story.id, story.profileId, story.title ?? null, story.status, story.scenes.length, story.revision, story],
+      );
+      await insertActivity(client, story.profileId, { code: "story.created", dedupeKey: `story.created:${story.id}` });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
   }
   async listStories(profileId: string): Promise<readonly Story[]> {
     const result = await this.pool.query<{ payload: unknown }>("SELECT payload FROM stories WHERE profile_id = $1 ORDER BY created_at", [profileId]);
@@ -71,8 +133,18 @@ export class PostgresStoryRepository implements StoryRepository {
     const payload = result.rows[0]?.payload;
     return payload === undefined ? undefined : normalizeStoredStory(payload);
   }
-  async updateStory(story: Story): Promise<void> {
-    await persistStoryRevision(this.pool, story);
+  async updateStory(story: Story, activity?: ProductActivityRecord): Promise<void> {
+    if (!activity) return persistStoryRevision(this.pool, story);
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await persistStoryRevision(client, story);
+      await insertActivity(client, story.profileId, activity);
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
   }
   async deleteScene(story: Story, sceneId: string, storageKeys: readonly string[]): Promise<void> {
     const client = await this.pool.connect();
@@ -232,7 +304,21 @@ export function createPostgresRepository(): { pool: Pool; repository: PostgresSt
 }
 
 async function insertSession(client: Pick<Pool | PoolClient, "query">, session: SessionRecord): Promise<void> {
-  await client.query("INSERT INTO sessions (token_hash, profile_id, expires_at) VALUES ($1, $2, $3)", [session.tokenHash, session.profileId, session.expiresAt]);
+  await client.query(
+    "INSERT INTO sessions (id, token_hash, profile_id, expires_at) VALUES ($1, $2, $3, $4)",
+    [session.id, session.tokenHash, session.profileId, session.expiresAt],
+  );
+}
+async function insertActivity(
+  client: Pick<Pool | PoolClient, "query">,
+  profileId: string,
+  activity: ProductActivityRecord,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO product_activity_events (profile_id, code, dedupe_key) VALUES ($1, $2, $3)
+     ON CONFLICT (dedupe_key) DO NOTHING`,
+    [profileId, activity.code, activity.dedupeKey],
+  );
 }
 function encryptSecret(secret: string, key: Buffer): string {
   const iv = randomBytes(12);
@@ -243,6 +329,7 @@ function encryptSecret(secret: string, key: Buffer): string {
 interface ProfileRow { id: string; name: string; email: string; language: Profile["language"] }
 interface CredentialRow { id: string; provider: PlatformProvider; external_account_id: string | null; secret_hint: string }
 function mapProfile(row: ProfileRow): Profile { return { id: row.id, name: row.name, email: row.email, language: row.language }; }
+function toIso(value: Date | string): string { return value instanceof Date ? value.toISOString() : new Date(value).toISOString(); }
 function mapCredential(row: CredentialRow): PlatformCredentialSummary {
   return { id: row.id, provider: row.provider, secretHint: row.secret_hint, ...(row.external_account_id === null ? {} : { externalAccountId: row.external_account_id }) };
 }

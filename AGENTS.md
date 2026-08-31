@@ -2,6 +2,7 @@
 
 ## Git changes and review
 
+- Never run `git add` or otherwise modify the Git index unless the user explicitly authorizes that specific staging action. A request to implement, fix, prepare, finish, commit, push, or deploy is not staging authorization. Leave completed edits unstaged by default. Preserve any files already staged by the user: do not stage additional changes, unstage files, or run commands such as `git restore --staged` or `git reset` without separate explicit permission.
 - Leave completed changes uncommitted so the user can review and commit them. Never run `git commit` unless the user explicitly authorizes that specific commit after reviewing the current changes; a request to implement, finish, deploy, or mark a task done is not commit authorization.
 - Never run `git push` unless the user explicitly authorizes that specific push. Commit permission does not imply push permission, and prior permission does not carry over to later commits or pushes. Prefer handing off the working-tree diff, verification results, and a suggested commit message so the user can commit and push personally.
 

@@ -445,6 +445,63 @@ export const migrations = [{
     DELETE FROM scene_renders render USING ranked
     WHERE render.id = ranked.id AND ranked.position > 1;
   `,
+}, {
+  version: 10,
+  sql: `
+    ALTER TABLE sessions ADD COLUMN id uuid;
+    UPDATE sessions SET id = gen_random_uuid();
+    ALTER TABLE sessions ALTER COLUMN id SET NOT NULL;
+    ALTER TABLE sessions ALTER COLUMN id SET DEFAULT gen_random_uuid();
+    ALTER TABLE sessions ADD CONSTRAINT sessions_id_unique UNIQUE (id);
+    ALTER TABLE sessions ADD COLUMN last_seen_at timestamptz;
+    UPDATE sessions SET last_seen_at = created_at;
+    ALTER TABLE sessions ALTER COLUMN last_seen_at SET NOT NULL;
+    ALTER TABLE sessions ALTER COLUMN last_seen_at SET DEFAULT now();
+    ALTER TABLE sessions ADD COLUMN revoked_at timestamptz;
+    CREATE INDEX sessions_profile_status_idx ON sessions(profile_id, revoked_at, expires_at DESC);
+    CREATE INDEX sessions_retention_idx ON sessions(expires_at, revoked_at);
+
+    CREATE TABLE product_activity_event_types (
+      code text PRIMARY KEY,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    INSERT INTO product_activity_event_types (code) VALUES
+      ('auth.registered'),
+      ('auth.logged_in'),
+      ('story.created'),
+      ('material.uploaded'),
+      ('scene.render_requested'),
+      ('scene.render_ready'),
+      ('story.export_requested'),
+      ('story.export_ready'),
+      ('publication.requested'),
+      ('publication.succeeded'),
+      ('publication.failed');
+
+    CREATE TABLE product_activity_events (
+      id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      code text NOT NULL REFERENCES product_activity_event_types(code),
+      dedupe_key text NOT NULL UNIQUE,
+      occurred_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX product_activity_events_profile_idx
+      ON product_activity_events(profile_id, occurred_at DESC, id DESC);
+    CREATE INDEX product_activity_events_code_idx
+      ON product_activity_events(code, occurred_at DESC, id DESC);
+
+    CREATE TABLE admin_audit_log (
+      id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      actor_profile_id uuid REFERENCES profiles(id) ON DELETE SET NULL,
+      action text NOT NULL,
+      target_type text NOT NULL,
+      target_profile_id uuid REFERENCES profiles(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    CREATE INDEX admin_audit_log_created_idx ON admin_audit_log(created_at DESC, id DESC);
+    CREATE INDEX admin_audit_log_actor_idx ON admin_audit_log(actor_profile_id, created_at DESC, id DESC);
+    CREATE INDEX admin_audit_log_target_idx ON admin_audit_log(target_profile_id, created_at DESC, id DESC);
+  `,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

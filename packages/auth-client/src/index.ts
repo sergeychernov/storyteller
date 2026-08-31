@@ -1,4 +1,4 @@
-import { ApiError, createApiClient } from "@storyteller/api-client";
+import { ApiError, createApiClient, createBrowserApiClient } from "@storyteller/api-client";
 import { profileLanguages, type Profile as DomainProfile, type ProfileLanguage, type ProfileUpdate } from "@storyteller/domain";
 import { useCallback, useEffect, useState } from "react";
 
@@ -6,13 +6,13 @@ export { ApiError } from "@storyteller/api-client";
 export { createGravatarUrl, ProfileAvatar, profileInitials } from "./ProfileAvatar.js";
 export { useProfileLanguage } from "./useProfileLanguage.js";
 
-const sessionStorageKey = "storyteller.auth-session";
+const legacySessionStorageKey = "storyteller.auth-session";
 
 export type Profile = DomainProfile;
 export type { ProfileLanguage, ProfileUpdate } from "@storyteller/domain";
 
 export interface AuthSession {
-  readonly accessToken: string;
+  readonly csrfToken: string;
   readonly expiresAt: string;
   readonly profile: Profile;
 }
@@ -24,68 +24,81 @@ export interface SignInResult {
 
 export interface AuthClient {
   readonly signIn: (email: string, password: string, name?: string, language?: ProfileLanguage) => Promise<SignInResult>;
-  readonly getProfile: (token: string) => Promise<Profile>;
-  readonly updateProfile: (token: string, input: ProfileUpdate) => Promise<Profile>;
+  readonly getSession: () => Promise<AuthSession>;
+  readonly exchange: (legacyAccessToken: string) => Promise<AuthSession>;
+  readonly logout: (csrfToken: string) => Promise<void>;
+  readonly getProfile: (csrfToken?: string) => Promise<Profile>;
+  readonly updateProfile: (csrfToken: string, input: ProfileUpdate) => Promise<Profile>;
 }
 
 export function createAuthClient(apiUrl: string): AuthClient {
-  const api = createApiClient(apiUrl);
+  const browserApi = createBrowserApiClient(apiUrl);
+  const bearerApi = createApiClient(apiUrl);
 
   return {
     signIn: async (email, password, name, language) => {
-      const response = await api.json<AuthSession & { readonly accountCreated: boolean }>("/auth/sign-in", {
+      const response = await browserApi.json<AuthSession & { readonly accountCreated?: boolean }>("/auth/browser/sign-in", {
         method: "POST",
         body: JSON.stringify({ email, password, ...(name ? { name } : {}), ...(language ? { language } : {}) }),
       });
-      return {
-        accountCreated: response.accountCreated,
-        session: { accessToken: response.accessToken, expiresAt: response.expiresAt, profile: response.profile },
-      };
+      return { accountCreated: response.accountCreated === true, session: normalizeSession(response) };
     },
-    getProfile: (token) => api.json("/profile", {}, token),
-    updateProfile: (token, input) => api.json("/profile", { method: "PATCH", body: JSON.stringify(input) }, token),
+    getSession: async () => normalizeSession(await browserApi.json<AuthSession>("/auth/browser/session", { cache: "no-store" })),
+    exchange: async (legacyAccessToken) => normalizeSession(await bearerApi.json<AuthSession>("/auth/browser/exchange", {
+      method: "POST",
+    }, legacyAccessToken)),
+    logout: async (csrfToken) => {
+      await browserApi.json<null>("/auth/browser/logout", { method: "POST" }, csrfToken).catch((error: unknown) => {
+        if (!(error instanceof ApiError && error.status === 401)) throw error;
+      });
+    },
+    getProfile: () => browserApi.json("/profile", { cache: "no-store" }),
+    updateProfile: (csrfToken, input) => browserApi.json("/profile", { method: "PATCH", body: JSON.stringify(input) }, csrfToken),
   };
 }
 
-export function usePersistentSession(client: Pick<AuthClient, "getProfile" | "updateProfile">) {
-  const [session, setSession] = useState<AuthSession | null>(loadSession);
+const restorePromises = new WeakMap<object, Promise<AuthSession | null>>();
+
+export function usePersistentSession(client: AuthClient) {
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const authenticate = useCallback((nextSession: AuthSession): void => {
-    localStorage.setItem(sessionStorageKey, JSON.stringify(nextSession));
-    setSession(nextSession);
+    localStorage.removeItem(legacySessionStorageKey);
+    setSession(normalizeSession(nextSession));
   }, []);
 
   const clearSession = useCallback((): void => {
-    localStorage.removeItem(sessionStorageKey);
+    const csrfToken = session?.csrfToken;
     setSession(null);
-  }, []);
+    localStorage.removeItem(legacySessionStorageKey);
+    if (csrfToken) void client.logout(csrfToken);
+  }, [client, session?.csrfToken]);
 
   const updateProfile = useCallback(async (input: ProfileUpdate): Promise<Profile> => {
     if (!session) throw new ApiError("authentication required", 401);
-    const profile = await client.updateProfile(session.accessToken, input);
-    authenticate({ ...session, profile });
+    const profile = await client.updateProfile(session.csrfToken, input);
+    setSession({ ...session, profile });
     return profile;
-  }, [authenticate, client, session]);
+  }, [client, session]);
 
   useEffect(() => {
-    if (!session) return;
-    void client.getProfile(session.accessToken).then((profile) => {
-      if (profile.name === session.profile.name && profile.email === session.profile.email && profile.language === session.profile.language) return;
-      authenticate({ ...session, profile });
-    }).catch((error: unknown) => {
-      if (error instanceof ApiError && error.status === 401) clearSession();
+    let active = true;
+    let restore = restorePromises.get(client);
+    if (!restore) {
+      restore = restoreSession(client);
+      restorePromises.set(client, restore);
+      void restore.finally(() => restorePromises.delete(client));
+    }
+    void restore.then((restored) => {
+      if (active) setSession(restored);
+    }).finally(() => {
+      if (active) setIsLoading(false);
     });
-  }, [authenticate, clearSession, client, session?.accessToken]);
+    return () => { active = false; };
+  }, [client]);
 
-  useEffect(() => {
-    const synchronize = (event: StorageEvent) => {
-      if (event.key === sessionStorageKey) setSession(loadSession());
-    };
-    window.addEventListener("storage", synchronize);
-    return () => window.removeEventListener("storage", synchronize);
-  }, []);
-
-  return { session, authenticate, clearSession, updateProfile } as const;
+  return { session, isLoading, authenticate, clearSession, updateProfile } as const;
 }
 
 export function sanitizeContinuePath(value: string | null | undefined, fallback = "/app"): string {
@@ -94,25 +107,52 @@ export function sanitizeContinuePath(value: string | null | undefined, fallback 
   return value;
 }
 
+export function resolveContinueTarget(value: string | null | undefined, adminUrl: string, fallback = "/app"): string {
+  if (value === "admin") return adminUrl.replace(/\/+$/, "");
+  return sanitizeContinuePath(value, fallback);
+}
+
 export function createSignInPath(continuePath: string): string {
   return `/sign-in?continue=${encodeURIComponent(sanitizeContinuePath(continuePath))}`;
 }
 
-function loadSession(): AuthSession | null {
+async function restoreSession(client: AuthClient): Promise<AuthSession | null> {
   try {
-    const raw = localStorage.getItem(sessionStorageKey);
-    if (!raw) return null;
-    const session = JSON.parse(raw) as Partial<AuthSession>;
-    const expiresAt = typeof session.expiresAt === "string" ? Date.parse(session.expiresAt) : Number.NaN;
-    if (!session.accessToken || !session.profile?.id || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-      localStorage.removeItem(sessionStorageKey);
-      return null;
-    }
-    const profile = session.profile as Partial<Profile>;
-    const language = profileLanguages.includes(profile.language as ProfileLanguage) ? profile.language as ProfileLanguage : "en";
-    return { ...session, profile: { ...profile, language } } as AuthSession;
-  } catch {
-    localStorage.removeItem(sessionStorageKey);
+    return normalizeSession(await client.getSession());
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 401)) return null;
+  }
+  const legacyAccessToken = loadLegacyAccessToken();
+  if (!legacyAccessToken) return null;
+  try {
+    const session = normalizeSession(await client.exchange(legacyAccessToken));
+    localStorage.removeItem(legacySessionStorageKey);
+    return session;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) localStorage.removeItem(legacySessionStorageKey);
     return null;
   }
+}
+
+function loadLegacyAccessToken(): string | undefined {
+  try {
+    const raw = localStorage.getItem(legacySessionStorageKey);
+    if (!raw) return undefined;
+    const session = JSON.parse(raw) as { readonly accessToken?: unknown; readonly expiresAt?: unknown };
+    const expiresAt = typeof session.expiresAt === "string" ? Date.parse(session.expiresAt) : Number.NaN;
+    if (typeof session.accessToken !== "string" || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      localStorage.removeItem(legacySessionStorageKey);
+      return undefined;
+    }
+    return session.accessToken;
+  } catch {
+    localStorage.removeItem(legacySessionStorageKey);
+    return undefined;
+  }
+}
+
+function normalizeSession(session: AuthSession): AuthSession {
+  const profile = session.profile as Partial<Profile>;
+  const language = profileLanguages.includes(profile.language as ProfileLanguage) ? profile.language as ProfileLanguage : "en";
+  return { csrfToken: session.csrfToken, expiresAt: session.expiresAt, profile: { ...profile, language } as Profile };
 }

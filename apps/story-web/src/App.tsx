@@ -15,7 +15,7 @@ import { getEffectiveAccess } from "./api.js";
 import { AccessStatus } from "./components/AccessStatus.js";
 
 export function App() {
-  const { session, updateProfile } = usePersistentSession();
+  const { session, isLoading, updateProfile } = usePersistentSession();
   const location = useLocation();
   const { locale, setLocale } = useLocalization();
   const editingStory = useMatch("/:storyId/*");
@@ -26,11 +26,12 @@ export function App() {
   });
   const access = useQuery({
     queryKey: ["effective-access", session?.profile.id],
-    queryFn: () => getEffectiveAccess(session!.accessToken),
+    queryFn: () => getEffectiveAccess(session!.csrfToken),
     enabled: Boolean(session),
     retry: false,
   });
 
+  if (isLoading) return <AccessStatus state="loading" />;
   if (!session) {
     return <ExternalRedirect to={createSignInPath(`/app/stories${location.pathname}${location.search}`)} />;
   }

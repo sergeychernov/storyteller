@@ -22,12 +22,12 @@ export function useMaterialContentUrl({ storyId, material, session, source = fal
     queryKey: [audio ? "material-audio-content" : source ? "material-source-content" : "material-content", session.profile.id, storyId, material.id, storageKey],
     enabled: Boolean(storageKey),
     queryFn: async () => {
-      const access = audio ? await getMaterialAudioContentAccess(session.accessToken, storyId, material.id) : source
-        ? await getMaterialSourceContentAccess(session.accessToken, storyId, material.id)
-        : await getMaterialContentAccess(session.accessToken, storyId, material.id);
-      return access.url ?? (audio ? getMaterialAudioContent(session.accessToken, storyId, material.id) : source
-        ? getMaterialSourceContent(session.accessToken, storyId, material.id)
-        : getMaterialContent(session.accessToken, storyId, material.id));
+      const access = audio ? await getMaterialAudioContentAccess(session.csrfToken, storyId, material.id) : source
+        ? await getMaterialSourceContentAccess(session.csrfToken, storyId, material.id)
+        : await getMaterialContentAccess(session.csrfToken, storyId, material.id);
+      return access.url ?? (audio ? getMaterialAudioContent(session.csrfToken, storyId, material.id) : source
+        ? getMaterialSourceContent(session.csrfToken, storyId, material.id)
+        : getMaterialContent(session.csrfToken, storyId, material.id));
     },
     staleTime: 45 * 60 * 1_000,
     refetchInterval: 45 * 60 * 1_000,

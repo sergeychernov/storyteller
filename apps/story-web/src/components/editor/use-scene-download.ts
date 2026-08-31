@@ -41,7 +41,7 @@ export function useSceneDownload(scene: Scene, storyId: string, session: AuthSes
       controller.current?.abort();
       clearPreparedDownloads(preparedDownloadsRef.current);
     };
-  }, [sceneSnapshotKey, storyId, session.accessToken]);
+  }, [sceneSnapshotKey, storyId, session.csrfToken]);
 
   async function download(mode: VideoExportMode = "video") {
     if (preparedDownloadsRef.current[mode]) return;
@@ -53,21 +53,21 @@ export function useSceneDownload(scene: Scene, storyId: string, session: AuthSes
     setState("rendering");
     setError(undefined);
     try {
-      const initial = await requestSceneRender(session.accessToken, storyId, scene.id, mode, signal);
+      const initial = await requestSceneRender(session.csrfToken, storyId, scene.id, mode, signal);
       analytics.track("scene render requested", {
         export_mode: mode, renderer_kind: rendererKind, collage_card_orientation: collageCardOrientation, collage_media_mix: collageMediaMix,
       });
       failureStage = "processing";
       const render = await waitForSceneRender(initial, {
         signal,
-        load: (renderId, requestSignal) => getSceneRender(session.accessToken, storyId, scene.id, renderId, requestSignal),
+        load: (renderId, requestSignal) => getSceneRender(session.csrfToken, storyId, scene.id, renderId, requestSignal),
         onUpdate: setProgress,
       });
       analytics.track("scene render succeeded", {
         export_mode: mode, renderer_kind: rendererKind, collage_card_orientation: collageCardOrientation, collage_media_mix: collageMediaMix,
       });
       failureStage = "download";
-      const blob = await downloadSceneRender(session.accessToken, storyId, scene.id, render.id, signal);
+      const blob = await downloadSceneRender(session.csrfToken, storyId, scene.id, render.id, signal);
       signal.throwIfAborted();
       const prepared = {
         url: URL.createObjectURL(blob),

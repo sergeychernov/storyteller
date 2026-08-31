@@ -3,7 +3,7 @@ import { analytics } from "@storyteller/analytics";
 import { configureStoryScene, type Story } from "../../api.js";
 import type { SceneChange } from "./story-editor-view.js";
 
-export function useConfigureStoryScene(accessToken: string, storyId: string) {
+export function useConfigureStoryScene(csrfToken: string, storyId: string) {
   const queryClient = useQueryClient();
   const queryKey = ["story", storyId] as const;
   return useMutation({
@@ -13,7 +13,7 @@ export function useConfigureStoryScene(accessToken: string, storyId: string) {
     scope: { id: `configure-story-scene:${storyId}` },
     mutationFn: ({ sceneId, change }: { readonly sceneId: string; readonly change: SceneChange }) => {
       const { outcome: _outcome, ...configuration } = change;
-      return configureStoryScene(accessToken, storyId, sceneId, configuration);
+      return configureStoryScene(csrfToken, storyId, sceneId, configuration);
     },
     onSuccess: (changed: Story, { change }) => {
       queryClient.setQueryData(queryKey, changed);
