@@ -9,10 +9,9 @@ describe("admin i18n provider", () => {
   it("fully localizes filtered and unfiltered empty states in Russian", async () => {
     await i18nProvider.changeLocale("ru");
 
-    expect(i18nProvider.translate("ra.page.empty.no_filtered_results", { name: "Активность" }))
+    expect(i18nProvider.translate("ra.navigation.no_filtered_results", { name: "Активность" }))
       .toBe("По текущим фильтрам ничего не найдено.");
-    expect(i18nProvider.translate("ra.page.empty.no_results", { name: "Активность" }))
-      .toBe("Данные отсутствуют.");
-    expect(i18nProvider.translate("ra.page.empty.clear_filters")).toBe("Сбросить фильтры");
+    expect(i18nProvider.translate("ra.navigation.no_results", { name: "Активность" })).toBe("Нет данных");
+    expect(i18nProvider.translate("ra.navigation.clear_filters")).toBe("Сбросить фильтры");
   });
 });

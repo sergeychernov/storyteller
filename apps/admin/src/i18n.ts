@@ -19,8 +19,7 @@ const productEnglish = {
 const russianMessages = mergeTranslations(englishMessages, productEnglish, {
   ra: {
     action: { show: "Открыть", list: "Список", search: "Поиск", refresh: "Обновить", sort: "Сортировка", logout: "Выйти", back: "Назад", expand: "Развернуть", close: "Закрыть" },
-    navigation: { page_rows_per_page: "Строк на странице:", page_range_info: "%{offsetBegin}–%{offsetEnd} из %{total}", no_results: "Нет данных", no_more_results: "Больше данных нет", page_out_of_boundaries: "Страница вне диапазона", page_out_from_end: "Нельзя перейти дальше последней страницы" },
-    page: { empty: { no_filtered_results: "По текущим фильтрам ничего не найдено.", no_results: "Данные отсутствуют.", clear_filters: "Сбросить фильтры" } },
+    navigation: { page_rows_per_page: "Строк на странице:", page_range_info: "%{offsetBegin}–%{offsetEnd} из %{total}", no_filtered_results: "По текущим фильтрам ничего не найдено.", clear_filters: "Сбросить фильтры", no_results: "Нет данных", no_more_results: "Больше данных нет", page_out_of_boundaries: "Страница вне диапазона", page_out_from_end: "Нельзя перейти дальше последней страницы" },
     message: { loading: "Загрузка", error: "Произошла ошибка", invalid_form: "Проверьте введённые данные", not_found: "Не найдено" },
   },
   resources: {
