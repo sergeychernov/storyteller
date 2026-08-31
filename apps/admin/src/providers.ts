@@ -1,6 +1,6 @@
 import { ApiError, createBrowserApiClient } from "@storyteller/api-client";
 import { createAuthClient, type AuthSession } from "@storyteller/auth-client";
-import type { DataProvider, GetListParams, GetOneParams, RaRecord } from "react-admin";
+import type { DataProvider, GetListParams, GetManyReferenceParams, GetOneParams, RaRecord } from "react-admin";
 import type { AdminPage } from "@storyteller/schemas";
 import type { AuthProvider } from "react-admin";
 import { i18nProvider } from "./i18n.js";
@@ -62,32 +62,7 @@ export const authProvider: AuthProvider = {
 };
 
 export const dataProvider: DataProvider = {
-  getList: async <RecordType extends RaRecord = RaRecord>(resource: string, params: GetListParams) => {
-    await ensureIdentity();
-    if (resource === "users") {
-      const response = await requestPage<RecordType>("/admin/users/search", params, {
-        method: "POST", body: JSON.stringify({
-          page: params.pagination?.page ?? 1, perPage: params.pagination?.perPage ?? 25,
-          sort: normalizeUserSort(params.sort?.field), order: params.sort?.order ?? "DESC",
-          ...((params.filter as { q?: string }).q ? { query: (params.filter as { q: string }).q } : {}),
-        }),
-      });
-      return { data: [...response.data], total: response.total };
-    }
-    if (resource === "activity") {
-      const profileId = stringFilter(params, "profileId");
-      const query = pageQuery(params, ["code", "from", "to"]);
-      return listResult(await api.json<AdminPage<RecordType>>(
-        profileId ? `/admin/users/${encodeURIComponent(profileId)}/activity?${query}` : `/admin/activity?${query}`,
-      ));
-    }
-    if (resource === "sessions") {
-      const profileId = requiredStringFilter(params, "profileId");
-      return listResult(await api.json<AdminPage<RecordType>>(`/admin/users/${encodeURIComponent(profileId)}/sessions?${pageQuery(params)}`));
-    }
-    if (resource === "audit") return listResult(await api.json<AdminPage<RecordType>>(`/admin/audit?${pageQuery(params, ["action"])}`));
-    throw new Error(`Unsupported read-only resource: ${resource}`);
-  },
+  getList: getAdminList,
   getOne: async <RecordType extends RaRecord = RaRecord>(resource: string, params: GetOneParams<RecordType>) => {
     await ensureIdentity();
     if (resource === "users") return { data: await api.json<RecordType>(`/admin/users/${encodeURIComponent(String(params.id))}`) };
@@ -96,13 +71,50 @@ export const dataProvider: DataProvider = {
     throw new Error(`Unsupported read-only resource: ${resource}`);
   },
   getMany: readOnlyReject,
-  getManyReference: readOnlyReject,
+  getManyReference: async <RecordType extends RaRecord = RaRecord>(resource: string, params: GetManyReferenceParams) => {
+    if ((resource !== "activity" && resource !== "sessions") || params.target !== "profileId") {
+      throw new Error(`Unsupported read-only relation: ${resource}.${params.target}`);
+    }
+    return getAdminList<RecordType>(resource, {
+      pagination: params.pagination,
+      sort: params.sort,
+      filter: { ...(params.filter as Record<string, unknown>), [params.target]: String(params.id) },
+      ...(params.signal ? { signal: params.signal } : {}),
+    });
+  },
   create: readOnlyReject,
   update: readOnlyReject,
   updateMany: readOnlyReject,
   delete: readOnlyReject,
   deleteMany: readOnlyReject,
 };
+
+async function getAdminList<RecordType extends RaRecord = RaRecord>(resource: string, params: GetListParams) {
+  await ensureIdentity();
+  if (resource === "users") {
+    const response = await requestPage<RecordType>("/admin/users/search", params, {
+      method: "POST", body: JSON.stringify({
+        page: params.pagination?.page ?? 1, perPage: params.pagination?.perPage ?? 25,
+        sort: normalizeUserSort(params.sort?.field), order: params.sort?.order ?? "DESC",
+        ...((params.filter as { q?: string }).q ? { query: (params.filter as { q: string }).q } : {}),
+      }),
+    });
+    return { data: [...response.data], total: response.total };
+  }
+  if (resource === "activity") {
+    const profileId = stringFilter(params, "profileId");
+    const query = pageQuery(params, ["code", "from", "to"]);
+    return listResult(await api.json<AdminPage<RecordType>>(
+      profileId ? `/admin/users/${encodeURIComponent(profileId)}/activity?${query}` : `/admin/activity?${query}`,
+    ));
+  }
+  if (resource === "sessions") {
+    const profileId = requiredStringFilter(params, "profileId");
+    return listResult(await api.json<AdminPage<RecordType>>(`/admin/users/${encodeURIComponent(profileId)}/sessions?${pageQuery(params)}`));
+  }
+  if (resource === "audit") return listResult(await api.json<AdminPage<RecordType>>(`/admin/audit?${pageQuery(params, ["action"])}`));
+  throw new Error(`Unsupported read-only resource: ${resource}`);
+}
 
 async function ensureIdentity(): Promise<AdminIdentityResponse> {
   if (currentSession && currentIdentity) return currentIdentity;
