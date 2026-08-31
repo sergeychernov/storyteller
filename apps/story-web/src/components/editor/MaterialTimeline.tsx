@@ -4,24 +4,27 @@ import type { EditorCopy } from "./editor-copy.js";
 import { MaterialActions } from "./MaterialActions.js";
 import { MaterialDragGhost } from "./MaterialDragGhost.js";
 import { MaterialUploader } from "./MaterialUploader.js";
+import { CollageBackgroundMaterial } from "./CollageBackgroundMaterial.js";
 import { MaterialThumbnail } from "./MaterialThumbnail.js";
 import styles from "./MaterialTimeline.module.css";
 import { useMaterialDrag } from "./use-material-drag.js";
 import { preventNativeMediaAction } from "./NativeDragSafeVideo.js";
 
 interface MaterialTimelineProps {
-  readonly scene: Scene; readonly copy: EditorCopy; readonly saving: boolean; readonly uploading: boolean; readonly uploadCount: number;
+  readonly scene: Scene; readonly previousScene?: Scene | undefined; readonly copy: EditorCopy; readonly saving: boolean; readonly uploading: boolean;
+  readonly backgroundUploading: boolean; readonly uploadCount: number;
   readonly storyId: string; readonly session: AuthSession;
   readonly variant: "default" | "mobilePanel" | "desktopPanel";
   readonly onUpload: (files: readonly File[]) => void; readonly onDeleteMaterial: (materialId: string) => void;
+  readonly onUploadBackground: (file: File) => void; readonly onRemoveBackground: () => void;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onMoveToScene: (sourceSceneId: string, materialId: string, targetSceneId: string) => void;
   readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
 }
 
 export function MaterialTimeline({
-  scene, copy, saving, uploading, uploadCount, storyId, session, variant,
-  onUpload, onDeleteMaterial, onReorder, onMoveToScene, onEditMaterial,
+  scene, previousScene, copy, saving, uploading, backgroundUploading, uploadCount, storyId, session, variant,
+  onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onReorder, onMoveToScene, onEditMaterial,
 }: MaterialTimelineProps) {
   const materials = scene.materials;
   const { orderedMaterials, draggingId, dragVisual, stripRef, startDrag, moveWithKeyboard } = useMaterialDrag({
@@ -75,6 +78,17 @@ export function MaterialTimeline({
           </article>
           );
         })}
+        {scene.rendererId === "collage" && <CollageBackgroundMaterial
+          scene={scene}
+          previousScene={previousScene}
+          copy={copy}
+          storyId={storyId}
+          session={session}
+          disabled={saving}
+          uploading={backgroundUploading}
+          onUpload={onUploadBackground}
+          onRemove={onRemoveBackground}
+        />}
         <MaterialUploader copy={copy} disabled={saving} uploading={uploading} uploadCount={uploadCount} onUpload={onUpload} />
       </div>
       {dragVisual && <MaterialDragGhost {...dragVisual} storyId={storyId} session={session} />}

@@ -9,6 +9,7 @@ import type { SceneChange } from "./story-editor-view.js";
 
 interface ScenePreviewProps {
   readonly scene: Scene;
+  readonly previousScene?: Scene | undefined;
   readonly copy: EditorCopy;
   readonly storyId: string;
   readonly session: AuthSession;
@@ -19,7 +20,7 @@ interface ScenePreviewProps {
   readonly onChange: (change: SceneChange) => void;
 }
 
-export function ScenePreview({ scene, copy, storyId, session, compact, saving, deleteDisabled, onDeleteScene, onChange }: ScenePreviewProps) {
+export function ScenePreview({ scene, previousScene, copy, storyId, session, compact, saving, deleteDisabled, onDeleteScene, onChange }: ScenePreviewProps) {
   return (
     <section className={classNames(styles.panel, styles.desktop, compact && styles.compact)}>
       <div className={styles.label}><span>{copy.preview}</span><span className={styles.labelActions}>
@@ -28,6 +29,7 @@ export function ScenePreview({ scene, copy, storyId, session, compact, saving, d
       </span></div>
       <SceneCanvas
         scene={scene}
+        previousScene={previousScene}
         copy={copy}
         storyId={storyId}
         session={session}

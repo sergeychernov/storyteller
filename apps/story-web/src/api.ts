@@ -3,6 +3,8 @@ import type { EffectiveAccess, StorySummary } from "@storyteller/application";
 import type {
   AppliedMaterialEdit,
   AudioTrack,
+  CollageSettings,
+  EditableCollageSettings,
   FocusPoint,
   ImageMaterial,
   MaterialCrop,
@@ -26,6 +28,8 @@ export type { EffectiveAccess, StorySummary } from "@storyteller/application";
 export type {
   AppliedMaterialEdit,
   AudioTrack,
+  CollageSettings,
+  EditableCollageSettings,
   FocusPoint,
   ImageMaterial,
   MaterialCrop,
@@ -51,6 +55,8 @@ export interface SceneRender {
   id: string;
   current: boolean;
   status: "queued" | "running" | "ready" | "failed" | "canceled";
+  progressPercent: number;
+  progressPhase: "queued" | "downloading" | "rendering" | "finalizing" | "uploading" | "ready";
   sizeBytes?: number;
   error?: string;
 }
@@ -59,7 +65,7 @@ export interface SceneFrame extends SceneRender {
   inputHash: string;
   contentHash?: string;
 }
-export interface SceneRenderVersion extends SceneRender {
+export interface SceneRenderResult extends SceneRender {
   inputHash: string;
   contentHash?: string;
   createdAt?: string;
@@ -92,6 +98,14 @@ export function uploadSceneMaterial(token: string, storyId: string, sceneId: str
   const form = new FormData();
   form.append("file", file, file.name);
   return request(`/stories/${storyId}/scenes/${sceneId}/materials`, { method: "POST", body: form }, token);
+}
+export function uploadCollageBackgroundMaterial(token: string, storyId: string, sceneId: string, file: File): Promise<Story> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  return request(`/stories/${storyId}/scenes/${sceneId}/collage-background/material`, { method: "POST", body: form }, token);
+}
+export function removeCollageBackgroundMaterial(token: string, storyId: string, sceneId: string): Promise<Story> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/collage-background`, { method: "DELETE" }, token);
 }
 export function deleteSceneMaterial(token: string, storyId: string, sceneId: string, materialId: string): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}/materials/${materialId}`, { method: "DELETE" }, token);
@@ -142,7 +156,7 @@ export function moveSceneMaterials(token: string, storyId: string, sourceSceneId
   }, token);
 }
 export function configureStoryScene(token: string, storyId: string, sceneId: string, settings: {
-  durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint;
+  durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint; collage?: EditableCollageSettings;
 }): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}`, { method: "PATCH", body: JSON.stringify(settings) }, token);
 }
@@ -152,7 +166,7 @@ export function requestSceneRender(token: string, storyId: string, sceneId: stri
 export function getSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<SceneRender> {
   return request(`/stories/${storyId}/scenes/${sceneId}/renders/${renderId}`, signal ? { signal } : {}, token);
 }
-export function listSceneRenderVersions(token: string, storyId: string, sceneId: string, signal?: AbortSignal): Promise<SceneRenderVersion[]> {
+export function listSceneRenderResults(token: string, storyId: string, sceneId: string, signal?: AbortSignal): Promise<SceneRenderResult[]> {
   return request(`/stories/${storyId}/scenes/${sceneId}/renders`, { cache: "no-store", ...(signal ? { signal } : {}) }, token);
 }
 export async function downloadSceneRender(token: string, storyId: string, sceneId: string, renderId: string, signal?: AbortSignal): Promise<Blob> {

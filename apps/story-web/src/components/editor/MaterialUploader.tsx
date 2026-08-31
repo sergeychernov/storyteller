@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import sharedStyles from "./editor-shared.module.css";
@@ -14,23 +13,26 @@ interface MaterialUploaderProps {
 }
 
 export function MaterialUploader({ copy, disabled, uploading, uploadCount, onUpload }: MaterialUploaderProps) {
-  const input = useRef<HTMLInputElement>(null);
   const canUpload = useCapability("media.upload");
 
   if (!canUpload) return null;
 
+  const label = uploading ? copy.uploadingMaterials.replace("{{count}}", String(uploadCount)) : copy.addMaterial;
   return (
-    <>
-      <button type="button" className={classNames(styles.addCard, uploading && styles.loading, uploading && sharedStyles.loading)} disabled={disabled} onClick={() => input.current?.click()}>
-        <span aria-hidden="true">＋</span>
-        <strong>{uploading ? copy.uploadingMaterials.replace("{{count}}", String(uploadCount)) : copy.addMaterial}</strong>
-      </button>
+    <div
+      className={classNames(
+        styles.addCard,
+        disabled && styles.disabled,
+        uploading && styles.loading,
+        uploading && sharedStyles.loading,
+      )}
+    >
+      <span aria-hidden="true">＋</span>
+      <strong aria-hidden="true">{label}</strong>
       <input
-        ref={input}
-        className={styles.visuallyHidden}
+        className={styles.fileInput}
         type="file"
-        aria-hidden="true"
-        tabIndex={-1}
+        aria-label={label}
         accept="image/*,video/*"
         multiple
         disabled={disabled}
@@ -40,6 +42,6 @@ export function MaterialUploader({ copy, disabled, uploading, uploadCount, onUpl
           event.target.value = "";
         }}
       />
-    </>
+    </div>
   );
 }

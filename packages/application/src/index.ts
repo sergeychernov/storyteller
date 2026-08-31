@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
-  addMaterial, addScene, buildStoryTimeline, configureScene, createStory, DomainError, materialStorageKeys, moveSceneMaterials, removeMaterial, removeScene, reorderMaterials, reorderScenes, replaceMaterial,
-  type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type ProfileLanguage, type ProfileUpdate, type SceneMaterial, type SceneMotion, type Story,
+  addMaterial, addScene, buildStoryTimeline, configureScene, createStory, DomainError, materialStorageKeys, moveSceneMaterials, removeMaterial, removeScene, reorderMaterials, reorderScenes, replaceMaterial, setCollageBackground,
+  type EditableCollageSettings, type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type ProfileLanguage, type ProfileUpdate, type Scene, type SceneMaterial, type SceneMotion, type Story,
 } from "@storyteller/domain";
 import { timelineDurationLimits } from "./timeline-formats.js";
 
@@ -152,8 +152,8 @@ export class StoryApplication {
       throw new ApplicationError(`story cannot be edited while ${story.status}`, 409, "story_not_editable");
     }
     const changed = removeScene(story, sceneId);
-    const retainedKeys = new Set(changed.scenes.flatMap(({ materials }) => materials.flatMap(materialStorageKeys)));
-    const storageKeys = [...new Set(scene.materials.flatMap(materialStorageKeys))].filter((key) => !retainedKeys.has(key));
+    const retainedKeys = new Set(changed.scenes.flatMap(sceneStoredMaterials).flatMap(materialStorageKeys));
+    const storageKeys = [...new Set(sceneStoredMaterials(scene).flatMap(materialStorageKeys))].filter((key) => !retainedKeys.has(key));
     await this.repository.deleteScene(changed, sceneId, storageKeys);
     return changed;
   }
@@ -180,9 +180,34 @@ export class StoryApplication {
     return this.changeStory(profileId, storyId, (story) => reorderMaterials(story, sceneId, materialIds));
   }
   async configureScene(profileId: string, storyId: string, sceneId: string, input: {
-    durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint;
+    durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint; collage?: EditableCollageSettings;
   }): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => configureScene(story, sceneId, input));
+  }
+  async setSceneCollageBackground(
+    profileId: string,
+    storyId: string,
+    sceneId: string,
+    background: { readonly source: "previous-scene" } | { readonly source: "material"; readonly material: NewSceneMaterial },
+  ): Promise<{ readonly story: Story; readonly replacedMaterial?: SceneMaterial }> {
+    const story = await this.getStory(profileId, storyId);
+    const scene = story.scenes.find(({ id }) => id === sceneId);
+    if (!scene) throw new ApplicationError(`scene not found: ${sceneId}`, 404, "scene_not_found");
+    const replacedMaterial = scene.collageBackground?.source === "material"
+      ? scene.collageBackground.material
+      : undefined;
+    const resolved = background.source === "material"
+      ? { source: "material" as const, material: { ...background.material, id: randomUUID() } as SceneMaterial }
+      : background;
+    let changed: Story;
+    try {
+      changed = setCollageBackground(story, sceneId, resolved);
+    } catch (error) {
+      if (error instanceof DomainError) throw new ApplicationError(error.message, 422, "invalid_collage_background");
+      throw error;
+    }
+    await this.repository.updateStory(changed);
+    return { story: changed, ...(replacedMaterial ? { replacedMaterial } : {}) };
   }
   setPlatformCredential(profileId: string, input: { provider: PlatformProvider; secret: string; externalAccountId?: string }): Promise<PlatformCredentialSummary> {
     return this.repository.upsertPlatformCredential({
@@ -229,6 +254,12 @@ export class StoryApplication {
     await this.repository.updateStory(changed);
     return changed;
   }
+}
+
+function sceneStoredMaterials(scene: Scene): readonly SceneMaterial[] {
+  return scene.collageBackground?.source === "material"
+    ? [...scene.materials, scene.collageBackground.material]
+    : scene.materials;
 }
 
 export class ApplicationError extends Error {

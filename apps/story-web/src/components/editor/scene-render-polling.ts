@@ -8,6 +8,7 @@ interface RenderPollingOptions {
   readonly intervalMs?: number;
   readonly queueTimeoutMs?: number;
   readonly renderTimeoutMs?: number;
+  readonly onUpdate?: (render: SceneRender) => void;
 }
 
 export class SceneRenderTimeoutError extends Error {
@@ -17,13 +18,14 @@ export class SceneRenderStaleError extends Error {}
 
 export async function waitForSceneRender(initial: SceneRender, {
   signal, load, now = Date.now, wait = abortableDelay, intervalMs = 800,
-  queueTimeoutMs = 60_000, renderTimeoutMs = 5 * 60_000,
+  queueTimeoutMs = 60_000, renderTimeoutMs = 5 * 60_000, onUpdate,
 }: RenderPollingOptions): Promise<SceneRender> {
   const startedAt = now();
   let render = initial;
   let hasStarted = render.status === "running";
   signal.throwIfAborted();
   if (!render.current) throw new SceneRenderStaleError("scene render is outdated");
+  onUpdate?.(render);
   while (render.status === "queued" || render.status === "running") {
     hasStarted ||= render.status === "running";
     const timeout = hasStarted ? renderTimeoutMs : queueTimeoutMs;
@@ -34,6 +36,7 @@ export async function waitForSceneRender(initial: SceneRender, {
     render = await load(render.id, signal);
     signal.throwIfAborted();
     if (!render.current) throw new SceneRenderStaleError("scene render is outdated");
+    onUpdate?.(render);
   }
   if (render.status !== "ready") throw new Error(render.error || "scene render failed");
   return render;

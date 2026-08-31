@@ -11,6 +11,11 @@ const allowedSurfaces = new Set(["site", "story-web", "clip-web"]);
 const allowedMaterialKinds = new Set(["image", "video"]);
 const allowedLanguages = new Set(["en", "ru", "sr-Latn", "es"]);
 const allowedExportModes = new Set(["video", "audio", "combined"]);
+const allowedRendererKinds = new Set(["still_image", "video", "collage"]);
+const allowedCollageCardOrientations = new Set(["angled", "straight", "not_applicable"]);
+const allowedCollageMediaMixes = new Set(["images_only", "includes_video", "not_applicable"]);
+const allowedCollageBackgroundModes = new Set(["previous_scene_darkened", "custom_material_original"]);
+const allowedCollageRowDirections = new Set(["ascending", "level", "descending", "random"]);
 const allowedFailureStages = new Set(["request", "processing", "download"]);
 const allowedFailureReasons = new Set(["version_changed", "queue_timeout", "render_timeout", "api_error", "unknown"]);
 const safePage = /^[a-z0-9:/_-]+$/;
@@ -162,8 +167,21 @@ function sanitizeEventProperties(eventType: AnalyticsEventName, value: unknown):
   if (eventType === "profile language changed" && !allowedLanguages.has(value.language as string)) {
     return { ok: false, message: "analytics language is invalid" };
   }
+  if (eventType === "collage background configured" && !allowedCollageBackgroundModes.has(value.collage_background_mode as string)) {
+    return { ok: false, message: "analytics collage background mode is invalid" };
+  }
+  if (eventType === "collage row direction configured" && !allowedCollageRowDirections.has(value.collage_row_direction as string)) {
+    return { ok: false, message: "analytics collage row direction is invalid" };
+  }
   if (eventType.includes("render") || eventType.includes("export")) {
     if (!allowedExportModes.has(value.export_mode as string)) return { ok: false, message: "analytics export mode is invalid" };
+    if (!allowedRendererKinds.has(value.renderer_kind as string)) return { ok: false, message: "analytics renderer kind is invalid" };
+    if (!allowedCollageCardOrientations.has(value.collage_card_orientation as string)) {
+      return { ok: false, message: "analytics collage card orientation is invalid" };
+    }
+    if (!allowedCollageMediaMixes.has(value.collage_media_mix as string)) {
+      return { ok: false, message: "analytics collage media mix is invalid" };
+    }
   }
   if (eventType === "scene export failed") {
     if (!allowedFailureStages.has(value.failure_stage as string)) return { ok: false, message: "analytics failure stage is invalid" };

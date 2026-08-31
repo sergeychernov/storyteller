@@ -48,6 +48,8 @@ Then open [http://localhost:3000](http://localhost:3000). The API runs at [http:
 
 Use `yarn dev:services` for API + worker + MCP, `yarn dev:all` for every non-mobile service, or `yarn dev:mobile` to start Expo separately. `yarn dev:web` rebuilds and serves Site, Story Studio, and Clip Studio from one origin. Isolated Vite servers remain available as `yarn dev:site`, `yarn dev:story-web`, and `yarn dev:clip-web`; individual backend commands are `yarn dev:api`, `yarn dev:worker`, and `yarn dev:mcp`.
 
+Run `yarn storybook` to develop Story Studio components locally at `http://localhost:6006`; the stories use generated media fixtures and do not require the API or database. Run `yarn build:storybook` to verify the static Storybook bundle. Storybook is a local development tool and is not part of the Railway deployment.
+
 Scene downloads require the worker and FFmpeg (`ffmpeg` and `ffprobe` on `PATH`). If API and web were started separately, also run `yarn dev:worker`; otherwise render jobs remain queued. When using local storage, API and worker must share the same `MEDIA_ROOT` (the default resolves to the repository's `.storyteller-media` directory).
 
 ### Video tracks and downloads

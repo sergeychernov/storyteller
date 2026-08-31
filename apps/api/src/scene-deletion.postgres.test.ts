@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import test, { type TestContext } from "node:test";
 import { setTimeout } from "node:timers/promises";
 import { StoryApplication } from "@storyteller/application";
-import { addMaterial, addScene, configureScene, createStory, removeScene } from "@storyteller/domain";
-import { PostgresSceneRenderQueue, type SceneRenderInput } from "@storyteller/render-queue";
+import { addMaterial, addScene, configureScene, createStory, removeScene, type VideoExportMode } from "@storyteller/domain";
+import { PostgresSceneRenderQueue, type SceneRenderInput, type StillImageRenderInput } from "@storyteller/render-queue";
 import { Pool } from "pg";
 import { PostgresStoryRepository } from "./database.js";
 import { migrateDatabase } from "./migrations.js";
@@ -14,8 +14,8 @@ test("PostgreSQL: scene deletion commits the story, render removal and cleanup t
   const fixture = await createFixture(context);
   const { application, repository, pool, story, sceneId, otherSceneId } = fixture;
   const ready = await enqueueRender(fixture);
-  const running = await enqueueRender(fixture);
-  const queued = await enqueueRender(fixture);
+  const running = await enqueueRender(fixture, sceneId, "audio");
+  const queued = await enqueueRender(fixture, sceneId, "combined");
   const frame = await enqueueFrame(fixture);
   const retained = await enqueueRender(fixture, otherSceneId);
   await pool.query("UPDATE scene_renders SET status = 'ready', storage_key = 'ready.mp4' WHERE id = $1", [ready.id]);
@@ -156,26 +156,38 @@ test("PostgreSQL: deletion captures an artifact completed by a concurrent worker
   }
 });
 
-test("PostgreSQL: versions persist content hashes and reject stale snapshots and late completions", options, async (context) => {
+test("PostgreSQL: the latest output replaces its predecessor and schedules the old file for deletion", options, async (context) => {
   const { pool, queue, repository, story, sceneId } = await createFixture(context);
   const job = renderJob(story.profileId, story.id, sceneId);
   const queued = await queue.enqueue(job, story.revision);
   assert.ok(queued);
   const running = await queue.claim("worker", 60_000);
   assert.equal(running?.id, queued.id);
+  assert.equal(running?.progressPercent, 1);
+  assert.equal(running?.progressPhase, "downloading");
+  assert.equal(await queue.reportProgress(queued.id, "other-worker", 46, "rendering"), false);
+  assert.equal(await queue.reportProgress(queued.id, "worker", 46, "rendering"), true);
   const contentHash = "a".repeat(64);
   assert.equal(await queue.complete(queued.id, "other-worker", "wrong.mp4", 10, contentHash), false);
   assert.equal(await queue.complete(queued.id, "worker", "result.mp4", 10, contentHash), true);
   assert.equal(await queue.complete(queued.id, "worker", "late.mp4", 20, "b".repeat(64)), false);
   const reopened = new PostgresSceneRenderQueue(pool);
-  const history = await reopened.listAuthorized(story.profileId, story.id, sceneId);
-  assert.equal(history[0]?.contentHash, contentHash);
-  assert.equal(history[0]?.storageKey, "result.mp4");
-  assert.ok(history[0]?.createdAt);
+  const results = await reopened.listAuthorized(story.profileId, story.id, sceneId);
+  assert.equal(results[0]?.contentHash, contentHash);
+  assert.equal(results[0]?.progressPercent, 100);
+  assert.equal(results[0]?.progressPhase, "ready");
+  assert.equal(results[0]?.storageKey, "result.mp4");
+  assert.ok(results[0]?.createdAt);
   assert.deepEqual(await reopened.listAuthorized(randomUUID(), story.id, sceneId), []);
   assert.equal((await reopened.enqueue(job, story.revision))?.id, queued.id);
-  await repository.updateStory(configureScene(story, sceneId, { durationSeconds: 8 }));
+  const changedStory = configureScene(story, sceneId, { durationSeconds: 8 });
+  await repository.updateStory(changedStory);
   assert.equal(await reopened.enqueue(renderJob(story.profileId, story.id, sceneId), story.revision), undefined);
+  const replacement = await reopened.enqueue(renderJob(story.profileId, story.id, sceneId), changedStory.revision);
+  assert.ok(replacement);
+  assert.equal((await reopened.listAuthorized(story.profileId, story.id, sceneId)).length, 1);
+  assert.equal(await reopened.findAuthorized(story.profileId, story.id, sceneId, queued.id), undefined);
+  assert.deepEqual((await pool.query("SELECT storage_key FROM object_deletion_jobs")).rows, [{ storage_key: "result.mp4" }]);
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 1);
 });
 
@@ -187,6 +199,8 @@ test("PostgreSQL: retry refreshes source locations without changing the content 
   const retry = await queue.enqueue({ ...job, id: randomUUID(), input: { ...job.input, material: { ...job.input.material, storageKey: "new-path.png" } } });
   assert.equal(retry?.id, job.id);
   assert.equal(retry?.status, "queued");
+  assert.equal(retry?.input.rendererId, "still-image");
+  if (retry?.input.rendererId !== "still-image") throw new Error("expected still-image render input");
   assert.equal(retry?.input.material.storageKey, "new-path.png");
   assert.equal(retry?.error, undefined);
   assert.equal((await queue.claim("retry-worker", 60_000))?.id, job.id);
@@ -245,19 +259,30 @@ async function createFixture(context: TestContext) {
   return { pool, repository, application, queue: new PostgresSceneRenderQueue(pool), story, sceneId, otherSceneId };
 }
 
-function renderJob(profileId: string, storyId: string, sceneId: string) {
+function renderJob(profileId: string, storyId: string, sceneId: string, mode: VideoExportMode = "video") {
   const id = randomUUID();
-  const input: SceneRenderInput = {
+  const stillInput: StillImageRenderInput = {
     rendererId: "still-image", rendererVersion: 1,
     material: { storageKey: "original.png", name: "original.png", mimeType: "image/png", width: 100, height: 100, orientation: "landscape" },
     durationSeconds: 5, motion: "none", focusPoint: { x: 0.5, y: 0.5 },
     output: { width: 1080, height: 1920, fps: 30, codec: "h264" },
   };
+  const input: SceneRenderInput = mode === "video" ? stillInput : {
+    ...stillInput,
+    rendererId: "video",
+    mode,
+    edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } },
+    hasAudio: true,
+  };
   return { id, profileId, storyId, sceneId, input, inputHash: id.replaceAll("-", "").repeat(2) };
 }
 
-async function enqueueRender(fixture: Awaited<ReturnType<typeof createFixture>>, sceneId = fixture.sceneId) {
-  const job = await fixture.queue.enqueue(renderJob(fixture.story.profileId, fixture.story.id, sceneId));
+async function enqueueRender(
+  fixture: Awaited<ReturnType<typeof createFixture>>,
+  sceneId = fixture.sceneId,
+  mode: VideoExportMode = "video",
+) {
+  const job = await fixture.queue.enqueue(renderJob(fixture.story.profileId, fixture.story.id, sceneId, mode));
   assert.ok(job);
   return job;
 }

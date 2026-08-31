@@ -15,7 +15,7 @@ interface SceneDownloadButtonProps {
 
 export function SceneDownloadButton({ scene, storyId, session, copy }: SceneDownloadButtonProps) {
   const canRender = useCapability("scene.render");
-  const { supported, state, error, download } = useSceneDownload(scene, storyId, session, copy);
+  const { supported, state, error, progress, preparedDownloads, download, markDownloaded } = useSceneDownload(scene, storyId, session, copy);
   const [choosing, setChoosing] = useState(false);
   const video = scene.materials.length === 1 && scene.materials[0]?.kind === "video" ? scene.materials[0] : undefined;
   const errorId = useId();
@@ -38,7 +38,8 @@ export function SceneDownloadButton({ scene, storyId, session, copy }: SceneDown
     </button>
     {error && !choosing && <span className={styles.error} id={errorId} role="alert">{error}</span>}
     {choosing && <SceneDownloadOptions copy={copy} supported={supported} isVideo={Boolean(video)} hasAudio={video?.hasAudio ?? false}
-      scene={scene} storyId={storyId} session={session} rendering={state === "rendering"} error={error}
+      rendering={state === "rendering"} error={error} progress={progress}
+      preparedDownloads={preparedDownloads} onPreparedDownload={markDownloaded}
       onClose={() => setChoosing(false)} onDownload={(mode) => void download(mode)} />}
   </span>;
 }

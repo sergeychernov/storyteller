@@ -11,6 +11,7 @@
   "scripts": {
     "build": "node ./node_modules/typescript/bin/tsc -b",
     "build:backend": "node ./node_modules/typescript/bin/tsc -b apps/api apps/worker",
+    "build:storybook": "yarn workspace @storyteller/story-web build-storybook",
     "build:web": "yarn workspace @storyteller/site build && yarn workspace @storyteller/story-web build && yarn workspace @storyteller/clip-web build",
     "db:migrate": "node apps/api/dist/migrate.js",
     "clean": "node ./node_modules/typescript/bin/tsc -b --clean",
@@ -32,7 +33,8 @@
     "dev:clip-web": "yarn workspace @storyteller/clip-web dev",
     "dev:mobile": "yarn workspace @storyteller/mobile dev",
     "format": "node scripts/format-manifests.mjs",
-    "format:check": "node scripts/format-manifests.mjs --check"
+    "format:check": "node scripts/format-manifests.mjs --check",
+    "storybook": "yarn workspace @storyteller/story-web storybook"
   },
   "engines": {
     "node": ">=22"

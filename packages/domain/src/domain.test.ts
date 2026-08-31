@@ -3,8 +3,17 @@ import test from "node:test";
 import {
   addMaterial, addNarration, addScene, configureScene, createStillImageMotionPlan, createStory, evaluateStillImageMotion,
   focusDwellProgress, getLayoutOptions, mergeMaterialOrder, removeMaterial, removeScene, reorderMaterials, replaceMaterial, selectRenderer, setSceneTitle,
-  buildStoryTimeline, getSceneDurationSeconds, moveSceneMaterials, reorderScenes, transitionStory, verticalStoryFrame,
-  type Story, type VideoMaterial,
+  setCollageBackground,
+  buildStoryTimeline, collageCardMaterials, collageCardShadow, collageLayoutDefinitions, collageLayoutMaterials,
+  collageCardAngleDefaultMaximumDegrees, collageCardAngleMinimumDegrees,
+  createCollageCardAngles, createCollageCardOffsets, createCollageEntranceSchedule, createTornPaperClipPath, createTornPaperInnerFramePath,
+  defaultCollageSettings,
+  getCollageCardShadowMetrics, getCollageLayoutDefinition, getCollageLayoutOptions, getCollagePauseDurationSeconds,
+  getImplementedCollageOrientationSequences, getSceneDurationSeconds,
+  materialOrientationSequence,
+  moveSceneMaterials, reorderScenes, resolveCollageSettings, tornPaperEdgeParameters, tornPaperInnerEdgeParameters,
+  transitionStory, verticalStoryFrame,
+  type CollageSettings, type Story, type VideoMaterial,
 } from "./index.js";
 
 test("a render starts only when every scene has material and a renderer", () => {
@@ -15,17 +24,18 @@ test("a render starts only when every scene has material and a renderer", () => 
   assert.equal(transitionStory(readyToRender, "rendering").status, "rendering");
 });
 
-test("material order determines layout choices and changing order invalidates the selection", () => {
+test("material order and format validators determine layout choices", () => {
   let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
   story = addMaterial(story, "scene-1", imageMaterial("p1", "portrait"));
   story = addMaterial(story, "scene-1", imageMaterial("p2", "portrait"));
   story = addMaterial(story, "scene-1", {
     ...fileMetadata("l1", "landscape"), kind: "video", hasAudio: true, audioTags: ["voice", "ambient"],
   });
-  assert.deepEqual(getLayoutOptions(story.scenes[0]!.materials).map(({ id }) => id), ["2+1", "overlap-stack"]);
-  story = configureScene(story, "scene-1", { layoutId: "2+1" });
-  story = reorderMaterials(story, "scene-1", ["l1", "p1", "p2"]);
-  assert.equal(story.scenes[0]!.layoutId, undefined);
+  assert.deepEqual(getCollageLayoutOptions(story.scenes[0]!.materials).map(({ id }) => id), ["2+1"]);
+  assert.deepEqual(getLayoutOptions(story.scenes[0]!.materials).map(({ id }) => id), ["2+1"]);
+  const configured = configureScene(story, "scene-1", { layoutId: "2+1" });
+  assert.equal(configured.scenes[0]?.rendererId, "collage");
+  assert.equal(configured.scenes[0]?.layoutId, "2+1");
 });
 
 test("one image gets orientation-aware motion, centered focus and the still-image renderer", () => {
@@ -69,7 +79,7 @@ test("focus belongs only to the single-image renderer", () => {
   assert.throws(() => configureScene(empty, "scene-1", { focusPoint: { x: 0.2, y: 0.7 } }), /single-image renderer/);
   const oneImage = addMaterial(empty, "scene-1", imageMaterial("first", "portrait"));
   const layout = addMaterial(oneImage, "scene-1", imageMaterial("second", "portrait"));
-  assert.equal(layout.scenes[0]?.rendererId, undefined);
+  assert.equal(layout.scenes[0]?.rendererId, "collage");
   assert.equal(layout.scenes[0]?.focusPoint, undefined);
   assert.throws(() => configureScene(layout, "scene-1", { focusPoint: { x: 0.2, y: 0.7 } }), /single-image renderer/);
 });
@@ -118,7 +128,7 @@ test("removing a material invalidates the layout and rejects an unknown material
   let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
   story = addMaterial(story, "scene-1", imageMaterial("p1", "portrait"));
   story = addMaterial(story, "scene-1", imageMaterial("p2", "portrait"));
-  story = configureScene(story, "scene-1", { layoutId: "overlap-stack" });
+  assert.throws(() => configureScene(story, "scene-1", { layoutId: "overlap-stack" }), /not available/);
   const changed = removeMaterial(story, "scene-1", "p1");
   assert.deepEqual(changed.scenes[0]!.materials.map(({ id }) => id), ["p2"]);
   assert.equal(changed.scenes[0]!.layoutId, "full-frame");
@@ -142,7 +152,472 @@ test("new materials merge into an in-progress local order", () => {
 
 test("six portrait materials expose four explicit cascade choices", () => {
   const materials = Array.from({ length: 6 }, (_, index) => imageMaterial(`p${index}`, "portrait"));
+  assert.equal(getCollageLayoutOptions(materials).length, 4);
   assert.equal(getLayoutOptions(materials).length, 4);
+});
+
+test("each six-portrait layout owns its final grouping and stop order", () => {
+  const materials = Array.from({ length: 6 }, (_, index) => imageMaterial(`p${index}`, "portrait"));
+  const sources = collageLayoutMaterials(materials);
+  const settings = defaultCollageSettings(materials);
+  const pairAscendingSettings = {
+    ...settings,
+    cardOffsets: createCollageCardOffsets({
+      layoutId: "portrait-pairs-descending", materials, direction: "ascending", seedKey: "row-geometry",
+    }),
+  };
+  const descending = createCollageEntranceSchedule({
+    layoutId: "portrait-pairs-descending", layoutRendererId: "animated-collage.portrait-pairs-descending.v1",
+    layoutOverlapRatio: getCollageLayoutDefinition("portrait-pairs-descending")!.overlapRatio,
+    materials: sources, width: 1080, height: 1920, settings: pairAscendingSettings,
+  });
+  const ascending = createCollageEntranceSchedule({
+    layoutId: "portrait-pairs-ascending", layoutRendererId: "animated-collage.portrait-pairs-ascending.v1",
+    layoutOverlapRatio: getCollageLayoutDefinition("portrait-pairs-ascending")!.overlapRatio,
+    materials: sources, width: 1080, height: 1920, settings: {
+      ...settings,
+      cardOffsets: createCollageCardOffsets({
+        layoutId: "portrait-pairs-ascending", materials, direction: "ascending", seedKey: "row-geometry",
+      }),
+    },
+  });
+  const triples = createCollageEntranceSchedule({
+    layoutId: "portrait-triples-descending", layoutRendererId: "animated-collage.portrait-triples-descending.v1",
+    layoutOverlapRatio: getCollageLayoutDefinition("portrait-triples-descending")!.overlapRatio,
+    materials: sources, width: 1080, height: 1920, settings: {
+      ...settings,
+      cardOffsets: createCollageCardOffsets({
+        layoutId: "portrait-triples-descending", materials, direction: "ascending", seedKey: "row-geometry",
+      }),
+    },
+  });
+  const rowDescending = createCollageEntranceSchedule({
+    layoutId: "portrait-pairs-descending", layoutRendererId: "animated-collage.portrait-pairs-descending.v1",
+    layoutOverlapRatio: getCollageLayoutDefinition("portrait-pairs-descending")!.overlapRatio,
+    materials: sources, width: 1080, height: 1920, settings: {
+      ...settings,
+      rowDirection: "descending",
+      cardOffsets: createCollageCardOffsets({
+        layoutId: "portrait-pairs-descending", materials, direction: "descending", seedKey: "row-geometry-descending",
+      }),
+    },
+  });
+  assert.ok(descending[0]!.endSeconds < descending.at(-1)!.endSeconds);
+  assert.ok(ascending[0]!.endSeconds > ascending.at(-1)!.endSeconds);
+  assert.deepEqual(descending.map(({ stackOrder }) => stackOrder), [0, 1, 2, 3, 4, 5]);
+  assert.deepEqual(ascending.map(({ stackOrder }) => stackOrder), [4, 5, 2, 3, 0, 1]);
+  assertEntrancesStartOutsideScene(descending, 1080, 1920);
+  assertEntrancesStartOutsideScene(ascending, 1080, 1920);
+  assert.notEqual(descending[0]!.width, triples[0]!.width);
+  assert.ok(descending[1]!.x < descending[0]!.x + descending[0]!.width);
+  for (let row = 0; row < 3; row += 1) {
+    const pair = descending.slice(row * 2, row * 2 + 2);
+    const occupiedWidth = Math.max(...pair.map(({ x, width }) => x + width)) - Math.min(...pair.map(({ x }) => x));
+    assert.ok(occupiedWidth >= 1080 * 0.8, "portrait pairs must use the available scene width");
+    const ascendingDifference = cardCenterY(pair[0]!) - cardCenterY(pair[1]!);
+    const descendingDifference = cardCenterY(rowDescending[row * 2]!) - cardCenterY(rowDescending[row * 2 + 1]!);
+    assert.ok(ascendingDifference >= 20 && ascendingDifference <= 40,
+      "the default row must rise left-to-right by 20–40 output pixels");
+    assert.ok(descendingDifference <= -20 && descendingDifference >= -40,
+      "the descending setting must calculate its own saved 20–40 px fall");
+  }
+  for (const rowStart of [0, 3]) {
+    for (let column = 0; column < 2; column += 1) {
+      const difference = cardCenterY(triples[rowStart + column]!) - cardCenterY(triples[rowStart + column + 1]!);
+      assert.ok(difference >= 20 && difference <= 40, "every adjacent card in a triple must use the calibrated rise");
+    }
+  }
+  assert.deepEqual(
+    createCollageEntranceSchedule({
+      layoutId: "portrait-pairs-descending", layoutRendererId: "animated-collage.portrait-pairs-descending.v1",
+      layoutOverlapRatio: getCollageLayoutDefinition("portrait-pairs-descending")!.overlapRatio,
+      materials: sources, width: 1080, height: 1920, settings: pairAscendingSettings,
+    }).map(cardCenterY),
+    descending.map(cardCenterY),
+    "the persisted vertical offsets must stay stable between render schedule calls",
+  );
+});
+
+function cardCenterY(card: { readonly y: number; readonly height: number }): number {
+  return card.y + card.height / 2;
+}
+
+test("each collage layout owns a format/sequence validator, renderer and editor association", () => {
+  assert.equal(new Set(collageLayoutDefinitions.map(({ renderer }) => renderer.id)).size, collageLayoutDefinitions.length);
+  assert.equal(new Set(collageLayoutDefinitions.map(({ renderer }) => renderer.createSchedule)).size, collageLayoutDefinitions.length);
+  assert.ok(collageLayoutDefinitions.every((layout) => layout.rowSizes.reduce((sum, size) => sum + size, 0)
+    === layout.requirements.orientationSequence.length));
+  assert.ok(collageLayoutDefinitions.every(({ overlapRatio }) => overlapRatio >= 0.3 && overlapRatio <= 0.5));
+  assert.deepEqual(new Set(collageLayoutDefinitions.map(({ editorId }) => editorId)), new Set([
+    "paper-stack", "paper-rows", "paper-cascade",
+  ]));
+  assert.deepEqual(getImplementedCollageOrientationSequences(), [
+    "ll", "ppl", "pppp", "ppll", "pplpp", "ppppl", "ppppll", "pppppp",
+  ]);
+  const stack = getCollageLayoutDefinition("stack")!;
+  const images = collageLayoutMaterials([imageMaterial("l1", "landscape"), imageMaterial("l2", "landscape")]);
+  assert.deepEqual(stack.validate(images), { valid: true });
+  assert.deepEqual(stack.validate([{ ...images[0]!, kind: "video" }, images[1]!]), { valid: true });
+  const stackSettings = defaultCollageSettings([imageMaterial("l1", "landscape"), imageMaterial("l2", "landscape")]);
+  const stackInput = { materials: images, width: 1080, height: 1920, settings: stackSettings };
+  assert.deepEqual(
+    stack.renderer.createSchedule(stackInput),
+    stack.renderer.createSchedule({
+      ...stackInput,
+      settings: { ...stackSettings, overlapRatio: 0.3 } as CollageSettings & { overlapRatio: number },
+    }),
+    "even a stale settings object cannot override layout-owned overlap",
+  );
+  for (const layout of collageLayoutDefinitions) {
+    assert.deepEqual(layout.requirements.materialKinds, ["image", "video"]);
+    const mixedMaterials = [...layout.requirements.orientationSequence].map((orientation, index) => ({
+      id: `${layout.id}-${index}`,
+      kind: index % 2 === 0 ? "video" as const : "image" as const,
+      width: orientation === "p" ? 900 : 1600,
+      height: orientation === "p" ? 1600 : 900,
+    }));
+    assert.deepEqual(layout.validate(mixedMaterials), { valid: true }, `${layout.id} must accept mixed media`);
+  }
+  assert.deepEqual(stack.validate(collageLayoutMaterials([
+    imageMaterial("p1", "portrait"), imageMaterial("l2", "landscape"),
+  ])), { valid: false, code: "orientation-sequence", expected: "ll", actual: "pl" });
+  assert.throws(() => createCollageEntranceSchedule({
+    layoutId: stack.id,
+    layoutRendererId: "animated-collage.wrong.v1",
+    layoutOverlapRatio: stack.overlapRatio,
+    materials: images,
+    width: 1080,
+    height: 1920,
+    settings: stackSettings,
+  }), /renderer does not match/);
+});
+
+test("animated collage catalog does not add a generic layout to exact or unsupported sequences", () => {
+  assert.deepEqual(getCollageLayoutOptions([
+    imageMaterial("p1", "portrait"), imageMaterial("p2", "portrait"), imageMaterial("l1", "landscape"),
+  ]).map(({ id }) => id), ["2+1"]);
+  assert.deepEqual(getCollageLayoutOptions([
+    imageMaterial("p1", "portrait"), imageMaterial("l1", "landscape"),
+  ]).map(({ id }) => id), []);
+});
+
+test("collage orientation follows the displayed crop rather than original metadata", () => {
+  const cropped = {
+    ...imageMaterial("wide-cropped", "landscape"),
+    width: 400,
+    height: 200,
+    edit: { rotation: 0 as const, crop: { x: 0.4, y: 0, width: 0.2, height: 1 } },
+  };
+  assert.equal(cropped.orientation, "landscape");
+  assert.equal(materialOrientationSequence([cropped, imageMaterial("wide", "landscape")]), "pl");
+  const withDerivative = {
+    ...cropped,
+    edit: { ...cropped.edit, result: {
+      storageKey: "wide-cropped-edited.jpg", mimeType: "image/jpeg", sizeBytes: 80,
+      width: 80, height: 200, orientation: "portrait" as const,
+    } },
+  };
+  assert.equal(materialOrientationSequence([withDerivative, imageMaterial("wide", "landscape")]), "pl");
+  const rotatedAndCropped = {
+    ...imageMaterial("rotated", "landscape"), width: 400, height: 200,
+    edit: { rotation: 90 as const, crop: { x: 0, y: 0.4, width: 1, height: 0.2 } },
+  };
+  assert.equal(materialOrientationSequence([rotatedAndCropped]), "l");
+});
+
+test("animated collage preserves each cropped photo aspect and shares layout timing", () => {
+  let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  story = addMaterial(story, "scene-1", imageMaterial("wide-1", "landscape"));
+  story = addMaterial(story, "scene-1", imageMaterial("wide-2", "landscape"));
+  const scene = story.scenes[0]!;
+  assert.equal(scene.rendererId, "collage");
+  assert.deepEqual(scene.collageBackground, { source: "previous-scene" });
+  assert.deepEqual(scene.collage, {
+    frame: { width: 12, color: "#FFFFFF", shape: "straight" },
+    entryDurationSeconds: 4,
+    rowDirection: "ascending",
+    straightCards: false,
+    cardAngles: scene.collage?.cardAngles,
+    cardOffsets: scene.collage?.cardOffsets,
+  });
+  assert.deepEqual(scene.collage?.cardAngles.map(({ materialId }) => materialId), ["wide-1", "wide-2"]);
+  assert.ok(scene.collage!.cardAngles.every(({ angleDegrees }) => Math.abs(angleDegrees) >= collageCardAngleMinimumDegrees
+    && Math.abs(angleDegrees) <= collageCardAngleDefaultMaximumDegrees));
+  const legacySettings = { ...scene.collage!, pauseDurationSeconds: 1, overlapRatio: 0.49 } as CollageSettings & {
+    pauseDurationSeconds: number; overlapRatio: number;
+  };
+  const normalizedLegacy = resolveCollageSettings(scene.materials, legacySettings, 5);
+  assert.equal("pauseDurationSeconds" in normalizedLegacy, false);
+  assert.equal("overlapRatio" in normalizedLegacy, false);
+  const { rowDirection: _legacyDirection, ...legacyWithoutDirection } = scene.collage!;
+  assert.equal(resolveCollageSettings(scene.materials, legacyWithoutDirection, 5).rowDirection, "ascending");
+  const legacyZeroWidth = resolveCollageSettings(scene.materials, {
+    ...scene.collage!, frame: { ...scene.collage!.frame, width: 0 },
+  }, 5);
+  assert.deepEqual(legacyZeroWidth.frame, { width: 12, color: "#FFFFFF", shape: "none" });
+  const legacyIntermediateWidth = resolveCollageSettings(scene.materials, {
+    ...scene.collage!, frame: { ...scene.collage!.frame, width: 18 },
+  }, 5);
+  assert.equal(legacyIntermediateWidth.frame.width, 16);
+  assert.deepEqual(getCollageCardShadowMetrics(1080), {
+    offsetX: 0, offsetY: 15, blurSigma: 20.52, padding: 77,
+  });
+  assert.equal(collageCardShadow.opacity, 0.4);
+  const configured = configureScene(story, "scene-1", { layoutId: "stack", collage: {
+    ...scene.collage!, frame: { width: 16, color: "#aabbcc", shape: "torn" },
+  } });
+  assert.deepEqual(configured.scenes[0]?.collage?.frame, { width: 16, color: "#AABBCC", shape: "torn" });
+  const schedule = createCollageEntranceSchedule({
+    layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    layoutOverlapRatio: getCollageLayoutDefinition("stack")!.overlapRatio,
+    width: 1080, height: 1920, settings: configured.scenes[0]!.collage!,
+    materials: [
+      { id: "wide-1", kind: "image", width: 200, height: 100 },
+      { id: "wide-2", kind: "image", width: 200, height: 100 },
+    ],
+  });
+  assert.equal(schedule[0]?.direction, "bottom");
+  assert.equal(schedule[1]?.direction, "bottom");
+  assert.equal(schedule[1]?.endSeconds, 4);
+  assert.ok(schedule.every(({ startAngleDegrees }) => Math.abs(startAngleDegrees) >= 25 && Math.abs(startAngleDegrees) <= 45));
+  assert.deepEqual(schedule.map(({ finalAngleDegrees }) => finalAngleDegrees),
+    configured.scenes[0]!.collage!.cardAngles.map(({ angleDegrees }) => angleDegrees));
+  assert.ok(schedule[1]!.y < schedule[0]!.y + schedule[0]!.height, "the final cards must overlap");
+  assertEntrancesStartOutsideScene(schedule, 1080, 1920);
+  assert.ok(Math.abs((schedule[0]!.width - 32) / (schedule[0]!.height - 32) - 2) < 0.01,
+    "the full cropped photo aspect must remain intact inside its frame");
+  const longer = configureScene(configured, "scene-1", { durationSeconds: 7 });
+  assert.equal(longer.scenes[0]?.collage?.entryDurationSeconds, 4);
+  assert.equal(getCollagePauseDurationSeconds(longer.scenes[0]!.collage!, longer.scenes[0]!.durationSeconds), 3);
+  assert.throws(() => configureScene(configured, "scene-1", { collage: {
+    ...configured.scenes[0]!.collage!, entryDurationSeconds: 4.5,
+  } }), /leave at least 1 second/);
+  assert.equal("overlapRatio" in configured.scenes[0]!.collage!, false,
+    "card overlap belongs to the selected layout rather than editable scene settings");
+});
+
+function assertEntrancesStartOutsideScene(
+  entrances: ReturnType<typeof createCollageEntranceSchedule>,
+  width: number,
+  height: number,
+): void {
+  const shadowPadding = getCollageCardShadowMetrics(width).padding;
+  entrances.forEach((entrance) => {
+    const radians = entrance.startAngleDegrees * Math.PI / 180;
+    const rotatedWidth = entrance.width * Math.abs(Math.cos(radians)) + entrance.height * Math.abs(Math.sin(radians));
+    const rotatedHeight = entrance.width * Math.abs(Math.sin(radians)) + entrance.height * Math.abs(Math.cos(radians));
+    const centerX = entrance.x + entrance.startOffsetX + entrance.width / 2;
+    const centerY = entrance.y + entrance.startOffsetY + entrance.height / 2;
+    if (entrance.direction === "left") {
+      assert.ok(centerX + rotatedWidth / 2 + shadowPadding <= 0, "left entrance must start fully outside the scene");
+    } else if (entrance.direction === "right") {
+      assert.ok(centerX - rotatedWidth / 2 - shadowPadding >= width, "right entrance must start fully outside the scene");
+    } else {
+      assert.ok(centerY - rotatedHeight / 2 - shadowPadding >= height, "bottom entrance must start fully outside the scene");
+    }
+  });
+}
+
+test("collage resting angles and offsets follow row geometry, persist in JSON and remain hidden implementation data", () => {
+  let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  story = addMaterial(story, "scene-1", imageMaterial("left", "portrait"));
+  story = addMaterial(story, "scene-1", imageMaterial("right", "portrait"));
+  story = addMaterial(story, "scene-1", imageMaterial("single", "landscape"));
+  const automatic = story.scenes[0]!;
+  assert.equal(automatic.layoutId, undefined);
+  assert.equal(automatic.collage?.cardAngles[0]?.materialId, "left");
+  assert.ok(automatic.collage!.cardAngles[0]!.angleDegrees < 0, "the left card in a pair must lean left");
+  assert.ok(automatic.collage!.cardAngles[1]!.angleDegrees > 0, "the right card in a pair must lean right");
+  assert.ok(Math.abs(automatic.collage!.cardAngles[2]!.angleDegrees) >= collageCardAngleMinimumDegrees);
+  const persistedAngles = automatic.collage!.cardAngles;
+  const persistedOffsets = automatic.collage!.cardOffsets;
+  assert.deepEqual(persistedOffsets.map(({ materialId }) => materialId), ["left", "right", "single"]);
+  assertAdjacentOffset(automatic.collage!, "left", "right", -1);
+  assert.equal(persistedOffsets.find(({ materialId }) => materialId === "single")?.offsetY, 0);
+
+  const reframed = configureScene(story, "scene-1", { collage: {
+    frame: { ...automatic.collage!.frame, color: "#EEEEDD" },
+    entryDurationSeconds: automatic.collage!.entryDurationSeconds,
+    straightCards: automatic.collage!.straightCards,
+  } });
+  assert.deepEqual(reframed.scenes[0]!.collage!.cardAngles, persistedAngles,
+    "frame edits must not silently randomize the final composition");
+  assert.deepEqual(reframed.scenes[0]!.collage!.cardOffsets, persistedOffsets,
+    "frame edits must preserve the persisted per-card vertical offsets");
+
+  const reseeded = configureScene(reframed, "scene-1", { collage: {
+    frame: reframed.scenes[0]!.collage!.frame,
+    entryDurationSeconds: reframed.scenes[0]!.collage!.entryDurationSeconds,
+    straightCards: reframed.scenes[0]!.collage!.straightCards,
+    rowDirection: "ascending",
+  } });
+  assert.notDeepEqual(reseeded.scenes[0]!.collage!.cardOffsets, persistedOffsets,
+    "choosing a row mode explicitly must calculate and persist a fresh random distance");
+  assertAdjacentOffset(reseeded.scenes[0]!.collage!, "left", "right", -1);
+
+  const level = configureScene(reseeded, "scene-1", { collage: {
+    frame: reseeded.scenes[0]!.collage!.frame,
+    entryDurationSeconds: reseeded.scenes[0]!.collage!.entryDurationSeconds,
+    straightCards: reseeded.scenes[0]!.collage!.straightCards,
+    rowDirection: "level",
+  } });
+  assert.deepEqual(level.scenes[0]!.collage!.cardOffsets.map(({ offsetY }) => offsetY), [0, 0, 0]);
+
+  const descending = configureScene(level, "scene-1", { collage: {
+    frame: level.scenes[0]!.collage!.frame,
+    entryDurationSeconds: level.scenes[0]!.collage!.entryDurationSeconds,
+    straightCards: level.scenes[0]!.collage!.straightCards,
+    rowDirection: "descending",
+  } });
+  assertAdjacentOffset(descending.scenes[0]!.collage!, "left", "right", 1);
+
+  const straight = configureScene(reframed, "scene-1", { collage: {
+    frame: reframed.scenes[0]!.collage!.frame,
+    entryDurationSeconds: reframed.scenes[0]!.collage!.entryDurationSeconds,
+    straightCards: true,
+  } });
+  assert.equal(straight.scenes[0]!.collage!.straightCards, true);
+  assert.deepEqual(straight.scenes[0]!.collage!.cardAngles.map(({ angleDegrees }) => angleDegrees), [0, 0, 0]);
+
+  const angled = configureScene(straight, "scene-1", { collage: {
+    frame: straight.scenes[0]!.collage!.frame,
+    entryDurationSeconds: straight.scenes[0]!.collage!.entryDurationSeconds,
+    straightCards: false,
+  } });
+  assert.ok(angled.scenes[0]!.collage!.cardAngles.every(({ angleDegrees }) => angleDegrees !== 0));
+
+  const removed = removeMaterial(angled, "scene-1", "single");
+  assert.deepEqual(removed.scenes[0]!.collage?.cardAngles, [], "an unsupported sequence must not keep stale angles");
+  assert.deepEqual(removed.scenes[0]!.collage?.cardOffsets, [], "an unsupported sequence must not keep stale offsets");
+  const restored = addMaterial(removed, "scene-1", imageMaterial("single", "landscape"));
+  assert.deepEqual(restored.scenes[0]!.collage!.cardAngles.map(({ materialId }) => materialId), ["left", "right", "single"]);
+  assert.notDeepEqual(restored.scenes[0]!.collage!.cardAngles, angled.scenes[0]!.collage!.cardAngles,
+    "adding material must calculate a new persisted composition");
+  assert.deepEqual(restored.scenes[0]!.collage!.cardOffsets.map(({ materialId }) => materialId), ["left", "right", "single"]);
+});
+
+function assertAdjacentOffset(settings: CollageSettings, leftId: string, rightId: string, expectedSign: -1 | 1): void {
+  const byMaterial = new Map(settings.cardOffsets.map(({ materialId, offsetY }) => [materialId, offsetY]));
+  const difference = byMaterial.get(rightId)! - byMaterial.get(leftId)!;
+  assert.equal(Math.sign(difference), expectedSign);
+  assert.ok(Math.abs(difference) >= 20 && Math.abs(difference) <= 40);
+}
+
+test("a custom background is separate from collage cards and survives composition edits", () => {
+  let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  story = addMaterial(story, "scene-1", imageMaterial("left", "landscape"));
+  story = addMaterial(story, "scene-1", imageMaterial("right", "landscape"));
+  story = configureScene(story, "scene-1", { layoutId: "stack" });
+  const background = {
+    ...fileMetadata("background-video", "portrait"), kind: "video", hasAudio: true, audioTags: ["ambient"],
+    sourceDurationSeconds: 8,
+  } satisfies VideoMaterial;
+  const withBackground = setCollageBackground(story, "scene-1", { source: "material", material: background });
+  const scene = withBackground.scenes[0]!;
+  assert.equal(scene.layoutId, "stack");
+  assert.deepEqual(collageCardMaterials(scene.materials, scene.collage!).map(({ id }) => id), ["left", "right"]);
+  assert.deepEqual(scene.collage!.cardAngles.map(({ materialId }) => materialId), ["left", "right"]);
+  assert.ok(scene.collage!.cardAngles.every(({ materialId }) => materialId !== "background-video"));
+  assert.deepEqual(scene.collageBackground, { source: "material", material: background });
+
+  const reframed = configureScene(withBackground, "scene-1", { collage: {
+    frame: { ...scene.collage!.frame, width: 24 },
+    entryDurationSeconds: scene.collage!.entryDurationSeconds,
+  } });
+  assert.deepEqual(reframed.scenes[0]!.collageBackground, { source: "material", material: background });
+  assert.equal(reframed.scenes[0]!.collage!.frame.width, 24);
+  const previous = setCollageBackground(reframed, "scene-1", { source: "previous-scene" });
+  assert.deepEqual(previous.scenes[0]!.collageBackground, { source: "previous-scene" });
+  assert.deepEqual(previous.scenes[0]!.collage!.cardAngles, reframed.scenes[0]!.collage!.cardAngles);
+});
+
+test("manual six-card layouts calculate pair or triple resting angles when selected", () => {
+  let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  for (let index = 0; index < 6; index += 1) {
+    story = addMaterial(story, "scene-1", imageMaterial(`p${index}`, "portrait"));
+  }
+  assert.equal(story.scenes[0]!.layoutId, undefined);
+  assert.deepEqual(story.scenes[0]!.collage!.cardAngles, []);
+
+  const pairs = configureScene(story, "scene-1", { layoutId: "portrait-pairs-descending" });
+  const pairAngles = pairs.scenes[0]!.collage!.cardAngles.map(({ angleDegrees }) => angleDegrees);
+  for (let index = 0; index < pairAngles.length; index += 2) {
+    assert.ok(pairAngles[index]! < 0);
+    assert.ok(pairAngles[index + 1]! > 0);
+  }
+
+  const triples = configureScene(pairs, "scene-1", { layoutId: "portrait-triples-descending" });
+  assert.deepEqual(triples.scenes[0]!.collage!.cardAngles.map(({ materialId }) => materialId),
+    triples.scenes[0]!.materials.map(({ id }) => id));
+  assert.ok(triples.scenes[0]!.collage!.cardAngles.every(({ angleDegrees }) =>
+    Math.abs(angleDegrees) >= collageCardAngleMinimumDegrees
+    && Math.abs(angleDegrees) <= collageCardAngleDefaultMaximumDegrees));
+
+  const materials = triples.scenes[0]!.materials;
+  const observedSigns = new Set(Array.from({ length: 32 }, (_, index) => createCollageCardAngles({
+    layoutId: "portrait-triples-descending", materials, straightCards: false, seedKey: `sign-seed-${index}`,
+  })).flat().map(({ angleDegrees }) => Math.sign(angleDegrees)));
+  assert.deepEqual(observedSigns, new Set([-1, 1]), "single and triple rows must choose either sign from their seed");
+
+  const randomSigns = new Set(Array.from({ length: 32 }, (_, index) => createCollageCardOffsets({
+    layoutId: "portrait-pairs-descending", materials, direction: "random", seedKey: `offset-seed-${index}`,
+  })).flatMap((offsets) => [0, 2, 4].map((leftIndex) => Math.sign(offsets[leftIndex + 1]!.offsetY - offsets[leftIndex]!.offsetY))));
+  assert.deepEqual(randomSigns, new Set([-1, 1]), "irregular multi-row compositions must seed both vertical directions");
+});
+
+test("every persisted angled layout still fits its final rotated cards inside the story frame", () => {
+  for (const layout of collageLayoutDefinitions) {
+    const materials = [...layout.requirements.orientationSequence].map((orientation, index) =>
+      imageMaterial(`${layout.id}-${index}`, orientation === "p" ? "portrait" : "landscape"));
+    const settings = {
+      ...defaultCollageSettings(materials),
+      cardAngles: createCollageCardAngles({
+        layoutId: layout.id, materials, straightCards: false, seedKey: "layout-fit",
+      }),
+      cardOffsets: createCollageCardOffsets({
+        layoutId: layout.id, materials, direction: "ascending", seedKey: "layout-fit",
+      }),
+    };
+    const schedule = createCollageEntranceSchedule({
+      layoutId: layout.id,
+      layoutRendererId: layout.renderer.id,
+      layoutOverlapRatio: layout.overlapRatio,
+      materials: collageLayoutMaterials(materials),
+      width: 1080,
+      height: 1920,
+      settings,
+    });
+    assert.equal(schedule.length, materials.length);
+    assert.deepEqual([...schedule.map(({ stackOrder }) => stackOrder)].sort((left, right) => left - right),
+      Array.from({ length: materials.length }, (_, index) => index));
+    assert.ok(schedule.every(({ x, y, width, height }) => x >= 0 && y >= 0 && x + width <= 1080 && y + height <= 1920));
+  }
+});
+
+test("torn paper uses a deterministic fine-grained contour instead of a repeating wave", () => {
+  const input = { width: 900, height: 600, frameWidth: 6, seed: 17_041 };
+  const first = createTornPaperClipPath(input);
+  assert.equal(first, createTornPaperClipPath(input));
+  assert.notEqual(first, createTornPaperClipPath({ ...input, seed: input.seed + 1 }));
+  assert.match(first, /^polygon\(/);
+  assert.ok(first.split(",").length > 300, "the contour must retain the skill's sparse 9 px edge samples");
+  assert.doesNotMatch(first, /NaN|Infinity/);
+  assert.ok(tornPaperInnerEdgeParameters(input.frameWidth).variation < tornPaperEdgeParameters(input.frameWidth).variation);
+  assert.ok(tornPaperInnerEdgeParameters(input.frameWidth).step > tornPaperEdgeParameters(input.frameWidth).step);
+  const innerFrame = createTornPaperInnerFramePath(input);
+  assert.match(innerFrame, /^M0 0H900V600H0ZM/u);
+  assert.equal(innerFrame, createTornPaperInnerFramePath(input));
+  assert.notEqual(innerFrame, createTornPaperInnerFramePath({ ...input, seed: input.seed + 1 }));
+  assert.doesNotMatch(innerFrame, /NaN|Infinity/);
+});
+
+test("a collage derives its final hold from the scene duration", () => {
+  let story = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  story = addMaterial(story, "scene-1", imageMaterial("wide-1", "landscape"));
+  story = configureScene(story, "scene-1", { durationSeconds: 7 });
+  story = addMaterial(story, "scene-1", imageMaterial("wide-2", "landscape"));
+  assert.equal(story.scenes[0]?.collage?.entryDurationSeconds, 4);
+  assert.equal(getCollagePauseDurationSeconds(story.scenes[0]!.collage!, story.scenes[0]!.durationSeconds), 3);
 });
 
 function imageMaterial(id: string, orientation: "portrait" | "landscape") {
@@ -211,7 +686,7 @@ test("batch transfer preserves media metadata and resets only the two affected p
   assert.equal(changed.scenes[1]!.materials[1], story.scenes[0]!.materials[2]);
   assert.equal(changed.scenes[2], story.scenes[2]);
   assert.equal(changed.scenes[0]!.rendererId, "still-image");
-  assert.equal(changed.scenes[1]!.rendererId, undefined);
+  assert.equal(changed.scenes[1]!.rendererId, "collage");
   assert.deepEqual(changed.scenes.slice(0, 2).map(({ render }) => render), [{ status: "idle" }, { status: "idle" }]);
   assert.equal(changed.revision, story.revision + 1);
   assert.equal(changed.narrations, story.narrations);

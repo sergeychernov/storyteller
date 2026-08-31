@@ -2,6 +2,11 @@ export type AnalyticsSurface = "site" | "story-web" | "clip-web";
 export type AnalyticsServerZone = "EU" | "US";
 export type MaterialKind = "image" | "video";
 export type ExportMode = "video" | "audio" | "combined";
+export type RendererKind = "still_image" | "video" | "collage";
+export type CollageCardOrientation = "angled" | "straight" | "not_applicable";
+export type CollageMediaMix = "images_only" | "includes_video" | "not_applicable";
+export type CollageBackgroundMode = "previous_scene_darkened" | "custom_material_original";
+export type CollageRowDirection = "ascending" | "level" | "descending" | "random";
 export type ExportFailureStage = "request" | "processing" | "download";
 export type ExportFailureReason = "version_changed" | "queue_timeout" | "render_timeout" | "api_error" | "unknown";
 export type AnalyticsLanguage = "en" | "ru" | "sr-Latn" | "es";
@@ -14,11 +19,28 @@ export interface AnalyticsEventMap {
   readonly "story created": Record<string, never>;
   readonly "scene created": Record<string, never>;
   readonly "material uploaded": { readonly material_kind: MaterialKind };
-  readonly "scene render requested": { readonly export_mode: ExportMode };
-  readonly "scene render succeeded": { readonly export_mode: ExportMode };
-  readonly "scene exported": { readonly export_mode: ExportMode };
+  readonly "collage background configured": { readonly collage_background_mode: CollageBackgroundMode };
+  readonly "collage row direction configured": { readonly collage_row_direction: CollageRowDirection };
+  readonly "scene render requested": {
+    readonly export_mode: ExportMode; readonly renderer_kind: RendererKind;
+    readonly collage_card_orientation: CollageCardOrientation;
+    readonly collage_media_mix: CollageMediaMix;
+  };
+  readonly "scene render succeeded": {
+    readonly export_mode: ExportMode; readonly renderer_kind: RendererKind;
+    readonly collage_card_orientation: CollageCardOrientation;
+    readonly collage_media_mix: CollageMediaMix;
+  };
+  readonly "scene exported": {
+    readonly export_mode: ExportMode; readonly renderer_kind: RendererKind;
+    readonly collage_card_orientation: CollageCardOrientation;
+    readonly collage_media_mix: CollageMediaMix;
+  };
   readonly "scene export failed": {
     readonly export_mode: ExportMode;
+    readonly renderer_kind: RendererKind;
+    readonly collage_card_orientation: CollageCardOrientation;
+    readonly collage_media_mix: CollageMediaMix;
     readonly failure_stage: ExportFailureStage;
     readonly failure_reason: ExportFailureReason;
   };
@@ -36,10 +58,14 @@ export const analyticsEventPropertyNames = {
   "story created": ["surface"],
   "scene created": ["surface"],
   "material uploaded": ["surface", "material_kind"],
-  "scene render requested": ["surface", "export_mode"],
-  "scene render succeeded": ["surface", "export_mode"],
-  "scene exported": ["surface", "export_mode"],
-  "scene export failed": ["surface", "export_mode", "failure_stage", "failure_reason"],
+  "collage background configured": ["surface", "collage_background_mode"],
+  "collage row direction configured": ["surface", "collage_row_direction"],
+  "scene render requested": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],
+  "scene render succeeded": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],
+  "scene exported": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],
+  "scene export failed": [
+    "surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix", "failure_stage", "failure_reason",
+  ],
 } as const satisfies Readonly<Record<AnalyticsEventName, readonly string[]>>;
 
 export interface AnalyticsAdapter {

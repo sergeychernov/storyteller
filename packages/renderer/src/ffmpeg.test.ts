@@ -3,8 +3,13 @@ import test from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createStillImageMotionPlan } from "@storyteller/domain";
-import { buildStillImageFilter, PcmWaveform, prepareVideoAudio, probeMedia, renderLastFrame, renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner } from "./index.js";
+import {
+  createCollageEntranceSchedule, createStillImageMotionPlan, getCollageCardShadowMetrics,
+} from "@storyteller/domain";
+import {
+  buildCollageBackgroundFilter, buildCollageCardFilter, buildCollageFilter, buildStillImageFilter, PcmWaveform, prepareVideoAudio, probeMedia, renderCollage,
+  renderLastFrame, renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner,
+} from "./index.js";
 
 test("probeMedia uses an argument array and parses JSON", async () => {
   let received: readonly string[] = [];
@@ -17,6 +22,337 @@ test("probeMedia uses an argument array and parses JSON", async () => {
   };
   assert.deepEqual(await probeMedia("clip with spaces.mp4", runner), { streams: [] });
   assert.equal(received.at(-1), "clip with spaces.mp4");
+});
+
+test("SpawnMediaProcessRunner reports FFmpeg timestamp progress", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-ffmpeg-progress-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const progress: number[] = [];
+  const result = await new SpawnMediaProcessRunner().run("ffmpeg", [
+    "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=16x16:r=10", "-t", "0.5",
+    "-c:v", "libx264", join(root, "progress.mp4"),
+  ], undefined, { durationSeconds: 0.5, onProgress: (value) => progress.push(value) });
+  assert.equal(result.exitCode, 0, result.stderr);
+  assert.ok(progress.length > 0);
+  assert.equal(progress.at(-1), 1);
+  assert.ok(progress.every((value, index) => index === 0 || value >= progress[index - 1]!));
+});
+
+test("collage renderer preserves full photo aspects, paper frame, rotation and eased sequential timing", async () => {
+  const settings = {
+    frame: { width: 12 as const, color: "#AABBCC", shape: "torn" as const },
+    entryDurationSeconds: 4,
+    rowDirection: "ascending" as const,
+    straightCards: false,
+    cardAngles: [
+      { materialId: "a", angleDegrees: -4.5 },
+      { materialId: "b", angleDegrees: 6.25 },
+    ],
+    cardOffsets: [{ materialId: "a", offsetY: 0 }, { materialId: "b", offsetY: 0 }],
+  };
+  const spec = {
+    materials: [
+      { id: "a", kind: "image" as const, sourcePath: "a.jpg", sourceSize: { width: 1200, height: 800 } },
+      { id: "b", kind: "image" as const, sourcePath: "b.jpg", sourceSize: { width: 1200, height: 800 } },
+    ],
+    outputPath: "collage.mp4", layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    layoutOverlapRatio: 0.4, settings, durationSeconds: 5,
+  };
+  const cardFilter = buildCollageCardFilter(spec, 0);
+  const backgroundFilter = buildCollageBackgroundFilter(spec);
+  const filter = buildCollageFilter(spec);
+  assert.match(backgroundFilter, /force_original_aspect_ratio=increase/);
+  assert.match(backgroundFilter, /crop=1080:1920:\(iw-ow\)\/2:\(ih-oh\)\/2/);
+  assert.match(backgroundFilter, /eq=brightness=-0\.400:saturation=0\.720/);
+  assert.match(cardFilter, /force_original_aspect_ratio=decrease/);
+  assert.doesNotMatch(cardFilter, /crop=/);
+  assert.match(cardFilter, /color=c=0xAABBCC/);
+  assert.match(cardFilter, /geq=.*sin/);
+  assert.match(cardFilter, /floor\(X\/9\)/);
+  assert.match(cardFilter, /mod\(X\\,9\)\/9/);
+  assert.match(cardFilter, /\[photo\]null\[photo-shape\]/);
+  assert.match(cardFilter, /\[frame\]\[photo-shape\]overlay/);
+  assert.match(cardFilter, /\[inner-frame-base\]geq=.*floor\(X\/18\).*\[inner-frame\]/);
+  assert.match(cardFilter, /\[inner-frame-base\]geq=.*a='if\(.*,0,alpha\(X,Y\)\)'\[inner-frame\]/);
+  assert.match(cardFilter, /\[card-photo\]\[inner-frame\]overlay/);
+  assert.doesNotMatch(cardFilter, /\/2\.7/);
+  assert.doesNotMatch(filter, /geq=|force_original_aspect_ratio/,
+    "the expensive static paper contour must not be recalculated for every video frame");
+  assert.match(filter, /rotate=angle=/);
+  assert.match(filter, /:c=0x00000000/);
+  assert.match(filter, /\[card-rotated0\]split=2/);
+  assert.match(filter, /colorchannelmixer=rr=0:gg=0:bb=0:aa=0\.400/);
+  assert.match(filter, /boxblur=lr=0:lp=1:cr=0:cp=1:ar=21:ap=2/);
+  assert.ok(filter.indexOf("[card-shape0]rotate") < filter.indexOf("[card-shadow-source0]pad"),
+    "the shadow must be generated from the cropped and rotated alpha silhouette");
+  assert.match(filter, /pow\(1-/);
+  assert.match(filter, /-0\.07853982/);
+  assert.match(filter, /0\.10908308/);
+  assert.match(filter, /enable='gte\(t,3\.300\)'/);
+  const entrance = createCollageEntranceSchedule({
+    layoutId: spec.layoutId,
+    layoutRendererId: spec.layoutRendererId,
+    layoutOverlapRatio: spec.layoutOverlapRatio,
+    materials: spec.materials.map(({ id, kind, sourceSize }) => ({ id, kind, ...sourceSize })),
+    width: 1080,
+    height: 1920,
+    settings,
+  })[0]!;
+  const maximumAngle = Math.max(Math.abs(entrance.startAngleDegrees), Math.abs(entrance.finalAngleDegrees));
+  const radians = maximumAngle * Math.PI / 180;
+  const rotatedHeight = Math.max(entrance.height, Math.ceil(
+    entrance.width * Math.abs(Math.sin(radians)) + entrance.height * Math.abs(Math.cos(radians)),
+  ));
+  const initialOverlayY = entrance.y - Math.ceil((rotatedHeight - entrance.height) / 2)
+    - getCollageCardShadowMetrics(1080).padding + entrance.startOffsetY;
+  assert.ok(initialOverlayY > 1920, "the FFmpeg card must start fully below the scene");
+  assert.ok(filter.includes(`if(lt(t\\,0.000)\\,${initialOverlayY}\\,`), "FFmpeg must use the shared off-stage offset");
+  const withoutFrame = buildCollageCardFilter({
+    ...spec,
+    settings: { ...settings, frame: { width: 16, color: "#AABBCC", shape: "none" } },
+  }, 0);
+  assert.doesNotMatch(withoutFrame, /\[frame\]|\[inner-frame\]|color=c=0xAABBCC/);
+  assert.match(withoutFrame, /\[photo-shape\]null\[card-base\]/);
+  const ascendingMaterials = Array.from({ length: 6 }, (_, index) => ({
+    id: `p${index}`, kind: "image" as const, sourcePath: `p${index}.jpg`, sourceSize: { width: 900, height: 1600 },
+  }));
+  const ascending = buildCollageFilter({
+    ...spec,
+    materials: ascendingMaterials,
+    layoutId: "portrait-pairs-ascending",
+    layoutRendererId: "animated-collage.portrait-pairs-ascending.v1",
+    settings: {
+      ...settings,
+      frame: { width: 12, color: "#AABBCC", shape: "straight" },
+      straightCards: true,
+      cardAngles: ascendingMaterials.map(({ id }) => ({ materialId: id, angleDegrees: 0 })),
+      cardOffsets: ascendingMaterials.map(({ id }, index) => ({ materialId: id, offsetY: index % 2 === 0 ? 15 : -15 })),
+    },
+  });
+  assert.deepEqual([...ascending.matchAll(/\[base\d+\]\[card(\d+)\]overlay/gu)].map((match) => Number(match[1])),
+    [4, 5, 2, 3, 0, 1]);
+  const rowDescending = buildCollageFilter({
+    ...spec,
+    materials: ascendingMaterials,
+    layoutId: "portrait-pairs-ascending",
+    layoutRendererId: "animated-collage.portrait-pairs-ascending.v1",
+    settings: {
+      ...settings,
+      rowDirection: "descending",
+      frame: { width: 12, color: "#AABBCC", shape: "straight" },
+      straightCards: true,
+      cardAngles: ascendingMaterials.map(({ id }) => ({ materialId: id, angleDegrees: 0 })),
+      cardOffsets: ascendingMaterials.map(({ id }, index) => ({ materialId: id, offsetY: index % 2 === 0 ? -15 : 15 })),
+    },
+  });
+  assert.notEqual(rowDescending, ascending, "FFmpeg must consume the shared vertical row direction schedule");
+  assert.throws(() => buildCollageFilter({ ...spec, layoutRendererId: "animated-collage.stack.v2" }), /renderer does not match/);
+  assert.throws(() => buildCollageFilter({ ...spec, layoutOverlapRatio: 0.3 }), /layout overlap does not match/);
+  assert.doesNotThrow(() => buildCollageFilter({
+    ...spec,
+    materials: [{ ...spec.materials[0]!, kind: "video" }, spec.materials[1]!],
+  }));
+
+  const calls: { executable: string; args: readonly string[] }[] = [];
+  await renderCollage(spec, {
+    async run(executable, args) {
+      calls.push({ executable, args });
+      return executable === "ffmpeg"
+        ? { exitCode: 0, stdout: "", stderr: "" }
+        : { exitCode: 0, stdout: '{"streams":[{"codec_type":"video"}]}', stderr: "" };
+    },
+  });
+  const ffmpegCalls = calls.filter(({ executable }) => executable === "ffmpeg");
+  assert.equal(ffmpegCalls.length, 4);
+  assert.ok(ffmpegCalls[0]?.args.includes("[background]"));
+  assert.ok(ffmpegCalls.slice(1, 3).every(({ args }) => args.includes("[card]") && args.includes("-frames:v")));
+  const animationCall = ffmpegCalls.find(({ args }) => args.at(-1) === "collage.mp4");
+  assert.ok(animationCall);
+  assert.deepEqual(animationCall.args.filter((argument) => argument === "-loop"), ["-loop", "-loop", "-loop"]);
+
+  const videoCalls: { executable: string; args: readonly string[] }[] = [];
+  const videoSpec = {
+    ...spec,
+    outputPath: "collage-video.mp4",
+    materials: [{ ...spec.materials[0]!, kind: "video" as const, sourceDurationSeconds: 1 }, spec.materials[1]!],
+  };
+  await renderCollage(videoSpec, {
+    async run(executable, args) {
+      videoCalls.push({ executable, args });
+      return executable === "ffmpeg"
+        ? { exitCode: 0, stdout: "", stderr: "" }
+        : { exitCode: 0, stdout: '{"streams":[{"codec_type":"video"}]}', stderr: "" };
+    },
+  });
+  const videoAnimation = videoCalls.find(({ executable, args }) => executable === "ffmpeg" && args.at(-1) === "collage-video.mp4")!;
+  const videoCardInput = videoAnimation.args.indexOf(".collage-card-0.mkv");
+  assert.equal(videoAnimation.args[videoCardInput - 1], "-i");
+  assert.notEqual(videoAnimation.args[videoCardInput - 3], "-stream_loop",
+    "a video card must be decoded once instead of restarting after EOF");
+  assert.match(buildCollageFilter(videoSpec), /tpad=stop_mode=clone:stop_duration=5\.000,trim=duration=5\.000/,
+    "the last decoded video-card frame must remain visible for the rest of the scene");
+});
+
+test("a non-PPL collage keeps trimmed video moving inside a framed card", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-collage-video-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const runner = new SpawnMediaProcessRunner();
+  const video = join(root, "video.mp4");
+  const landscape = join(root, "landscape.png");
+  const output = join(root, "mixed.mp4");
+  const createdVideo = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=80x40:r=5:d=1",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", video,
+  ]);
+  assert.equal(createdVideo.exitCode, 0, createdVideo.stderr);
+  for (const [path, color, size] of [[landscape, "blue", "80x40"]] as const) {
+    const created = await runner.run("ffmpeg", [
+      "-y", "-v", "error", "-f", "lavfi", "-i", `color=${color}:s=${size}:d=0.1`,
+      "-frames:v", "1", "-update", "1", path,
+    ]);
+    assert.equal(created.exitCode, 0, created.stderr);
+  }
+  const materials = [
+    {
+      id: "video", kind: "video" as const, sourcePath: video,
+      sourceSize: { width: 80, height: 40 }, displaySize: { width: 80, height: 40 }, sourceDurationSeconds: 1,
+      edit: { rotation: 0 as const, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 0.2, endSeconds: 0.8 } },
+    },
+    { id: "landscape", kind: "image" as const, sourcePath: landscape, sourceSize: { width: 80, height: 40 } },
+  ];
+  const settings = {
+    frame: { width: 12 as const, color: "#FFFFFF", shape: "torn" as const },
+    entryDurationSeconds: 0.5,
+    rowDirection: "ascending" as const,
+    straightCards: false,
+    cardAngles: [
+      { materialId: "video", angleDegrees: -4 },
+      { materialId: "landscape", angleDegrees: 4 },
+    ],
+    cardOffsets: [{ materialId: "video", offsetY: 0 }, { materialId: "landscape", offsetY: 0 }],
+  };
+  const spec = {
+    materials, outputPath: output, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    layoutOverlapRatio: 0.4,
+    settings, durationSeconds: 1.5, width: 180, height: 320, fps: 5, overwrite: true,
+  };
+  const videoCardFilter = buildCollageCardFilter(spec, 0);
+  const animationFilter = buildCollageFilter(spec);
+  assert.match(animationFilter, /\[0:v\].*tpad=stop_mode=clone/,
+    "a custom video background must hold its final frame instead of looping");
+  assert.match(videoCardFilter, /crop=80:40:0:0/);
+  assert.match(videoCardFilter, /force_original_aspect_ratio=decrease/);
+  assert.match(animationFilter, /\[1:v\].*tpad=stop_mode=clone:stop_duration=1\.500,trim=duration=1\.500/);
+  assert.doesNotMatch(animationFilter, /\[2:v\].*tpad=/,
+    "a static image remains a looped input and does not need video EOF padding");
+  await renderCollage(spec, runner);
+
+  for (const index of [0]) {
+    const card = join(root, `.collage-card-${index}.mkv`);
+    const hashes = await runner.run("ffmpeg", ["-v", "error", "-i", card, "-map", "0:v:0", "-f", "framemd5", "-"]);
+    assert.equal(hashes.exitCode, 0, hashes.stderr);
+    const distinctFrames = new Set(hashes.stdout.split("\n").filter((line) => /^\d/u.test(line)).map((line) => line.split(",").at(-1)?.trim()));
+    assert.ok(distinctFrames.size > 1, `prepared card ${index} must retain video frame changes`);
+  }
+  const metadata = await probeMedia(output, runner) as {
+    streams: { codec_type: string; codec_name: string; pix_fmt: string; width: number; height: number }[];
+    format: { duration: string };
+  };
+  assert.deepEqual(metadata.streams.map(({ codec_type }) => codec_type), ["video"]);
+  assert.deepEqual(metadata.streams.map(({ codec_name, pix_fmt, width, height }) => ({ codec_name, pix_fmt, width, height })), [
+    { codec_name: "h264", pix_fmt: "yuv420p", width: 180, height: 320 },
+  ]);
+  assert.equal(Number(metadata.format.duration), 1.6);
+
+  const backgroundOutput = join(root, "video-background.mp4");
+  const backgroundSpec = {
+    background: {
+      treatment: "original" as const,
+      kind: "video" as const, sourcePath: video, sourceSize: { width: 80, height: 40 }, sourceDurationSeconds: 1,
+      edit: { rotation: 0 as const, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 0.2, endSeconds: 0.8 } },
+    },
+    materials: [
+      { id: "left", kind: "image" as const, sourcePath: landscape, sourceSize: { width: 80, height: 40 } },
+      { id: "right", kind: "image" as const, sourcePath: landscape, sourceSize: { width: 80, height: 40 } },
+    ],
+    outputPath: backgroundOutput, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    layoutOverlapRatio: 0.4,
+    settings: {
+      frame: { width: 12 as const, color: "#FFFFFF", shape: "straight" as const },
+      entryDurationSeconds: 0.5, rowDirection: "ascending" as const, straightCards: false,
+      cardAngles: [{ materialId: "left", angleDegrees: -4 }, { materialId: "right", angleDegrees: 4 }],
+      cardOffsets: [{ materialId: "left", offsetY: 0 }, { materialId: "right", offsetY: 0 }],
+    },
+    durationSeconds: 1.5, width: 180, height: 320, fps: 5, overwrite: true,
+  };
+  assert.doesNotMatch(buildCollageBackgroundFilter(backgroundSpec), /eq=brightness|saturation=/,
+    "a custom background must not receive the previous-frame darkening treatment");
+  await renderCollage(backgroundSpec, runner);
+  const preparedBackground = join(root, ".collage-background.mkv");
+  const backgroundHashes = await runner.run("ffmpeg", [
+    "-v", "error", "-i", preparedBackground, "-map", "0:v:0", "-f", "framemd5", "-",
+  ]);
+  assert.equal(backgroundHashes.exitCode, 0, backgroundHashes.stderr);
+  const distinctBackgroundFrames = new Set(backgroundHashes.stdout.split("\n")
+    .filter((line) => /^\d/u.test(line)).map((line) => line.split(",").at(-1)?.trim()));
+  assert.ok(distinctBackgroundFrames.size > 1, "the custom video background must remain moving");
+  const backgroundMetadata = await probeMedia(backgroundOutput, runner) as { streams: { codec_type: string }[] };
+  assert.deepEqual(backgroundMetadata.streams.map(({ codec_type }) => codec_type), ["video"]);
+});
+
+test("collage renderer produces a decodable silent H.264 file with the configured torn frame", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-collage-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const runner = new SpawnMediaProcessRunner();
+  const red = join(root, "red.png"), blue = join(root, "blue.png"), green = join(root, "green.png");
+  const output = join(root, "collage.mp4");
+  for (const [path, color] of [[red, "red"], [blue, "blue"], [green, "green"]] as const) {
+    const created = await runner.run("ffmpeg", [
+      "-y", "-v", "error", "-f", "lavfi", "-i", `color=${color}:s=80x40:d=0.1`,
+      "-frames:v", "1", "-update", "1", path,
+    ]);
+    assert.equal(created.exitCode, 0, created.stderr);
+  }
+  await renderCollage({
+    background: { treatment: "darkened", kind: "image", sourcePath: green, sourceSize: { width: 80, height: 40 } },
+    materials: [
+      { id: "red", kind: "image", sourcePath: red, sourceSize: { width: 80, height: 40 } },
+      { id: "blue", kind: "image", sourcePath: blue, sourceSize: { width: 80, height: 40 } },
+    ],
+    outputPath: output,
+    layoutId: "stack",
+    layoutRendererId: "animated-collage.stack.v1",
+    layoutOverlapRatio: 0.4,
+    settings: {
+      frame: { width: 12, color: "#FFFFFF", shape: "torn" },
+      entryDurationSeconds: 0.7,
+      rowDirection: "ascending",
+      straightCards: false,
+      cardAngles: [
+        { materialId: "red", angleDegrees: -4 },
+        { materialId: "blue", angleDegrees: 4 },
+      ],
+      cardOffsets: [{ materialId: "red", offsetY: 0 }, { materialId: "blue", offsetY: 0 }],
+    },
+    durationSeconds: 2,
+    width: 180,
+    height: 320,
+    fps: 5,
+  }, runner);
+  const metadata = await probeMedia(output, runner) as { streams: { codec_type: string; codec_name: string; pix_fmt: string; width: number; height: number }[] };
+  assert.deepEqual(metadata.streams.map(({ codec_type }) => codec_type), ["video"]);
+  assert.deepEqual(metadata.streams.map(({ codec_name, pix_fmt, width, height }) => ({ codec_name, pix_fmt, width, height })), [
+    { codec_name: "h264", pix_fmt: "yuv420p", width: 180, height: 320 },
+  ]);
+  const firstPixel = join(root, "first-pixel.rgb");
+  const decoded = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-i", output, "-vf", "select=eq(n\\,0),scale=1:1", "-frames:v", "1",
+    "-pix_fmt", "rgb24", "-f", "rawvideo", firstPixel,
+  ]);
+  assert.equal(decoded.exitCode, 0, decoded.stderr);
+  const [firstRed = 0, firstGreen = 0, firstBlue = 0] = await readFile(firstPixel);
+  assert.ok(firstGreen > firstRed + 10 && firstGreen > firstBlue + 10,
+    `expected the explicit darkened green background, received rgb(${firstRed},${firstGreen},${firstBlue})`);
 });
 
 test("audio processing preserves delayed sound and nonzero source timestamps, including silence", async (context) => {

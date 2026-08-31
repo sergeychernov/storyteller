@@ -1,0 +1,22 @@
+.stage {
+  container-type: inline-size;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(720px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - 48px));
+  min-height: 480px;
+  overflow: hidden;
+  border-radius: 18px;
+  background:
+    linear-gradient(45deg, #1f201d 25%, transparent 25%, transparent 75%, #1f201d 75%),
+    linear-gradient(45deg, #1f201d 25%, #171815 25%, #171815 75%, #1f201d 75%);
+  background-position: 0 0, 16px 16px;
+  background-size: 32px 32px;
+  box-shadow: inset 0 0 0 1px #ffffff14, 0 24px 70px #29291f2b;
+}
+
+.card {
+  top: 50%;
+  left: 50%;
+}

@@ -34,15 +34,28 @@ test("adds the surface and never needs content identifiers", () => {
   assert.equal(analytics.initialize({ apiKey: "public-key", serverZone: "EU", surface: "story-web" }), true);
   analytics.setUser("profile-id");
   analytics.track("material uploaded", { material_kind: "video" });
+  analytics.track("collage background configured", { collage_background_mode: "custom_material_original" });
+  analytics.track("collage row direction configured", { collage_row_direction: "random" });
   analytics.track("profile language changed", { language: "es" });
-  analytics.track("scene render succeeded", { export_mode: "combined" });
+  analytics.track("scene render succeeded", {
+    export_mode: "combined", renderer_kind: "collage", collage_card_orientation: "angled", collage_media_mix: "includes_video",
+  });
 
   assert.deepEqual(calls, [
     { name: "initialize", arguments: ["public-key", "EU", undefined] },
     { name: "setUserId", arguments: ["profile-id"] },
     { name: "track", arguments: ["material uploaded", { surface: "story-web", material_kind: "video" }] },
+    { name: "track", arguments: ["collage background configured", {
+      surface: "story-web", collage_background_mode: "custom_material_original",
+    }] },
+    { name: "track", arguments: ["collage row direction configured", {
+      surface: "story-web", collage_row_direction: "random",
+    }] },
     { name: "track", arguments: ["profile language changed", { surface: "story-web", language: "es" }] },
-    { name: "track", arguments: ["scene render succeeded", { surface: "story-web", export_mode: "combined" }] },
+    { name: "track", arguments: ["scene render succeeded", {
+      surface: "story-web", export_mode: "combined", renderer_kind: "collage", collage_card_orientation: "angled",
+      collage_media_mix: "includes_video",
+    }] },
   ]);
 });
 

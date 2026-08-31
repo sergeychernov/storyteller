@@ -136,6 +136,7 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
                 </div>
                 <SceneCanvas
                   scene={slot.scene}
+                  previousScene={scenes[slot.index - 1]}
                   copy={copy}
                   storyId={storyId}
                   session={session}

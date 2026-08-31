@@ -1,6 +1,14 @@
 import { DomainError } from "./errors.js";
-import { getLayoutOptions } from "./layout.js";
-import type { FocusPoint, Narration, Scene, SceneMaterial, SceneMotion, Story } from "./model.js";
+import {
+  collageCardMaterials, collageRendererId, defaultCollageRowDirection, defaultCollageSettings,
+  hasCompleteCollageCardAngles, hasCompleteCollageCardOffsets, isCollageMaterials,
+  resolveCollageSettings, validateCollageSettings,
+} from "./collage.js";
+import { createCollageCardAngles, createCollageCardOffsets } from "./collage-layout.js";
+import { getAutomaticCollageLayout, getCollageLayoutOptions, getLayoutOptions, getSelectedCollageLayout } from "./layout.js";
+import type {
+  CollageBackground, CollageSettings, EditableCollageSettings, FocusPoint, Narration, Scene, SceneMaterial, SceneMotion, Story,
+} from "./model.js";
 import { defaultSingleImageMotion, getSceneMotionOptions } from "./scene-motion.js";
 import { centeredFocusPoint } from "./still-image-motion.js";
 
@@ -35,14 +43,19 @@ export function removeScene(story: Story, sceneId: string): Story {
 export function addMaterial(story: Story, sceneId: string, material: SceneMaterial): Story {
   return updateScene(story, sceneId, (scene) => {
     if (scene.materials.some(({ id }) => id === material.id)) throw new DomainError(`material already exists: ${material.id}`);
-    return resetMaterialPresentation({ ...scene, materials: [...scene.materials, material] });
+    return resetMaterialPresentation(
+      { ...scene, materials: [...scene.materials, material] }, collageAngleSeed(story, scene, "add-material"),
+    );
   });
 }
 
 export function removeMaterial(story: Story, sceneId: string, materialId: string): Story {
   return updateScene(story, sceneId, (scene) => {
     if (!scene.materials.some(({ id }) => id === materialId)) throw new DomainError(`unknown material: ${materialId}`);
-    return resetMaterialPresentation({ ...scene, materials: scene.materials.filter(({ id }) => id !== materialId) });
+    return resetMaterialPresentation(
+      { ...scene, materials: scene.materials.filter(({ id }) => id !== materialId) },
+      collageAngleSeed(story, scene, "remove-material"),
+    );
   });
 }
 
@@ -52,7 +65,7 @@ export function replaceMaterial(story: Story, sceneId: string, material: SceneMa
     return resetMaterialPresentation({
       ...scene,
       materials: scene.materials.map((current) => current.id === material.id ? material : current),
-    });
+    }, collageAngleSeed(story, scene, "replace-material"));
   });
 }
 
@@ -64,7 +77,9 @@ export function reorderMaterials(story: Story, sceneId: string, materialIds: rea
     const materialsById = new Map(scene.materials.map((material) => [material.id, material]));
     const materials = materialIds.map((id) => materialsById.get(id));
     if (materials.some((material) => !material)) throw new DomainError("material order contains an unknown material");
-    return resetLayout({ ...scene, materials: materials as SceneMaterial[] });
+    return resetMaterialPresentation(
+      { ...scene, materials: materials as SceneMaterial[] }, collageAngleSeed(story, scene, "reorder-materials"),
+    );
   });
 }
 
@@ -116,10 +131,10 @@ export function moveSceneMaterials(story: Story, sourceSceneId: string, input: M
   const scenes = story.scenes.map((scene) => {
     if (scene.id === source.id) return resetMaterialPresentation({
       ...scene, materials: scene.materials.filter(({ id }) => !movingIds.has(id)),
-    });
+    }, collageAngleSeed(story, scene, "move-materials-source"));
     if (scene.id === target.id) return resetMaterialPresentation({
       ...scene, materials: [...scene.materials.slice(0, input.targetIndex), ...moving, ...scene.materials.slice(input.targetIndex)],
-    });
+    }, collageAngleSeed(story, scene, "move-materials-target"));
     return scene;
   });
   return { ...changed(story, { scenes }), music: { ...story.music, applied: false } };
@@ -130,14 +145,11 @@ export function configureScene(story: Story, sceneId: string, input: {
   layoutId?: string | null;
   motion?: SceneMotion;
   focusPoint?: FocusPoint;
+  collage?: EditableCollageSettings;
 }): Story {
   return updateScene(story, sceneId, (scene) => {
     const durationSeconds = input.durationSeconds ?? scene.durationSeconds;
     if (durationSeconds < 3 || durationSeconds > 15) throw new DomainError("scene duration must be between 3 and 15 seconds");
-    if (input.layoutId) {
-      const available = getLayoutOptions(scene.materials);
-      if (!available.some(({ id }) => id === input.layoutId)) throw new DomainError(`layout is not available: ${input.layoutId}`);
-    }
     const motion = input.motion ?? scene.motion;
     if (!getSceneMotionOptions(scene.materials).includes(motion)) {
       throw new DomainError(`motion is not available for this material orientation: ${motion}`);
@@ -150,15 +162,82 @@ export function configureScene(story: Story, sceneId: string, input: {
         throw new DomainError("focus point coordinates must be between 0 and 1");
       }
     }
+    const currentCollage = scene.collage
+      ? resolveCollageSettings(scene.materials, scene.collage, scene.durationSeconds)
+      : isCollageMaterials(scene.materials) ? defaultCollageSettings(scene.materials, durationSeconds) : undefined;
+    const inheritedCollage: CollageSettings | undefined = input.collage ? {
+      ...(currentCollage ?? defaultCollageSettings(scene.materials, durationSeconds)),
+      ...input.collage,
+      frame: input.collage.frame,
+      rowDirection: input.collage.rowDirection ?? currentCollage?.rowDirection ?? defaultCollageRowDirection,
+      straightCards: input.collage.straightCards ?? currentCollage?.straightCards ?? false,
+      cardAngles: currentCollage?.cardAngles ?? [],
+      cardOffsets: currentCollage?.cardOffsets ?? [],
+    } : currentCollage;
+    const collage = inheritedCollage && input.collage === undefined && input.durationSeconds !== undefined ? {
+      ...inheritedCollage,
+      entryDurationSeconds: Math.min(inheritedCollage.entryDurationSeconds, Math.max(0, durationSeconds - 1)),
+    } : inheritedCollage;
+    const cards = collage ? collageCardMaterials(scene.materials, collage) : scene.materials;
+    if (input.layoutId) {
+      const available = scene.rendererId === collageRendererId
+        ? getCollageLayoutOptions(cards)
+        : getLayoutOptions(scene.materials);
+      if (!available.some(({ id }) => id === input.layoutId)) throw new DomainError(`layout is not available: ${input.layoutId}`);
+    }
+    const requestedLayoutId = input.layoutId === undefined ? scene.layoutId : input.layoutId ?? undefined;
+    const selectedLayout = collage && input.layoutId !== null && isCollageMaterials(cards)
+      ? getSelectedCollageLayout(cards, requestedLayoutId) : undefined;
+    const straightCardsChanged = input.collage?.straightCards !== undefined
+      && input.collage.straightCards !== currentCollage?.straightCards;
+    const recalculateAngles = selectedLayout && (input.layoutId !== undefined || straightCardsChanged
+      || !collage || !hasCompleteCollageCardAngles(scene.materials, collage));
+    const rowDirectionConfigured = input.collage?.rowDirection !== undefined;
+    const recalculateOffsets = selectedLayout && (input.layoutId !== undefined || rowDirectionConfigured
+      || !collage || !hasCompleteCollageCardOffsets(scene.materials, collage, selectedLayout.rowSizes));
+    const collageWithComposition = collage ? {
+      ...collage,
+      cardAngles: selectedLayout
+        ? recalculateAngles ? createCollageCardAngles({
+            layoutId: selectedLayout.id,
+            materials: cards,
+            straightCards: collage.straightCards,
+            seedKey: collageAngleSeed(story, scene, input.layoutId !== undefined ? "select-layout" : "configure-collage"),
+          }) : collage.cardAngles
+        : [],
+      cardOffsets: selectedLayout
+        ? recalculateOffsets ? createCollageCardOffsets({
+            layoutId: selectedLayout.id,
+            materials: cards,
+            direction: collage.rowDirection,
+            seedKey: collageAngleSeed(story, scene, rowDirectionConfigured ? "configure-row-offsets"
+              : input.layoutId !== undefined ? "select-layout" : "configure-collage"),
+          }) : collage.cardOffsets
+        : [],
+    } : undefined;
+    const validatedCollage = collageWithComposition
+      ? validateCollageSettings(scene.materials, collageWithComposition, durationSeconds, selectedLayout?.rowSizes)
+      : undefined;
     const { layoutId: _oldLayout, ...withoutLayout } = scene;
     return {
       ...withoutLayout,
       durationSeconds,
       motion,
       ...(input.focusPoint ? { focusPoint: input.focusPoint } : {}),
-      ...(input.layoutId === undefined ? (scene.layoutId ? { layoutId: scene.layoutId } : {}) : input.layoutId ? { layoutId: input.layoutId } : {}),
+      ...(validatedCollage ? { collage: validatedCollage, rendererId: collageRendererId } : {}),
+      ...(selectedLayout ? { layoutId: selectedLayout.id } : {}),
       render: { status: "idle" },
     };
+  });
+}
+
+export function setCollageBackground(story: Story, sceneId: string, background: CollageBackground): Story {
+  return updateScene(story, sceneId, (scene) => {
+    if (!isCollageMaterials(scene.materials)) throw new DomainError("a collage background requires 2 to 6 media cards");
+    if (background.source === "material" && scene.materials.some(({ id }) => id === background.material.id)) {
+      throw new DomainError("a collage background material must be separate from its cards");
+    }
+    return { ...scene, collageBackground: background, render: { status: "idle" } };
   });
 }
 
@@ -211,18 +290,50 @@ function resetLayout(scene: Scene): Scene {
   return { ...withoutLayout, render: { status: "idle" } };
 }
 
-function resetMaterialPresentation(scene: Scene): Scene {
+function resetMaterialPresentation(scene: Scene, angleSeed: string): Scene {
   const reset = resetLayout(scene);
   if (reset.materials.length !== 1) {
-    const { focusPoint: _focusPoint, rendererId: _rendererId, ...withoutRenderer } = reset;
+    const { focusPoint: _focusPoint, rendererId: _rendererId, collage: oldCollage, ...withoutRenderer } = reset;
+    if (isCollageMaterials(reset.materials)) {
+      const settings = oldCollage
+        ? resolveCollageSettings(reset.materials, oldCollage, reset.durationSeconds)
+        : defaultCollageSettings(reset.materials, reset.durationSeconds);
+      const cards = collageCardMaterials(reset.materials, settings);
+      const layout = getAutomaticCollageLayout(cards);
+      return {
+        ...withoutRenderer,
+        rendererId: collageRendererId,
+        collageBackground: reset.collageBackground ?? { source: "previous-scene" },
+        collage: {
+          ...settings,
+          cardAngles: layout ? createCollageCardAngles({
+            layoutId: layout.id,
+            materials: cards,
+            straightCards: settings.straightCards,
+            seedKey: angleSeed,
+          }) : [],
+          cardOffsets: layout ? createCollageCardOffsets({
+            layoutId: layout.id,
+            materials: cards,
+            direction: settings.rowDirection,
+            seedKey: `${angleSeed}:offsets`,
+          }) : [],
+        },
+        motion: "none",
+      };
+    }
     return { ...withoutRenderer, motion: "none" };
   }
   const material = reset.materials[0]!;
-  const { focusPoint: _focusPoint, rendererId: _rendererId, ...withoutFocus } = reset;
+  const { focusPoint: _focusPoint, rendererId: _rendererId, collage: _collage, ...withoutFocus } = reset;
   return {
     ...withoutFocus,
     layoutId: "full-frame",
     motion: defaultSingleImageMotion(material),
     ...(material.kind === "image" ? { rendererId: "still-image", focusPoint: centeredFocusPoint } : {}),
   };
+}
+
+function collageAngleSeed(story: Story, scene: Pick<Scene, "id">, action: string): string {
+  return `${story.id}:${scene.id}:${story.revision + 1}:${action}`;
 }

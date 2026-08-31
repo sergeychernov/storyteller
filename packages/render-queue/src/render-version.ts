@@ -18,6 +18,41 @@ export function sceneRenderParameters(input: SceneRenderInput): Record<string, u
     source: { width: input.material.width, height: input.material.height, orientation: input.material.orientation },
     output: input.output,
   };
+  if (input.rendererId === "collage") return {
+    ...renderer, ...artifact,
+    durationSeconds: input.durationSeconds,
+    layoutId: input.layoutId,
+    layoutRendererId: input.layoutRendererId,
+    layoutOverlapRatio: input.layoutOverlapRatio,
+    settings: input.settings,
+    background: !input.background ? { source: "card-fallback", materialId: input.materials[0]?.id, treatment: "darkened" }
+      : input.background.source === "previous-scene-frame" ? {
+          source: input.background.source,
+          sceneId: input.background.sceneId,
+          inputHash: input.background.inputHash,
+          width: input.background.width,
+          height: input.background.height,
+        } : {
+          source: input.background.source,
+          materialId: input.background.materialId,
+          treatment: input.background.treatment,
+          material: {
+            id: input.background.material.id,
+            kind: input.background.material.kind,
+            width: input.background.material.width,
+            height: input.background.material.height,
+            orientation: input.background.material.orientation,
+            sourceWidth: input.background.material.sourceWidth,
+            sourceHeight: input.background.material.sourceHeight,
+            sourceDurationSeconds: input.background.material.sourceDurationSeconds,
+            edit: input.background.material.edit,
+          },
+        },
+    sources: input.materials.map(({
+      id, kind, width, height, orientation, sourceWidth, sourceHeight, sourceDurationSeconds, edit,
+    }) => ({ id, kind, width, height, orientation, sourceWidth, sourceHeight, sourceDurationSeconds, edit })),
+    output: input.output,
+  };
   return {
     ...renderer, ...artifact, mode: input.mode, trim: input.edit.trim ?? null, sourceDurationSeconds: input.sourceDurationSeconds ?? null,
     ...(input.mode === "audio" ? {} : {

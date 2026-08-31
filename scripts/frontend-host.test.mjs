@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
-import { once } from "node:events";
+import { EventEmitter, once } from "node:events";
 import test from "node:test";
-import { createFrontendHost } from "../apps/site/server.mjs";
+import { createFrontendHost, registerFrontendHostShutdown } from "../apps/site/server.mjs";
 
 test("one host isolates public, Story and Clip build roots", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "storyteller-frontends-"));
@@ -66,6 +66,32 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
   assert.equal((await inject(server, "/app/unknown")).status, 404);
   assert.equal((await inject(server, "/ru/not-a-page")).status, 404);
   assert.equal((await inject(server, "/", "POST")).status, 405);
+});
+
+test("frontend host closes once when shutdown signals repeat", () => {
+  const processTarget = new EventEmitter();
+  const exits = [];
+  let closeCalls = 0;
+  const server = {
+    close(callback) {
+      closeCalls++;
+      callback();
+    },
+  };
+  const cleanup = registerFrontendHostShutdown(server, {
+    processTarget,
+    exit: (code) => exits.push(code),
+  });
+
+  processTarget.emit("SIGINT");
+  processTarget.emit("SIGINT");
+  processTarget.emit("SIGTERM");
+
+  assert.equal(closeCalls, 1);
+  assert.deepEqual(exits, [0]);
+  assert.equal(processTarget.listenerCount("SIGINT"), 0);
+  assert.equal(processTarget.listenerCount("SIGTERM"), 0);
+  cleanup();
 });
 
 async function writeFixture(root, relativePath, contents) {

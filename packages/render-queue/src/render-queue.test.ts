@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { hashSceneRenderInput, sceneFrameDependency, sceneRenderFileType, sceneRenderStorageKey, type SceneRenderInput } from "./index.js";
+import { hashSceneRenderInput, sceneFrameDependency, sceneRenderFileType, sceneRenderSlot, sceneRenderStorageKey, type SceneRenderInput } from "./index.js";
 
 const input: SceneRenderInput = {
   rendererId: "still-image",
@@ -20,9 +20,72 @@ test("scene render input hash is deterministic", () => {
   assert.notEqual(hashSceneRenderInput(input), hashSceneRenderInput({ ...input, durationSeconds: 6 }));
 });
 
+test("collage fingerprint follows layout, crop-aware size, frame settings and ordered source contents", () => {
+  const collage: SceneRenderInput = {
+    rendererId: "collage", rendererVersion: 23, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    layoutOverlapRatio: 0.4, durationSeconds: 5,
+    settings: {
+      frame: { width: 12, color: "#FFFFFF", shape: "torn" },
+      entryDurationSeconds: 4,
+      rowDirection: "ascending",
+      straightCards: false,
+      cardAngles: [
+        { materialId: "a", angleDegrees: -4 },
+        { materialId: "b", angleDegrees: 4 },
+      ],
+      cardOffsets: [{ materialId: "a", offsetY: 0 }, { materialId: "b", offsetY: 0 }],
+    },
+    materials: [
+      { id: "a", kind: "image", storageKey: "a.jpg", name: "a.jpg", mimeType: "image/jpeg", width: 800, height: 600,
+        orientation: "landscape", contentHash: "a".repeat(64) },
+      { id: "b", kind: "image", storageKey: "b.jpg", name: "b.jpg", mimeType: "image/jpeg", width: 800, height: 600,
+        orientation: "landscape", contentHash: "b".repeat(64) },
+    ],
+    dependencies: [
+      { role: "original", storageKey: "a.jpg", contentHash: "a".repeat(64), parents: [], parameters: { materialId: "a", index: 0 } },
+      { role: "original", storageKey: "b.jpg", contentHash: "b".repeat(64), parents: [], parameters: { materialId: "b", index: 1 } },
+    ],
+    output: { width: 1080, height: 1920, fps: 30, codec: "h264" },
+  };
+  if (collage.rendererId !== "collage") throw new Error("expected collage input");
+  const hash = hashSceneRenderInput(collage);
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, layoutId: "2x2" }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, layoutRendererId: "animated-collage.stack.v2" }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, layoutOverlapRatio: 0.42 }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, settings: { ...collage.settings, frame: { ...collage.settings.frame, color: "#000000" } } }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, settings: { ...collage.settings, rowDirection: "descending" } }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, settings: {
+    ...collage.settings,
+    cardAngles: collage.settings.cardAngles.map((angle, index) => index ? angle : { ...angle, angleDegrees: -5 }),
+  } }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, settings: {
+    ...collage.settings,
+    cardOffsets: collage.settings.cardOffsets.map((offset, index) => index ? offset : { ...offset, offsetY: -5 }),
+  } }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, materials: collage.materials.map((material, index) => index
+    ? material : { ...material, width: 700 }) }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, background: {
+    source: "previous-scene-frame", treatment: "darkened", sceneId: "previous", inputHash: "c".repeat(64), contentHash: "d".repeat(64),
+    storageKey: "previous.png", name: "previous.png", mimeType: "image/png",
+    width: 1080, height: 1920, orientation: "portrait",
+  } }));
+  assert.notEqual(hash, hashSceneRenderInput({ ...collage, dependencies: [...collage.dependencies!].reverse() }));
+});
+
 test("render artifact key is scoped to profile, story, scene and hash", () => {
   assert.equal(sceneRenderStorageKey({ profileId: "p", storyId: "s", sceneId: "c", inputHash: "abc" }),
     "projects/p/s/scenes/c/renders/abc.mp4");
+});
+
+test("retention slots separate downloadable formats and intermediate scene frames", () => {
+  assert.equal(sceneRenderSlot(input), "scene-render:video");
+  const video = { ...input, rendererId: "video", mode: "combined", hasAudio: true,
+    edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } } } satisfies SceneRenderInput;
+  assert.equal(sceneRenderSlot(video), "scene-render:combined");
+  assert.equal(sceneRenderSlot({ ...video, mode: "audio" }), "scene-render:audio");
+  assert.equal(sceneRenderSlot({ ...input, artifact: "scene-frame", frame: {
+    rendererVersion: 1, format: "png", compressionLevel: 6, intermediateCodec: "h264-lossless", layerPolicy: "base-visual",
+  } }), "scene-frame");
 });
 
 test("scene frame has its own cache fingerprint, S3 collection and dependency snapshot", () => {

@@ -3,7 +3,7 @@ import multipart from "@fastify/multipart";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { ApplicationError, createBaselineAccessControl, type AccessControlService, type StoryApplication } from "@storyteller/application";
-import { getMaterialPresentation, getMaterialSource, materialStorageKeys, type MaterialEdit } from "@storyteller/domain";
+import { getMaterialPresentation, getMaterialSource, materialStorageKeys, type MaterialEdit, type SceneMaterial, type Story } from "@storyteller/domain";
 import { sceneRenderFileType, type SceneRenderQueue } from "@storyteller/render-queue";
 import {
   authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, deleteSceneSchema, editMaterialSchema, errorSchema, healthSchema,
@@ -166,6 +166,76 @@ export async function buildApi(application: StoryApplication, options: {
       throw error;
     }
   });
+  const previousSceneBackgroundSchema = z.object({ source: z.literal("previous-scene") }).strict();
+  app.put("/stories/:storyId/scenes/:sceneId/collage-background", {
+    schema: {
+      security: bearerSecurity, params: sceneParams, body: previousSceneBackgroundSchema,
+      response: { 200: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 422: errorSchema },
+    },
+  }, async (request) => {
+    const profile = await authenticate(application, request);
+    const changed = await application.setSceneCollageBackground(
+      profile.id, request.params.storyId, request.params.sceneId, request.body,
+    );
+    if (changed.replacedMaterial) {
+      for (const storageKey of materialStorageKeys(changed.replacedMaterial)) {
+        await deleteStoredObject(mediaStorage, storageKey, request, options.renderQueue);
+      }
+    }
+    return serializeStory(changed.story);
+  });
+  app.delete("/stories/:storyId/scenes/:sceneId/collage-background", {
+    schema: {
+      security: bearerSecurity, params: sceneParams,
+      response: { 200: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 422: errorSchema },
+    },
+  }, async (request) => {
+    const profile = await authenticate(application, request);
+    const changed = await application.setSceneCollageBackground(
+      profile.id, request.params.storyId, request.params.sceneId, { source: "previous-scene" },
+    );
+    if (changed.replacedMaterial) {
+      for (const storageKey of materialStorageKeys(changed.replacedMaterial)) {
+        await deleteStoredObject(mediaStorage, storageKey, request, options.renderQueue);
+      }
+    }
+    return serializeStory(changed.story);
+  });
+  app.post("/stories/:storyId/scenes/:sceneId/collage-background/material", {
+    schema: {
+      security: bearerSecurity, params: sceneParams,
+      response: { 201: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 413: errorSchema, 415: errorSchema, 422: errorSchema },
+    },
+  }, async (request, reply) => {
+    const profile = await authenticate(application, request);
+    const story = await application.getStory(profile.id, request.params.storyId);
+    if (!story.scenes.some(({ id }) => id === request.params.sceneId)) {
+      throw new ApplicationError(`scene not found: ${request.params.sceneId}`, 404, "scene_not_found");
+    }
+    const upload = await request.file();
+    if (!upload) throw new MediaUploadError("background media file is required", 422);
+    const stored = await mediaStorage.store(upload, {
+      profileId: profile.id, storyId: story.id, sceneId: request.params.sceneId,
+    });
+    try {
+      const changed = await application.setSceneCollageBackground(
+        profile.id, story.id, request.params.sceneId, { source: "material", material: stored.material },
+      );
+      if (changed.replacedMaterial) {
+        for (const storageKey of materialStorageKeys(changed.replacedMaterial)) {
+          await deleteStoredObject(mediaStorage, storageKey, request, options.renderQueue);
+        }
+      }
+      return reply.status(201).send(serializeStory(changed.story));
+    } catch (error) {
+      try {
+        await stored.cleanup();
+      } catch (cleanupError) {
+        request.log.error({ err: cleanupError, storageKey: stored.material.storageKey }, "could not roll back stored background media");
+      }
+      throw error;
+    }
+  });
   const materialParams = storyParams.extend({ materialId: z.string().uuid() });
   const sceneMaterialParams = sceneParams.extend({ materialId: z.string().uuid() });
   app.delete("/stories/:storyId/scenes/:sceneId/materials/:materialId", {
@@ -235,7 +305,7 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
     const story = await application.getStory(profile.id, request.params.storyId);
-    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    const material = findStoryMaterial(story, request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
     const presentation = getMaterialPresentation(material);
     const direct = await mediaStorage.createDownloadUrl(presentation.storageKey);
@@ -247,7 +317,7 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
     const story = await application.getStory(profile.id, request.params.storyId);
-    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    const material = findStoryMaterial(story, request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
     const direct = await mediaStorage.createDownloadUrl(getMaterialPresentation(material).storageKey);
     reply.header("cache-control", "private, no-store");
@@ -260,7 +330,7 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
     const story = await application.getStory(profile.id, request.params.storyId);
-    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    const material = findStoryMaterial(story, request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
     const peaks = await mediaStorage.waveform(material);
     return reply.header("cache-control", "private, no-store").send({ peaks });
@@ -270,7 +340,7 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
     const story = await application.getStory(profile.id, request.params.storyId);
-    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    const material = findStoryMaterial(story, request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
     const source = getMaterialSource(material);
     const direct = await mediaStorage.createDownloadUrl(source.storageKey);
@@ -282,7 +352,7 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request, reply) => {
     const profile = await authenticate(application, request);
     const story = await application.getStory(profile.id, request.params.storyId);
-    const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+    const material = findStoryMaterial(story, request.params.materialId);
     if (!material) throw new ApplicationError(`material not found: ${request.params.materialId}`, 404);
     const direct = await mediaStorage.createDownloadUrl(getMaterialSource(material).storageKey);
     reply.header("cache-control", "private, no-store");
@@ -294,7 +364,7 @@ export async function buildApi(application: StoryApplication, options: {
     }, async (request, reply) => {
       const profile = await authenticate(application, request);
       const story = await application.getStory(profile.id, request.params.storyId);
-      const material = story.scenes.flatMap(({ materials }) => materials).find(({ id }) => id === request.params.materialId);
+      const material = findStoryMaterial(story, request.params.materialId);
       if (material?.kind !== "video" || !material.audioTrack) throw new ApplicationError("audio track not found", 404);
       const track = material.audioTrack;
       const direct = await mediaStorage.createDownloadUrl(track.storageKey);
@@ -317,6 +387,7 @@ export async function buildApi(application: StoryApplication, options: {
       ...(request.body.layoutId === undefined ? {} : { layoutId: request.body.layoutId }),
       ...(request.body.motion === undefined ? {} : { motion: request.body.motion }),
       ...(request.body.focusPoint === undefined ? {} : { focusPoint: request.body.focusPoint }),
+      ...(request.body.collage === undefined ? {} : { collage: request.body.collage }),
     },
   )));
 
@@ -424,6 +495,17 @@ export async function buildApi(application: StoryApplication, options: {
 function serializeStory(story: unknown) {
   // Parse readonly domain collections into the mutable public JSON response shape.
   return storySchema.parse(story);
+}
+
+function findStoryMaterial(story: Story, materialId: string): SceneMaterial | undefined {
+  for (const scene of story.scenes) {
+    const card = scene.materials.find(({ id }) => id === materialId);
+    if (card) return card;
+    if (scene.collageBackground?.source === "material" && scene.collageBackground.material.id === materialId) {
+      return scene.collageBackground.material;
+    }
+  }
+  return undefined;
 }
 
 function requireRenderService(service: SceneRenderService | false | undefined): SceneRenderService {

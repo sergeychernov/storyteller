@@ -15,6 +15,7 @@ export interface VideoRenderSpec {
   readonly mode: VideoExportMode;
   readonly edit: MaterialEdit;
   readonly lossless?: boolean;
+  readonly onProgress?: (progress: number) => void;
 }
 
 export async function renderVideo(spec: VideoRenderSpec, runner: MediaProcessRunner = new SpawnMediaProcessRunner()): Promise<void> {
@@ -54,7 +55,10 @@ export async function renderVideo(spec: VideoRenderSpec, runner: MediaProcessRun
       "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000");
   } else args.push("-an");
   args.push("-t", duration, "-map_metadata", "-1", "-movflags", "+faststart", spec.outputPath);
-  const result = await runner.run("ffmpeg", args);
+  const result = await runner.run("ffmpeg", args, undefined, spec.onProgress ? {
+    durationSeconds: Number(duration),
+    onProgress: spec.onProgress,
+  } : undefined);
   if (result.exitCode !== 0) throw new Error(`video export failed (${result.exitCode}): ${result.stderr.trim()}`);
 }
 

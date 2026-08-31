@@ -16,8 +16,8 @@ interface DesktopStoryEditorProps extends StoryEditorViewProps {
 
 export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
   const {
-    story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, deleteDisabled,
-    onSelect, onAdd, onUpload, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
+    story, session, selected, copy, saving, adding, uploading, backgroundUploading, uploadCount, operationErrorMessage, deleteDisabled,
+    onSelect, onAdd, onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
   } = props;
   const showInspector = !!selected && !isSingleVideoScene(selected);
 
@@ -43,6 +43,7 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
           <main className={styles.workspace}>
             <ScenePreview
               scene={selected}
+              previousScene={story.scenes[story.scenes.findIndex(({ id }) => id === selected.id) - 1]}
               copy={copy}
               storyId={story.id}
               session={session}
@@ -59,14 +60,18 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
               </div>
               <MaterialTimeline
                 scene={selected}
+                previousScene={story.scenes[story.scenes.findIndex(({ id }) => id === selected.id) - 1]}
                 copy={copy}
                 saving={saving}
                 storyId={story.id}
                 session={session}
                 uploading={uploading}
+                backgroundUploading={backgroundUploading}
                 uploadCount={uploadCount}
                 variant="desktopPanel"
                 onUpload={onUpload}
+                onUploadBackground={onUploadBackground}
+                onRemoveBackground={onRemoveBackground}
                 onDeleteMaterial={onDeleteMaterial}
                 onMoveToScene={onMoveMaterial}
                 onEditMaterial={onEditMaterial}

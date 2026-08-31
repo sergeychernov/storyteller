@@ -23,6 +23,7 @@
   border-radius: 6px;
   background: #171714;
   box-shadow: inset 0 0 0 5px #171714, 0 18px 50px #33332635;
+  container-type: size;
 }
 
 .material {
@@ -62,6 +63,18 @@
   border: 4px solid white;
   box-shadow: 0 5px 15px #0004;
   transform: rotate(calc((var(--material-index) - 2) * 1.2deg));
+}
+
+.collageUnavailable {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16%;
+  color: #cbc9bf;
+  font-size: 5cqw;
+  line-height: 1.45;
+  text-align: center;
 }
 
 .empty {

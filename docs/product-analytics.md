@@ -24,6 +24,12 @@ AMPLITUDE_API_KEY=<same project API key>
 AMPLITUDE_SERVER_ZONE=US
 ```
 
+For local development the API also loads the repository-root `.env.local` and,
+when no explicit server value exists, reuses the matching browser-safe project
+key and zone. This keeps the first-party relay and the Vite bundle in sync
+without duplicating the same local value. Explicit `AMPLITUDE_*` values always
+take precedence.
+
 The server zone must match the Amplitude organization. Use `EU` for an EU data
 region and `US` for a default US organization. The project API key is designed
 to be embedded in a browser bundle, but the relay requires the browser and API
@@ -65,10 +71,12 @@ Event names follow the `object verb` form and are compile-time checked by
 | `story created` | `surface` | The API returns the created story |
 | `scene created` | `surface` | The API returns the updated story |
 | `material uploaded` | `surface`, `material_kind` | Each image/video upload succeeds |
-| `scene render requested` | `surface`, `export_mode` | The API accepts the render request |
-| `scene render succeeded` | `surface`, `export_mode` | Polling reads the ready render |
-| `scene exported` | `surface`, `export_mode` | The browser receives the artifact and starts saving it |
-| `scene export failed` | `surface`, `export_mode`, `failure_stage`, `failure_reason` | A safe error category is known |
+| `collage background configured` | `surface`, `collage_background_mode` | The dedicated background API confirms a custom upload or restoration of the previous-scene frame |
+| `collage row direction configured` | `surface`, `collage_row_direction` | The scene configuration API confirms the ascending, level, descending, or irregular card alignment |
+| `scene render requested` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The API accepts the render request |
+| `scene render succeeded` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | Polling reads the ready render |
+| `scene exported` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The browser receives the artifact and starts saving it |
+| `scene export failed` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix`, `failure_stage`, `failure_reason` | A safe error category is known |
 
 Authentication events are flushed before the Site navigates into another
 frontend bundle. A failed analytics request never prevents the authenticated
@@ -84,6 +92,19 @@ The current Web activation event is `scene render succeeded`. It is deliberately
 not named `story exported`: full-story master assembly belongs to F04 and is not
 implemented yet. Publication events should be added only with the corresponding
 real adapters and verified results.
+
+`renderer_kind` is a privacy-safe category (`still_image`, `video`, or `collage`)
+that makes the confirmed F03.1 collage outcome measurable without sending scene,
+material, title, filename, or layout identifiers.
+`collage_card_orientation` distinguishes the confirmed `angled` and `straight`
+collage outcomes; non-collage renderers send `not_applicable`. It never contains
+individual angles or other scene data.
+`collage_media_mix` distinguishes `images_only` from `includes_video` for the
+confirmed collage outcome; non-collage renderers send `not_applicable`. It does
+not expose counts, order, filenames, IDs, or content.
+`collage_background_mode` distinguishes `previous_scene_darkened` from
+`custom_material_original`. It is emitted only after the dedicated background
+operation succeeds and never exposes the material kind, ID, filename, or content.
 
 ### B13 access-control instrumentation decision
 

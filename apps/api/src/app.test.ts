@@ -22,7 +22,7 @@ import { probeMedia, renderVideo, SpawnMediaProcessRunner } from "@storyteller/r
 import { Readable } from "node:stream";
 import type { LightMyRequestResponse } from "fastify";
 import type { OpenAPIV3 } from "openapi-types";
-import { sceneRenderFileType, sceneRenderStorageKey } from "@storyteller/render-queue";
+import { sceneRenderFileType, sceneRenderSlot, sceneRenderStorageKey } from "@storyteller/render-queue";
 import type { StoryTimelineResponse } from "@storyteller/schemas";
 import sharp from "sharp";
 import { normalizeStoredStory } from "./database.js";
@@ -30,6 +30,137 @@ import { buildApi } from "./server.js";
 import { detectMediaMetadata, MediaStorage } from "./media-storage.js";
 import { LocalObjectStorage, S3ObjectStorage } from "./object-storage.js";
 import { accessPolicyForRoute } from "./access-control.js";
+import { buildSceneRenderInput } from "./scene-render-input.js";
+
+test("builds a crop-aware mixed PPL render job with a silent video card", async () => {
+  const scene = {
+    id: "scene", rendererId: "collage", layoutId: "2+1", durationSeconds: 5, motion: "none" as const,
+    materials: [
+      {
+        id: "video", kind: "video" as const, name: "video.mp4", storageKey: "original/video.mp4", mimeType: "video/mp4",
+        sizeBytes: 1_000, width: 900, height: 1600, orientation: "portrait" as const, hasAudio: true, audioTags: ["ambient" as const],
+        sourceDurationSeconds: 8,
+        videoTrack: { storageKey: "tracks/video.mp4", mimeType: "video/mp4", sizeBytes: 900, durationSeconds: 8 },
+        edit: { rotation: 0 as const, crop: { x: 0.25, y: 0, width: 0.5, height: 1 }, trim: { startSeconds: 1, endSeconds: 4 } },
+      },
+      { id: "portrait", kind: "image" as const, name: "portrait.jpg", storageKey: "portrait.jpg", mimeType: "image/jpeg",
+        sizeBytes: 100, width: 900, height: 1600, orientation: "portrait" as const },
+      { id: "landscape", kind: "image" as const, name: "landscape.jpg", storageKey: "landscape.jpg", mimeType: "image/jpeg",
+        sizeBytes: 100, width: 1600, height: 900, orientation: "landscape" as const },
+    ],
+    collage: {
+      frame: { width: 12 as const, color: "#FFFFFF", shape: "straight" as const }, entryDurationSeconds: 4,
+      rowDirection: "ascending" as const,
+      straightCards: false,
+      cardAngles: [
+        { materialId: "video", angleDegrees: -4 }, { materialId: "portrait", angleDegrees: 4 },
+        { materialId: "landscape", angleDegrees: -3 },
+      ],
+      cardOffsets: [
+        { materialId: "video", offsetY: 15 }, { materialId: "portrait", offsetY: -15 },
+        { materialId: "landscape", offsetY: 0 },
+      ],
+    },
+    render: { status: "idle" as const },
+  };
+  const input = await buildSceneRenderInput(scene, {
+    async contentHash({ storageKey }) { return createHash("sha256").update(storageKey).digest("hex"); },
+  }, "video");
+  assert.equal(input.rendererId, "collage");
+  if (input.rendererId !== "collage") throw new Error("expected collage input");
+  assert.equal(input.rendererVersion, 23);
+  assert.equal(input.layoutOverlapRatio, 0.4);
+  assert.equal(input.background?.source, "card-fallback");
+  if (input.background?.source !== "card-fallback") throw new Error("expected card fallback background");
+  assert.equal(input.background.materialId, "video");
+  assert.equal(input.background.treatment, "darkened");
+  assert.deepEqual(input.materials[0], {
+    id: "video", kind: "video", storageKey: "tracks/video.mp4", name: "tracks/video.mp4", mimeType: "video/mp4",
+    width: 452, height: 1600, orientation: "portrait", sourceWidth: 900, sourceHeight: 1600, sourceDurationSeconds: 8,
+    edit: { rotation: 0, crop: { x: 0.25, y: 0, width: 0.5, height: 1 }, trim: { startSeconds: 1, endSeconds: 4 } },
+    contentHash: createHash("sha256").update("tracks/video.mp4").digest("hex"),
+  });
+  assert.deepEqual(input.background.material, input.materials[0]);
+  assert.deepEqual(input.dependencies?.map(({ role }) => role), ["original", "video-track", "original", "original"]);
+});
+
+test("builds a mixed image/video render job for a non-PPL layout", async () => {
+  const scene = {
+    id: "scene", rendererId: "collage", layoutId: "stack", durationSeconds: 4, motion: "none" as const,
+    materials: [
+      {
+        id: "video", kind: "video" as const, name: "video.mp4", storageKey: "video.mp4", mimeType: "video/mp4",
+        sizeBytes: 1_000, width: 1600, height: 900, orientation: "landscape" as const, hasAudio: false, audioTags: [],
+        sourceDurationSeconds: 6,
+      },
+      {
+        id: "image", kind: "image" as const, name: "image.jpg", storageKey: "image.jpg", mimeType: "image/jpeg",
+        sizeBytes: 100, width: 1600, height: 900, orientation: "landscape" as const,
+      },
+    ],
+    collage: {
+      frame: { width: 12 as const, color: "#FFFFFF", shape: "torn" as const }, entryDurationSeconds: 3,
+      rowDirection: "ascending" as const,
+      straightCards: false,
+      cardAngles: [{ materialId: "video", angleDegrees: -4 }, { materialId: "image", angleDegrees: 4 }],
+      cardOffsets: [{ materialId: "video", offsetY: 0 }, { materialId: "image", offsetY: 0 }],
+    },
+    render: { status: "idle" as const },
+  };
+  const input = await buildSceneRenderInput(scene, {
+    async contentHash({ storageKey }) { return createHash("sha256").update(storageKey).digest("hex"); },
+  }, "video");
+  assert.equal(input.rendererId, "collage");
+  if (input.rendererId !== "collage") throw new Error("expected collage input");
+  assert.equal(input.rendererVersion, 23);
+  assert.equal(input.layoutId, "stack");
+  assert.equal(input.layoutOverlapRatio, 0.4);
+  assert.deepEqual(input.materials.map(({ kind }) => kind), ["video", "image"]);
+});
+
+test("builds a moving custom background that is absent from collage cards", async () => {
+  const background = {
+    id: "background", kind: "video" as const, name: "background.mp4", storageKey: "background.mp4", mimeType: "video/mp4",
+    sizeBytes: 1_000, width: 900, height: 1600, orientation: "portrait" as const, hasAudio: true, audioTags: ["ambient" as const],
+    sourceDurationSeconds: 8,
+    edit: { rotation: 0 as const, crop: { x: 0, y: 0.1, width: 1, height: 0.8 }, trim: { startSeconds: 1, endSeconds: 5 } },
+  };
+  const cards = [
+    { id: "left", kind: "image" as const, name: "left.jpg", storageKey: "left.jpg", mimeType: "image/jpeg",
+      sizeBytes: 100, width: 1600, height: 900, orientation: "landscape" as const },
+    { id: "right", kind: "image" as const, name: "right.jpg", storageKey: "right.jpg", mimeType: "image/jpeg",
+      sizeBytes: 100, width: 1600, height: 900, orientation: "landscape" as const },
+  ];
+  const input = await buildSceneRenderInput({
+    id: "scene", rendererId: "collage", layoutId: "stack", durationSeconds: 5, motion: "none",
+    materials: cards,
+    collageBackground: { source: "material", material: background },
+    collage: {
+      frame: { width: 12, color: "#FFFFFF", shape: "straight" },
+      entryDurationSeconds: 4, rowDirection: "ascending", straightCards: false,
+      cardAngles: [{ materialId: "left", angleDegrees: -4 }, { materialId: "right", angleDegrees: 4 }],
+      cardOffsets: [{ materialId: "left", offsetY: 0 }, { materialId: "right", offsetY: 0 }],
+    },
+    render: { status: "idle" },
+  }, {
+    async contentHash({ storageKey }) { return createHash("sha256").update(storageKey).digest("hex"); },
+  }, "video", {
+    sceneId: "previous", inputHash: "a".repeat(64), storageKey: "previous.png", contentHash: "b".repeat(64),
+  });
+
+  assert.equal(input.rendererId, "collage");
+  if (input.rendererId !== "collage") throw new Error("expected collage input");
+  assert.equal(input.rendererVersion, 23);
+  assert.deepEqual(input.materials.map(({ id }) => id), ["left", "right"]);
+  assert.equal(input.background?.source, "custom-material");
+  if (input.background?.source !== "custom-material") throw new Error("expected custom material background");
+  assert.equal(input.background.treatment, "original");
+  assert.equal(input.background.material?.kind, "video");
+  assert.equal(input.background.material?.id, "background");
+  assert.equal(input.background.material?.edit?.trim?.startSeconds, 1);
+  assert.equal(input.dependencies?.some(({ role }) => role === "scene-frame"), false,
+    "an explicit material background must not depend on the previous scene frame");
+});
 
 test("protects a profile, uploads media and stores its stories", async (context) => {
   process.env.NODE_ENV = "test";
@@ -166,19 +297,119 @@ test("protects a profile, uploads media and stores its stories", async (context)
     method: "POST", url: `/stories/${story.id}/scenes/${sceneId}/materials`,
     payload: secondMultipart.body, headers: { ...headers, "content-type": secondMultipart.contentType },
   });
-  const twoMaterials = withSecondPhoto.json<{ scenes: { materials: { id: string; name: string; storageKey: string }[] }[] }>().scenes[0]!.materials;
+  const collageScene = withSecondPhoto.json<Story>().scenes[0]!;
+  assert.equal(collageScene.rendererId, "collage");
+  assert.deepEqual(collageScene.collage?.frame, { width: 12, color: "#FFFFFF", shape: "straight" });
+  assert.equal("overlapRatio" in collageScene.collage!, false);
+  assert.equal(collageScene.collage?.entryDurationSeconds, 4);
+  assert.equal(collageScene.collage?.straightCards, false);
+  assert.deepEqual(collageScene.collage?.cardAngles.map(({ materialId }) => materialId),
+    collageScene.materials.map(({ id }) => id));
+  assert.ok(collageScene.collage!.cardAngles.every(({ angleDegrees }) => Math.abs(angleDegrees) >= 2
+    && Math.abs(angleDegrees) <= 8));
+  assert.deepEqual(collageScene.collage?.cardOffsets, collageScene.materials.map(({ id }) => ({ materialId: id, offsetY: 0 })),
+    "the scene debug JSON must expose the server-owned offset of every card");
+  const collageConfigured = await api.inject({
+    method: "PATCH", url: `/stories/${story.id}/scenes/${sceneId}`, headers,
+    payload: {
+      layoutId: "stack",
+      collage: {
+        ...collageScene.collage,
+        frame: { width: 10, color: "#aabbcc", shape: "torn" },
+        rowDirection: "descending",
+        overlapRatio: 0.49,
+        cardAngles: collageScene.materials.map(({ id }) => ({ materialId: id, angleDegrees: 0 })),
+      },
+    },
+  });
+  assert.equal(collageConfigured.statusCode, 200, collageConfigured.body);
+  let configuredCollageScene = collageConfigured.json<Story>().scenes[0]!;
+  assert.equal(configuredCollageScene.collage?.frame.width, 12,
+    "legacy free-form widths migrate to the nearest supported preset");
+  assert.equal(configuredCollageScene.collage?.frame.color, "#AABBCC");
+  assert.equal(configuredCollageScene.collage?.rowDirection, "descending");
+  assert.equal("overlapRatio" in configuredCollageScene.collage!, false,
+    "legacy clients cannot override layout-owned overlap");
+  assert.ok(configuredCollageScene.collage!.cardAngles.every(({ angleDegrees }) => angleDegrees !== 0),
+    "the server must calculate hidden angles instead of accepting them from the editable request");
+  const backgroundMultipart = multipartFile("background.png", "image/png", png);
+  const withCustomBackground = await api.inject({
+    method: "POST", url: `/stories/${story.id}/scenes/${sceneId}/collage-background/material`,
+    payload: backgroundMultipart.body, headers: { ...headers, "content-type": backgroundMultipart.contentType },
+  });
+  assert.equal(withCustomBackground.statusCode, 201, withCustomBackground.body);
+  const backgroundScene = withCustomBackground.json<Story>().scenes[0]!;
+  assert.equal(backgroundScene.materials.length, 2, "background media must not become a collage card");
+  assert.equal(backgroundScene.collageBackground?.source, "material");
+  if (backgroundScene.collageBackground?.source !== "material") throw new Error("expected custom background material");
+  const backgroundMaterial = backgroundScene.collageBackground.material;
+  assert.equal(backgroundMaterial.name, "background.png");
+  assert.deepEqual((await api.inject({
+    method: "GET", url: `/stories/${story.id}/materials/${backgroundMaterial.id}/content`, headers,
+  })).rawPayload, png, "the special background remains available through the authorized material content API");
+  const changedAfterBackground = await api.inject({
+    method: "PATCH", url: `/stories/${story.id}/scenes/${sceneId}`, headers,
+    payload: { collage: {
+      frame: { ...backgroundScene.collage!.frame, width: 16 },
+      entryDurationSeconds: backgroundScene.collage!.entryDurationSeconds,
+      rowDirection: backgroundScene.collage!.rowDirection,
+      straightCards: backgroundScene.collage!.straightCards,
+    } },
+  });
+  assert.equal(changedAfterBackground.statusCode, 200, changedAfterBackground.body);
+  configuredCollageScene = changedAfterBackground.json<Story>().scenes[0]!;
+  assert.equal(configuredCollageScene.collage?.frame.width, 16);
+  assert.equal(configuredCollageScene.collageBackground?.source, "material");
+  assert.equal(configuredCollageScene.collageBackground?.source === "material"
+    ? configuredCollageScene.collageBackground.material.id : undefined, backgroundMaterial.id,
+  "composition changes must preserve the separately stored background");
+  const collageRender = await api.inject({
+    method: "POST", url: `/stories/${story.id}/scenes/${sceneId}/renders`, headers, payload: { mode: "video" },
+  });
+  assert.equal(collageRender.statusCode, 202, collageRender.body);
+  const collageJob = [...renderQueue.jobs.values()].find(({ id }) => id === collageRender.json<{ id: string }>().id)!;
+  assert.equal(collageJob.input.rendererId, "collage");
+  if (collageJob.input.rendererId !== "collage") throw new Error("expected collage render input");
+  assert.equal(collageJob.input.layoutRendererId, "animated-collage.stack.v1");
+  assert.equal(collageJob.input.layoutOverlapRatio, 0.4);
+  assert.equal(collageJob.input.rendererVersion, 23);
+  assert.equal(collageJob.input.background?.source, "custom-material");
+  if (collageJob.input.background?.source !== "custom-material") throw new Error("expected custom background");
+  assert.equal(collageJob.input.background.materialId, backgroundMaterial.id);
+  assert.equal(collageJob.input.background.treatment, "original");
+  assert.deepEqual(collageJob.input.settings.cardAngles, configuredCollageScene.collage?.cardAngles);
+  assert.equal(collageJob.input.settings.rowDirection, "descending");
+  assert.equal(collageJob.input.materials.length, 2);
+  assert.deepEqual(collageJob.input.materials.map(({ width, height }) => ({ width, height })), [
+    { width: 1, height: 1 }, { width: 1, height: 1 },
+  ]);
+  assert.deepEqual(collageJob.input.dependencies?.map(({ role }) => role), ["original", "image-edit", "original", "original"]);
+  const removedBackground = await api.inject({
+    method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}/collage-background`, headers,
+  });
+  assert.equal(removedBackground.statusCode, 200, removedBackground.body);
+  assert.deepEqual(removedBackground.json<Story>().scenes[0]!.collageBackground, { source: "previous-scene" });
+  assert.equal(removedBackground.json<Story>().scenes[0]!.materials.length, 2);
+  await assert.rejects(access(join(mediaRoot, backgroundMaterial.storageKey)), { code: "ENOENT" });
+  const twoMaterials = collageConfigured.json<Story>().scenes[0]!.materials;
   const secondMaterial = twoMaterials.find(({ name }) => name === "second.png")!;
   const reordered = await api.inject({
     method: "PUT", url: `/stories/${story.id}/scenes/${sceneId}/material-order`, headers,
     payload: { materialIds: [twoMaterials[1]!.id, twoMaterials[0]!.id] },
   });
   assert.equal(reordered.statusCode, 200);
-  assert.deepEqual(reordered.json<{ scenes: { materials: { name: string }[] }[] }>().scenes[0]!.materials.map(({ name }) => name), ["second.png", "portrait.png"]);
+  const reorderedScene = reordered.json<Story>().scenes[0]!;
+  assert.deepEqual(reorderedScene.materials.map(({ name }) => name), ["second.png", "portrait.png"]);
+  assert.deepEqual(reorderedScene.collage?.cardAngles.map(({ materialId }) => materialId),
+    reorderedScene.materials.map(({ id }) => id));
+  assert.notDeepEqual(reorderedScene.collage?.cardAngles, configuredCollageScene.collage?.cardAngles);
   const deleted = await api.inject({
     method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}/materials/${uploaded.id}`, headers,
   });
   assert.equal(deleted.statusCode, 200);
-  assert.deepEqual(deleted.json<{ scenes: { materials: { name: string }[] }[] }>().scenes[0]!.materials.map(({ name }) => name), ["second.png"]);
+  const deletedScene = deleted.json<Story>().scenes[0]!;
+  assert.deepEqual(deletedScene.materials.map(({ name }) => name), ["second.png"]);
+  assert.equal(deletedScene.collage, undefined);
   assert.equal((await api.inject({
     method: "DELETE", url: `/stories/${story.id}/scenes/${sceneId}/materials/${uploaded.id}`, headers,
   })).statusCode, 404);
@@ -284,15 +515,21 @@ test("scene deletion deduplicates cleanup keys and preserves media referenced by
     id: randomUUID(), kind: "image", name: "shared.png", storageKey: "shared.png", mimeType: "image/png",
     orientation: "landscape", width: 100, height: 100, sizeBytes: 200,
   };
+  const background: SceneMaterial = {
+    ...image, id: randomUUID(), name: "background.png", storageKey: "background.png",
+  };
   const before = { ...story, scenes: [
-    { ...target, materials: [video, { ...video, id: randomUUID() }, image] },
+    { ...target, materials: [video, { ...video, id: randomUUID() }, image],
+      collageBackground: { source: "material" as const, material: background } },
     { ...retained, materials: [{ ...image, id: randomUUID() }] },
   ] };
   repository.stories.set(story.id, before);
   const response = await api.inject({ method: "DELETE", url: `/stories/${story.id}/scenes/${target.id}`, headers });
   assert.equal(response.statusCode, 200, response.body);
-  assert.deepEqual(new Set(repository.deletedSceneStorageKeys), new Set(["source.mp4", "video.mp4", "audio.m4a", "edited.mp4"]));
-  assert.equal(repository.deletedSceneStorageKeys.length, 4);
+  assert.deepEqual(new Set(repository.deletedSceneStorageKeys), new Set([
+    "source.mp4", "video.mp4", "audio.m4a", "edited.mp4", "background.png",
+  ]));
+  assert.equal(repository.deletedSceneStorageKeys.length, 5);
   assert.deepEqual(response.json<Story>().scenes, [before.scenes[1]]);
 });
 
@@ -414,11 +651,13 @@ test("serves each crop/rotation result without caching old pixels and renders th
     const render = await api.inject({ method: "POST", url: `/stories/${storyId}/scenes/${sceneId}/renders`, headers });
     assert.equal(render.statusCode, 202, render.body);
     const job = [...renderQueue.jobs.values()].find(({ id }) => id === render.json<{ id: string }>().id)!;
+    assert.equal(job.input.rendererId, "still-image");
+    if (job.input.rendererId !== "still-image") throw new Error("expected still-image render input");
     assert.equal(job.input.material.storageKey, result.storageKey);
     assert.deepEqual([job.input.material.width, job.input.material.height], size);
     assert.equal(job.input.material.orientation, "portrait");
   }
-  assert.equal(renderQueue.jobs.size, 2);
+  assert.equal(renderQueue.jobs.size, 1);
   const reset = await api.inject({
     method: "PATCH", url: `/stories/${storyId}/scenes/${sceneId}/materials/${original.id}`, headers,
     payload: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } },
@@ -694,6 +933,139 @@ test("upgrades a legacy scene with one image to the still-image renderer", () =>
   assert.deepEqual(normalized.scenes[0]?.focusPoint, { x: 0.5, y: 0.5 });
 });
 
+test("hydrates deterministic resting angles and offsets when opening a legacy collage", () => {
+  const payload = {
+    id: "e95428cd-ae65-4334-8497-1f31b88c8124",
+    profileId: "675efe5b-18a4-46f9-a210-00a8ebf9a01d",
+    title: "Legacy collage",
+    status: "draft",
+    revision: 3,
+    scenes: [{
+      id: "f89171cc-9473-4a01-a02a-fb93e5d4da6f",
+      durationSeconds: 5,
+      layoutId: "stack",
+      rendererId: "collage",
+      motion: "none",
+      materials: [
+        legacyImage("08140c76-10ba-48c5-a000-fa56c9e7364a", "first.png"),
+        legacyImage("18140c76-10ba-48c5-a000-fa56c9e7364a", "second.png"),
+      ],
+      collage: {
+        frame: { width: 6, color: "#FFFFFF", shape: "straight" },
+        entryDurationSeconds: 4,
+      },
+      render: { status: "idle" },
+    }],
+    narrations: [],
+    music: { generationStatus: "idle", applied: false },
+  };
+  const normalized = normalizeStoredStory(payload);
+  assert.equal(normalized.scenes[0]?.collage?.straightCards, false);
+  assert.equal(normalized.scenes[0]?.collage?.rowDirection, "ascending");
+  assert.deepEqual(normalized.scenes[0]?.collage?.cardAngles.map(({ materialId }) => materialId),
+    payload.scenes[0]!.materials.map(({ id }) => id));
+  assert.ok(normalized.scenes[0]!.collage!.cardAngles.every(({ angleDegrees }) => Math.abs(angleDegrees) >= 2
+    && Math.abs(angleDegrees) <= 8));
+  assert.deepEqual(normalizeStoredStory(payload).scenes[0]?.collage?.cardAngles,
+    normalized.scenes[0]?.collage?.cardAngles);
+  assert.deepEqual(normalized.scenes[0]?.collage?.cardOffsets,
+    payload.scenes[0]!.materials.map(({ id }) => ({ materialId: id, offsetY: 0 })));
+  assert.deepEqual(normalizeStoredStory(payload).scenes[0]?.collage?.cardOffsets,
+    normalized.scenes[0]?.collage?.cardOffsets);
+  assert.equal(normalized.scenes[0]?.collage?.frame.width, 12);
+  assert.deepEqual(normalized.scenes[0]?.collageBackground, { source: "previous-scene" });
+});
+
+test("migrates the legacy first material background into a separate scene resource", () => {
+  const background = legacyImage("08140c76-10ba-48c5-a000-fa56c9e7364a", "background.png", "portrait");
+  const cards = [
+    legacyImage("18140c76-10ba-48c5-a000-fa56c9e7364a", "left.png"),
+    legacyImage("28140c76-10ba-48c5-a000-fa56c9e7364a", "right.png"),
+  ];
+  const normalized = normalizeStoredStory({
+    id: "e95428cd-ae65-4334-8497-1f31b88c8124",
+    profileId: "675efe5b-18a4-46f9-a210-00a8ebf9a01d",
+    title: "Legacy custom background",
+    status: "draft",
+    revision: 4,
+    scenes: [{
+      id: "f89171cc-9473-4a01-a02a-fb93e5d4da6f",
+      durationSeconds: 5,
+      layoutId: "stack",
+      rendererId: "collage",
+      motion: "none",
+      materials: [background, ...cards],
+      collage: {
+        background: { mode: "first-material" },
+        frame: { width: 12, color: "#FFFFFF", shape: "straight" },
+        entryDurationSeconds: 4,
+      },
+      render: { status: "ready", artifactId: "stale" },
+    }],
+    narrations: [],
+    music: { generationStatus: "idle", applied: false },
+  });
+  const scene = normalized.scenes[0]!;
+  assert.deepEqual(scene.materials.map(({ id }) => id), cards.map(({ id }) => id));
+  assert.deepEqual(scene.collageBackground, { source: "material", material: background });
+  assert.equal("background" in scene.collage!, false);
+  assert.deepEqual(scene.collage!.cardAngles.map(({ materialId }) => materialId), cards.map(({ id }) => id));
+  assert.deepEqual(scene.render, { status: "idle" });
+});
+
+test("repairs a stale generic layout when mixed media now has one exact collage layout", () => {
+  const materialIds = [
+    "08140c76-10ba-48c5-a000-fa56c9e7364a",
+    "18140c76-10ba-48c5-a000-fa56c9e7364a",
+    "28140c76-10ba-48c5-a000-fa56c9e7364a",
+  ];
+  const normalized = normalizeStoredStory({
+    id: "e95428cd-ae65-4334-8497-1f31b88c8124",
+    profileId: "675efe5b-18a4-46f9-a210-00a8ebf9a01d",
+    title: "Mixed legacy collage",
+    status: "draft",
+    revision: 4,
+    scenes: [{
+      id: "f89171cc-9473-4a01-a02a-fb93e5d4da6f",
+      durationSeconds: 5,
+      layoutId: "overlap-stack",
+      rendererId: "collage",
+      motion: "none",
+      materials: [
+        legacyImage(materialIds[0]!, "portrait.png", "portrait"),
+        {
+          ...legacyImage(materialIds[1]!, "portrait.mp4", "portrait"),
+          kind: "video", mimeType: "video/mp4", hasAudio: false, audioTags: [], sourceDurationSeconds: 5,
+        },
+        legacyImage(materialIds[2]!, "landscape.png"),
+      ],
+      collage: {
+        frame: { width: 6, color: "#FFFFFF", shape: "straight" },
+        entryDurationSeconds: 4,
+        straightCards: false,
+        cardAngles: [],
+      },
+      render: { status: "ready", artifactId: "stale-render" },
+    }],
+    narrations: [],
+    music: { generationStatus: "idle", applied: false },
+  });
+  const scene = normalized.scenes[0]!;
+  assert.equal(scene.layoutId, "2+1");
+  assert.deepEqual(scene.collage?.cardAngles.map(({ materialId }) => materialId), materialIds);
+  assert.deepEqual(scene.collage?.cardOffsets.map(({ materialId }) => materialId), materialIds);
+  const offsetDifference = scene.collage!.cardOffsets[1]!.offsetY - scene.collage!.cardOffsets[0]!.offsetY;
+  assert.ok(offsetDifference <= -20 && offsetDifference >= -40);
+  assert.deepEqual(scene.render, { status: "idle" });
+});
+
+function legacyImage(id: string, name: string, orientation: "portrait" | "landscape" = "landscape") {
+  return {
+    id, kind: "image", name, orientation, storageKey: name, mimeType: "image/png",
+    sizeBytes: 1024, width: orientation === "portrait" ? 900 : 1600, height: orientation === "portrait" ? 1600 : 900,
+  };
+}
+
 test("never exposes a stored platform secret", async () => {
   process.env.NODE_ENV = "test";
   const api = await buildApi(new StoryApplication(new MemoryRepository()));
@@ -711,8 +1083,8 @@ test("never exposes a stored platform secret", async () => {
   await api.close();
 });
 
-test("render versions invalidate locally, reject stale downloads, survive reopening and reuse an exact revert", async (context) => {
-  const { api, application, queue, storage, repository, storyId, profileId, headers, sceneId, otherSceneId } = await versionFixture(context);
+test("a scene keeps only its latest render output and rejects obsolete downloads", async (context) => {
+  const { api, application, queue, storage, repository, storyId, profileId, headers, sceneId, otherSceneId } = await renderFixture(context);
   const sceneUrl = `/stories/${storyId}/scenes/${sceneId}`;
   const rendersUrl = `${sceneUrl}/renders`;
   const request = async (id: string) => {
@@ -744,15 +1116,19 @@ test("render versions invalidate locally, reject stale downloads, survive reopen
   assert.equal((await request(otherSceneId)).id, unaffected.id);
   const changed = await request(sceneId);
   assert.notEqual(changed.id, first.id);
-  assert.equal(queue.jobs.size, 3);
-  assert.deepEqual((await list()).map(({ current }) => current), [true, false]);
+  assert.equal(queue.jobs.size, 2);
+  assert.deepEqual((await list()).map(({ current }) => current), [true]);
+  assert.equal((await api.inject({ method: "GET", url: `${rendersUrl}/${first.id}`, headers })).statusCode, 404);
 
   await application.configureScene(profileId, storyId, sceneId, { durationSeconds: 5 });
-  assert.equal((await request(sceneId)).id, first.id);
-  assert.equal(queue.jobs.size, 3);
+  const reverted = await request(sceneId);
+  assert.notEqual(reverted.id, first.id);
+  assert.equal(queue.jobs.size, 2);
+  await queue.complete(reverted.id, "worker", "reverted.mp4", bytes.length, contentHash);
   const reopened = await buildApi(new StoryApplication(repository), { mediaStorage: new MediaStorage(storage), objectStorage: storage, renderQueue: queue });
   context.after(() => reopened.close());
-  const download = await reopened.inject({ method: "GET", url: `${rendersUrl}/${first.id}/content`, headers });
+  await storage.put("reverted.mp4", { body: Readable.from(bytes), contentType: "video/mp4", contentLength: bytes.length });
+  const download = await reopened.inject({ method: "GET", url: `${rendersUrl}/${reverted.id}/content`, headers });
   assert.equal(download.statusCode, 200, download.body);
   assert.equal(download.headers["cache-control"], "private, no-store");
   assert.deepEqual(download.rawPayload, bytes);
@@ -764,7 +1140,7 @@ test("render versions invalidate locally, reject stale downloads, survive reopen
 });
 
 test("scene frames are separate lossless base-visual PNG artifacts and follow scene cache invalidation", async (context) => {
-  const { api, application, queue, storage, storyId, profileId, headers, sceneId } = await versionFixture(context);
+  const { api, application, queue, storage, storyId, profileId, headers, sceneId } = await renderFixture(context);
   const framesUrl = `/stories/${storyId}/scenes/${sceneId}/frames`;
   const firstResponse = await api.inject({ method: "POST", url: framesUrl, headers });
   assert.equal(firstResponse.statusCode, 202, firstResponse.body);
@@ -802,8 +1178,54 @@ test("scene frames are separate lossless base-visual PNG artifacts and follow sc
   } })).statusCode, 404);
 });
 
+test("collage render uses a ready final frame from the immediately previous scene", async (context) => {
+  const { api, application, queue, storyId, profileId, headers, sceneId, otherSceneId } = await renderFixture(context);
+  const frameResponse = await api.inject({
+    method: "POST", url: `/stories/${storyId}/scenes/${sceneId}/frames`, headers,
+  });
+  assert.equal(frameResponse.statusCode, 202, frameResponse.body);
+  const frame = frameResponse.json<{ id: string; inputHash: string }>();
+  const frameStorageKey = `projects/${profileId}/${storyId}/previous-frame.png`;
+  const frameContentHash = "f".repeat(64);
+  await queue.complete(frame.id, "worker", frameStorageKey, 123, frameContentHash);
+
+  await application.addSceneMaterial(profileId, storyId, otherSceneId, {
+    kind: "image", name: "second.png", storageKey: "second.png", mimeType: "image/png",
+    contentHash: "e".repeat(64), sizeBytes: 100, width: 1600, height: 900, orientation: "landscape",
+  });
+  const response = await api.inject({
+    method: "POST", url: `/stories/${storyId}/scenes/${otherSceneId}/renders`, headers,
+  });
+  assert.equal(response.statusCode, 202, response.body);
+  const job = [...queue.jobs.values()].find(({ id }) => id === response.json<{ id: string }>().id)!;
+  assert.equal(job.input.rendererId, "collage");
+  if (job.input.rendererId !== "collage") throw new Error("expected collage input");
+  assert.deepEqual(job.input.background, {
+    source: "previous-scene-frame",
+    treatment: "darkened",
+    sceneId,
+    inputHash: frame.inputHash,
+    contentHash: frameContentHash,
+    storageKey: frameStorageKey,
+    name: "previous-scene-frame.png",
+    mimeType: "image/png",
+    width: 1080,
+    height: 1920,
+    orientation: "portrait",
+  });
+  assert.equal(job.input.dependencies?.at(-1)?.role, "scene-frame");
+  assert.deepEqual(job.input.dependencies?.at(-1)?.parameters, { sceneId, inputHash: frame.inputHash });
+  assert.equal((await api.inject({
+    method: "GET", url: `/stories/${storyId}/scenes/${otherSceneId}/renders/${job.id}`, headers,
+  })).json<{ current: boolean }>().current, true);
+  await application.configureScene(profileId, storyId, sceneId, { durationSeconds: 6 });
+  assert.equal((await api.inject({
+    method: "GET", url: `/stories/${storyId}/scenes/${otherSceneId}/renders/${job.id}`, headers,
+  })).json<{ current: boolean }>().current, false);
+});
+
 test("legacy material hashes come from bytes and match new uploads; legacy renders are not current", async (context) => {
-  const { api, application, queue, storage, storyId, profileId, headers, sceneId } = await versionFixture(context);
+  const { api, application, queue, storage, storyId, profileId, headers, sceneId } = await renderFixture(context);
   const url = `/stories/${storyId}/scenes/${sceneId}/renders`;
   const first = (await api.inject({ method: "POST", url, headers })).json<{ id: string }>();
   const material = (await application.getStory(profileId, storyId)).scenes[0]!.materials[0]!;
@@ -826,7 +1248,7 @@ test("legacy material hashes come from bytes and match new uploads; legacy rende
 });
 
 test("video dependencies preserve audio after visual edits and invalidate every affected export after trim", async (context) => {
-  const { api, application, storyId, profileId, headers, otherSceneId: sceneId } = await versionFixture(context);
+  const { api, application, storyId, profileId, headers, otherSceneId: sceneId } = await renderFixture(context);
   const scene = (await application.getStory(profileId, storyId)).scenes.find(({ id }) => id === sceneId)!;
   await application.removeSceneMaterial(profileId, storyId, sceneId, scene.materials[0]!.id);
   const story = await application.addSceneMaterial(profileId, storyId, sceneId, {
@@ -895,7 +1317,7 @@ test("timeline API recalculates trimmed video timing and warnings from the store
 });
 
 test("moving uploaded materials preserves content after source deletion and invalidates only affected render inputs", async (context) => {
-  const { api, application, repository, storyId, profileId, headers, sceneId, otherSceneId } = await versionFixture(context);
+  const { api, application, repository, storyId, profileId, headers, sceneId, otherSceneId } = await renderFixture(context);
   const renderUrl = (id: string) => `/stories/${storyId}/scenes/${id}/renders`;
   for (const id of [sceneId, otherSceneId]) assert.equal((await api.inject({ method: "POST", url: renderUrl(id), headers })).statusCode, 202);
   let story = await application.getStory(profileId, storyId);
@@ -1096,9 +1518,9 @@ test("every bearer-protected API route has an explicit access policy", async (co
   }
 });
 
-async function versionFixture(context: TestContext) {
+async function renderFixture(context: TestContext) {
   process.env.NODE_ENV = "test";
-  const root = await mkdtemp(join(tmpdir(), "storyteller-versions-test-"));
+  const root = await mkdtemp(join(tmpdir(), "storyteller-render-results-test-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const storage = new LocalObjectStorage(root);
   const repository = new MemoryRepository();
@@ -1106,7 +1528,7 @@ async function versionFixture(context: TestContext) {
   const queue = new MemoryRenderQueue();
   const api = await buildApi(application, { mediaStorage: new MediaStorage(storage), objectStorage: storage, renderQueue: queue });
   context.after(() => api.close());
-  const auth = await application.register({ name: "Test", email: "versions@example.com", password: "long-test-password" });
+  const auth = await application.register({ name: "Test", email: "render-results@example.com", password: "long-test-password" });
   const profileId = auth.profile.id;
   const headers = { authorization: `Bearer ${auth.accessToken}` };
   const storyId = (await application.createStory(profileId, { title: "Versions" })).id;
@@ -1173,6 +1595,10 @@ class MemoryRenderQueue implements SceneRenderQueue {
     if (existing) return existing;
     const queued = { ...job, status: "queued" as const };
     this.jobs.set(key, queued);
+    for (const [otherKey, candidate] of this.jobs) {
+      if (otherKey !== key && candidate.storyId === job.storyId && candidate.sceneId === job.sceneId
+        && sceneRenderSlot(candidate.input) === sceneRenderSlot(job.input)) this.jobs.delete(otherKey);
+    }
     return queued;
   }
   findAuthorized(profileId: string, storyId: string, sceneId: string, renderId: string): Promise<SceneRenderJob | undefined> {
@@ -1183,6 +1609,7 @@ class MemoryRenderQueue implements SceneRenderQueue {
     return [...this.jobs.values()].filter((job) => job.profileId === profileId && job.storyId === storyId && job.sceneId === sceneId).reverse();
   }
   claim(): Promise<SceneRenderJob | undefined> { return Promise.resolve(undefined); }
+  reportProgress(): Promise<boolean> { return Promise.resolve(false); }
   async complete(renderId: string, _workerId: string, storageKey: string, sizeBytes: number, contentHash: string): Promise<boolean> {
     const entry = [...this.jobs.entries()].find(([, job]) => job.id === renderId);
     if (!entry) return false;

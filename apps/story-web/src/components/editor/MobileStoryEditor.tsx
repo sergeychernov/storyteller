@@ -11,8 +11,8 @@ import { SceneRail } from "./SceneRail.js";
 export function MobileStoryEditor(props: StoryEditorViewProps) {
   const [mode, setMode] = useState<MobileEditorMode>("scene");
   const {
-    story, session, selected, copy, saving, adding, uploading, uploadCount, operationErrorMessage, deleteDisabled,
-    onSelect, onAdd, onUpload, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
+    story, session, selected, copy, saving, adding, uploading, backgroundUploading, uploadCount, operationErrorMessage, deleteDisabled,
+    onSelect, onAdd, onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
   } = props;
 
   return (
@@ -57,13 +57,17 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
       </div>
       {selected && <SceneEditorTabs
         scene={selected}
+        previousScene={story.scenes[story.scenes.findIndex(({ id }) => id === selected.id) - 1]}
         copy={copy}
         saving={saving}
         storyId={story.id}
         session={session}
         uploading={uploading}
+        backgroundUploading={backgroundUploading}
         uploadCount={uploadCount}
         onUpload={onUpload}
+        onUploadBackground={onUploadBackground}
+        onRemoveBackground={onRemoveBackground}
         onDeleteMaterial={onDeleteMaterial}
         onMoveMaterial={onMoveMaterial}
         onEditMaterial={onEditMaterial}

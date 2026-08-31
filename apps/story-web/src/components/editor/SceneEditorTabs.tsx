@@ -10,13 +10,17 @@ import type { SceneChange } from "./story-editor-view.js";
 
 interface SceneEditorTabsProps {
   readonly scene: Scene;
+  readonly previousScene?: Scene | undefined;
   readonly copy: EditorCopy;
   readonly saving: boolean;
   readonly uploading: boolean;
+  readonly backgroundUploading: boolean;
   readonly uploadCount: number;
   readonly storyId: string;
   readonly session: AuthSession;
   readonly onUpload: (files: readonly File[]) => void;
+  readonly onUploadBackground: (file: File) => void;
+  readonly onRemoveBackground: () => void;
   readonly onDeleteMaterial: (materialId: string) => void;
   readonly onMoveMaterial: (sourceSceneId: string, materialId: string, targetSceneId: string) => void;
   readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
@@ -27,8 +31,8 @@ interface SceneEditorTabsProps {
 type EditorTab = "materials" | "composition";
 
 export function SceneEditorTabs({
-  scene, copy, saving, uploading, uploadCount, storyId, session,
-  onUpload, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onChange,
+  scene, previousScene, copy, saving, uploading, backgroundUploading, uploadCount, storyId, session,
+  onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onChange,
 }: SceneEditorTabsProps) {
   const [activeTab, setActiveTab] = useState<EditorTab>("materials");
   const singleVideo = isSingleVideoScene(scene);
@@ -61,14 +65,18 @@ export function SceneEditorTabs({
       >
         {visibleTab === "materials" && <MaterialTimeline
           scene={scene}
+          previousScene={previousScene}
           copy={copy}
           saving={saving}
           storyId={storyId}
           session={session}
           uploading={uploading}
+          backgroundUploading={backgroundUploading}
           uploadCount={uploadCount}
           variant="mobilePanel"
           onUpload={onUpload}
+          onUploadBackground={onUploadBackground}
+          onRemoveBackground={onRemoveBackground}
           onDeleteMaterial={onDeleteMaterial}
           onMoveToScene={onMoveMaterial}
           onEditMaterial={onEditMaterial}

@@ -96,6 +96,16 @@
   background: #e5e3dc;
 }
 
+.layoutMessage {
+  margin: 0;
+  padding: 8px 9px;
+  border-radius: 6px;
+  color: #6d593f;
+  background: #f1e8d8;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
 .motionOptions {
   display: flex;
   flex-wrap: wrap;

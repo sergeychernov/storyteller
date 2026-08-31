@@ -46,7 +46,7 @@ export function SingleImageMaterial({
       duration: scene.durationSeconds * 1_000,
       easing: "linear",
       fill: "both",
-      iterations: Number.POSITIVE_INFINITY,
+      iterations: 1,
     });
     return () => animation.cancel();
   }, [active, frames, scene.durationSeconds, scene.motion]);

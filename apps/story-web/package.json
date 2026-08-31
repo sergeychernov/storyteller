@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "node ../../node_modules/typescript/bin/tsc -b ../../packages/api-client ../../packages/analytics ../../packages/application ../../packages/auth-client ../../packages/domain ../../packages/localization ../../packages/web-ui && vite build",
+    "build-storybook": "storybook build",
     "dev": "vite --host 0.0.0.0 --port 3002",
     "preview": "vite preview --host 0.0.0.0 --port 3002",
+    "storybook": "storybook dev --host 127.0.0.1 --port 6006",
     "test": "vitest run"
   },
   "dependencies": {
@@ -25,6 +27,9 @@
     "react-router-dom": "7.18.0"
   },
   "devDependencies": {
+    "@storybook/addon-a11y": "10.5.10",
+    "@storybook/addon-docs": "10.5.10",
+    "@storybook/react-vite": "10.5.10",
     "@testing-library/dom": "10.4.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.6",
@@ -32,6 +37,8 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.5",
     "jsdom": "30.0.1",
+    "storybook": "10.5.10",
+    "typescript": "7.0.2",
     "vite": "8.2.1",
     "vitest": "4.1.11"
   }

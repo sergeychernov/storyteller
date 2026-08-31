@@ -20,8 +20,9 @@ export function SceneLayoutSelector({ scene, copy, saving, onChange }: SceneLayo
       <code>{materialOrientationSequence(scene.materials) || "—"}</code>
     </div>
     <div className={styles.optionGroup} role="group" aria-label={copy.layout}>
-      {layouts.map((layout) => {
-        const selected = (scene.layoutId ?? layouts[0]?.id) === layout.id;
+      {layouts.map((layout, index) => {
+        const selected = scene.layoutId === layout.id || scene.layoutId === undefined
+          && layouts.length === 2 && layouts[1]?.id === "overlap-stack" && index === 0;
         return <button
           type="button"
           className={classNames(styles.optionButton, selected && styles.activeOption)}
@@ -37,7 +38,7 @@ export function SceneLayoutSelector({ scene, copy, saving, onChange }: SceneLayo
   </section>;
 }
 
-function LayoutGlyph({ layoutId }: { readonly layoutId: string }) {
+export function LayoutGlyph({ layoutId }: { readonly layoutId: string }) {
   if (layoutId === "overlap-stack") return <svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="4" y="3" width="13" height="16" rx="1.5" transform="rotate(-8 10.5 11)" />
     <rect x="8" y="6" width="12" height="15" rx="1.5" />

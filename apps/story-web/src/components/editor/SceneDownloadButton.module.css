@@ -12,7 +12,7 @@
   text-transform: none;
 }
 
-.options button {
+.options :is(button, a) {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -23,6 +23,8 @@
   color: #42483a;
   background: #f5f4ee;
   cursor: pointer;
+  font: inherit;
+  text-decoration: none;
 }
 
 .options button:disabled { opacity: 0.45; cursor: default; }

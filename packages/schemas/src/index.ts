@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { profileLanguages } from "@storyteller/domain";
+import {
+  collageFrameShapes, collageRowDirections, defaultCollageRowDirection,
+  normalizeCollageFrameWidth, profileLanguages,
+} from "@storyteller/domain";
 
 export const profileLanguageSchema = z.enum(profileLanguages);
 export const profileSchema = z.object({ id: z.string().uuid(), name: z.string(), email: z.email(), language: profileLanguageSchema });
@@ -28,6 +31,69 @@ export const materialOrientationSchema = z.enum(["portrait", "landscape"]);
 export const videoAudioTagSchema = z.enum(["voice", "music", "ambient"]);
 export const sceneMotionSchema = z.enum(["none", "zoom-in", "zoom-out", "pan-left", "pan-right"]);
 export const focusPointSchema = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
+const collageFrameInputSchema = z.object({
+    width: z.number().int().min(0).max(24),
+    color: z.string().regex(/^#[0-9a-f]{6}$/i),
+    shape: z.enum([...collageFrameShapes, "rectangle", "rounded", "circle"]),
+  });
+const collageFrameValueSchema = z.object({
+    width: z.union([z.literal(12), z.literal(16), z.literal(20), z.literal(24)]),
+    color: z.string().regex(/^#[0-9a-f]{6}$/i),
+    shape: z.enum(collageFrameShapes),
+  });
+const collageFrameSchema = z.codec(
+  collageFrameInputSchema,
+  collageFrameValueSchema,
+  {
+    decode: (frame) => ({
+      width: normalizeCollageFrameWidth(frame.width),
+      color: frame.color,
+      shape: frame.width === 0 || frame.shape === "none"
+        ? "none" as const
+        : frame.shape === "torn" ? "torn" as const : "straight" as const,
+    }),
+    encode: (frame) => frame,
+  },
+);
+
+const collageSettingsValueSchema = z.object({
+  frame: collageFrameValueSchema,
+  entryDurationSeconds: z.number().positive().max(14),
+  rowDirection: z.enum(collageRowDirections),
+  straightCards: z.boolean(),
+  cardAngles: z.array(z.object({
+    materialId: z.string().uuid(),
+    angleDegrees: z.number().min(-10).max(10),
+  })).max(6),
+  cardOffsets: z.array(z.object({
+    materialId: z.string().uuid(),
+    offsetY: z.number().int().min(-80).max(80),
+  })).max(6),
+});
+const collageSettingsInputSchema = collageSettingsValueSchema.extend({
+  frame: collageFrameSchema,
+  rowDirection: z.enum(collageRowDirections).default(defaultCollageRowDirection),
+  straightCards: z.boolean().default(false),
+  cardAngles: collageSettingsValueSchema.shape.cardAngles.default([]),
+  cardOffsets: collageSettingsValueSchema.shape.cardOffsets.default([]),
+  background: z.object({ mode: z.enum(["automatic", "first-material"]) }).optional(),
+});
+/** Reads the former settings-owned background field but never writes it back. */
+export const collageSettingsSchema = z.codec(
+  collageSettingsInputSchema,
+  collageSettingsValueSchema,
+  {
+    decode: ({ background: _legacyBackground, ...settings }) => settings,
+    encode: (settings) => settings,
+  },
+);
+const editableCollageSettingsSchema = collageSettingsValueSchema.omit({
+  cardAngles: true, cardOffsets: true, rowDirection: true, straightCards: true,
+}).extend({
+  frame: collageFrameSchema,
+  rowDirection: z.enum(collageRowDirections).optional(),
+  straightCards: z.boolean().optional(),
+});
 const materialRotationSchema = z.union([z.literal(0), z.literal(90), z.literal(180), z.literal(270)]);
 const materialCropSchema = z.object({
   x: z.number().min(0).max(1), y: z.number().min(0).max(1),
@@ -75,6 +141,10 @@ export const sceneMaterialSchema = z.discriminatedUnion("kind", [
     videoTrack: videoTrackSchema.optional(), audioTrack: audioTrackSchema.optional(),
   }),
 ]);
+export const collageBackgroundSchema = z.discriminatedUnion("source", [
+  z.object({ source: z.literal("previous-scene") }),
+  z.object({ source: z.literal("material"), material: sceneMaterialSchema }),
+]);
 export const materialContentAccessSchema = z.object({
   url: z.url().nullable(),
   expiresAt: z.iso.datetime().optional(),
@@ -83,6 +153,8 @@ export const materialWaveformSchema = z.object({ peaks: z.array(z.number().min(0
 export const sceneSchema = z.object({
   id: z.string().uuid(), materials: z.array(sceneMaterialSchema), durationSeconds: z.number().min(3).max(15),
   layoutId: z.string().optional(), motion: sceneMotionSchema, focusPoint: focusPointSchema.optional(),
+  collage: collageSettingsSchema.optional(),
+  collageBackground: collageBackgroundSchema.optional(),
   rendererId: z.string().optional(), title: z.string().optional(),
   render: z.object({ status: z.enum(["idle", "queued", "running", "ready", "failed"]), artifactId: z.string().optional() }),
 });
@@ -119,12 +191,14 @@ export const storyTimelineSchema = z.object({
 export const deleteSceneSchema = z.object({ expectedRevision: z.number().int().positive().optional() }).strict();
 export const configureSceneSchema = z.object({
   durationSeconds: z.number().min(3).max(15).optional(), layoutId: z.string().nullable().optional(),
-  motion: sceneMotionSchema.optional(), focusPoint: focusPointSchema.optional(),
+  motion: sceneMotionSchema.optional(), focusPoint: focusPointSchema.optional(), collage: editableCollageSettingsSchema.optional(),
 });
 export const sceneRenderStatusSchema = z.enum(["queued", "running", "ready", "failed", "canceled"]);
+export const sceneRenderProgressPhaseSchema = z.enum(["queued", "downloading", "rendering", "finalizing", "uploading", "ready"]);
 export const sceneRenderRequestSchema = z.object({ mode: z.enum(["video", "audio", "combined"]).optional() }).nullish().default({});
 export const sceneRenderSchema = z.object({
   id: z.string().uuid(), status: sceneRenderStatusSchema,
+  progressPercent: z.number().int().min(0).max(100), progressPhase: sceneRenderProgressPhaseSchema,
   artifact: z.literal("scene-render"),
   current: z.boolean(), inputHash: z.string().regex(/^[a-f0-9]{64}$/),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(), createdAt: z.iso.datetime().optional(),

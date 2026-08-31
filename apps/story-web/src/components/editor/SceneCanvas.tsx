@@ -8,6 +8,7 @@ import type { SceneChange } from "./story-editor-view.js";
 
 interface SceneCanvasProps {
   readonly scene: Scene;
+  readonly previousScene?: Scene | undefined;
   readonly copy: EditorCopy;
   readonly storyId: string;
   readonly session: AuthSession;
@@ -20,7 +21,7 @@ interface SceneCanvasProps {
 }
 
 export function SceneCanvas({
-  scene, copy, storyId, session, presentation, adjacent, dimmed = false, inactive = false, saving = false, onChange,
+  scene, previousScene, copy, storyId, session, presentation, adjacent, dimmed = false, inactive = false, saving = false, onChange,
 }: SceneCanvasProps) {
   return (
     <div className={classNames(
@@ -39,6 +40,7 @@ export function SceneCanvas({
           ? <SceneFrameImage scene={scene} storyId={storyId} session={session} presentation="canvas" />
           : <SceneRendererPreview
             scene={scene}
+            previousScene={previousScene}
             copy={copy}
             storyId={storyId}
             session={session}

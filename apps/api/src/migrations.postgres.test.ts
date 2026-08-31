@@ -20,7 +20,7 @@ test("PostgreSQL: release migration works on a fresh database, concurrently and 
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 0);
 });
 
-test("PostgreSQL: migrations 4–7 preserve legacy rows, baseline access and old API/worker writes", options, async (context) => {
+test("PostgreSQL: migrations 4–9 preserve the retained legacy row, baseline access and old API/worker writes", options, async (context) => {
   const { pool } = await createPostgresTestPool(context);
   await applyVersion3(pool);
   const profileId = randomUUID(), storyId = randomUUID(), sceneId = randomUUID(), renderId = randomUUID();
@@ -43,7 +43,9 @@ test("PostgreSQL: migrations 4–7 preserve legacy rows, baseline access and old
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_roles")).rows[0].count, 2);
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_capabilities")).rows[0].count, 35);
   await assert.rejects(pool.query("UPDATE profiles SET language = 'unsupported' WHERE id = $1", [profileId]), { code: "23514" });
-  assert.deepEqual((await pool.query("SELECT * FROM scene_renders WHERE id = $1", [renderId])).rows[0], { ...before, content_hash: null });
+  assert.deepEqual((await pool.query("SELECT * FROM scene_renders WHERE id = $1", [renderId])).rows[0], {
+    ...before, content_hash: null, progress_percent: 100, progress_phase: "ready", render_slot: "scene-render:video",
+  });
   assert.deepEqual((await pool.query("SELECT payload FROM stories WHERE id = $1", [storyId])).rows[0].payload, payload);
   const nextId = randomUUID();
   await pool.query(oldInsert, [nextId, profileId, storyId, sceneId, "b".repeat(64), { rendererVersion: 1 }]);
@@ -52,6 +54,39 @@ test("PostgreSQL: migrations 4–7 preserve legacy rows, baseline access and old
   await pool.query("UPDATE scene_renders SET content_hash = $2 WHERE id = $1", [nextId, "c".repeat(64)]);
   await assert.rejects(pool.query("UPDATE scene_renders SET content_hash = 'invalid' WHERE id = $1", [nextId]), { code: "23514" });
   assert.equal((await pool.query("SELECT content_hash FROM scene_renders WHERE id = $1", [nextId])).rows[0].content_hash, "c".repeat(64));
+  assert.equal((await pool.query("SELECT render_slot FROM scene_renders WHERE id = $1", [nextId])).rows[0].render_slot, "scene-render:video");
+});
+
+test("PostgreSQL: migration 9 retains only the latest result in each output slot", options, async (context) => {
+  const { pool } = await createPostgresTestPool(context);
+  await applyThroughVersion(pool, 8);
+  const profileId = randomUUID(), storyId = randomUUID(), sceneId = randomUUID();
+  await pool.query("INSERT INTO profiles (id, name, email, password_hash) VALUES ($1, 'Retention', 'retention@example.test', 'hash')", [profileId]);
+  await pool.query(
+    "INSERT INTO stories (id, profile_id, title, status, scene_count, payload) VALUES ($1, $2, 'Retention', 'draft', 1, $3)",
+    [storyId, profileId, { id: storyId, profileId, revision: 1, scenes: [{ id: sceneId, materials: [] }] }],
+  );
+  const rows = [
+    [randomUUID(), "a".repeat(64), { rendererId: "still-image" }, "old.mp4", "2026-01-01T00:00:00Z"],
+    [randomUUID(), "b".repeat(64), { rendererId: "still-image" }, "latest.mp4", "2026-01-02T00:00:00Z"],
+    [randomUUID(), "c".repeat(64), { rendererId: "video", mode: "audio" }, "audio.m4a", "2026-01-01T00:00:00Z"],
+    [randomUUID(), "d".repeat(64), { rendererId: "still-image", artifact: "scene-frame" }, "frame.png", "2026-01-01T00:00:00Z"],
+  ] as const;
+  for (const [id, inputHash, input, storageKey, createdAt] of rows) await pool.query(
+    `INSERT INTO scene_renders
+      (id, profile_id, story_id, scene_id, input_hash, input, status, storage_key, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, 'ready', $7, $8)`,
+    [id, profileId, storyId, sceneId, inputHash, input, storageKey, createdAt],
+  );
+
+  await migrateDatabase(pool);
+
+  assert.deepEqual((await pool.query("SELECT render_slot, storage_key FROM scene_renders ORDER BY render_slot")).rows, [
+    { render_slot: "scene-frame", storage_key: "frame.png" },
+    { render_slot: "scene-render:audio", storage_key: "audio.m4a" },
+    { render_slot: "scene-render:video", storage_key: "latest.mp4" },
+  ]);
+  assert.deepEqual((await pool.query("SELECT storage_key FROM object_deletion_jobs")).rows, [{ storage_key: "old.mp4" }]);
 });
 
 test("PostgreSQL: migration 7 grants the requested existing profile access_manager exactly once", options, async (context) => {

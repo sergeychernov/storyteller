@@ -7,11 +7,16 @@ export type {
   AnalyticsEventName,
   AnalyticsServerZone,
   AnalyticsSurface,
+  CollageBackgroundMode,
+  CollageCardOrientation,
+  CollageMediaMix,
+  CollageRowDirection,
   ExportFailureReason,
   ExportFailureStage,
   ExportMode,
   MaterialKind,
   ProductAnalytics,
+  RendererKind,
 } from "./core.js";
 export { analyticsEventPropertyNames, createProductAnalytics, resolveAnalyticsRelayUrl, resolveAnalyticsServerZone } from "./core.js";
 

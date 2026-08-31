@@ -7,6 +7,12 @@ export type MaterialOrientation = "portrait" | "landscape";
 export type VideoAudioTag = "voice" | "music" | "ambient";
 export type SceneMotion = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right";
 export type MaterialRotation = 0 | 90 | 180 | 270;
+export const collageFrameShapes = ["straight", "torn", "none"] as const;
+export type CollageFrameShape = (typeof collageFrameShapes)[number];
+export const collageFrameWidths = [12, 16, 20, 24] as const;
+export type CollageFrameWidth = (typeof collageFrameWidths)[number];
+export const collageRowDirections = ["ascending", "level", "descending", "random"] as const;
+export type CollageRowDirection = (typeof collageRowDirections)[number];
 
 export interface MaterialCrop {
   readonly x: number;
@@ -48,6 +54,41 @@ export interface FocusPoint {
   readonly x: number;
   readonly y: number;
 }
+
+export interface CollageCardAngle {
+  readonly materialId: string;
+  readonly angleDegrees: number;
+}
+
+export interface CollageCardOffset {
+  readonly materialId: string;
+  /** Final vertical offset from the centered baseline, in 1080×1920 output pixels. */
+  readonly offsetY: number;
+}
+
+export interface CollageSettings {
+  readonly frame: {
+    /** Width in final 1080 px output pixels. */
+    readonly width: CollageFrameWidth;
+    readonly color: string;
+    readonly shape: CollageFrameShape;
+  };
+  readonly entryDurationSeconds: number;
+  /** Left-to-right vertical rhythm for every row containing multiple cards. */
+  readonly rowDirection: CollageRowDirection;
+  /** User-facing opt-out; individual angles remain hidden implementation data. */
+  readonly straightCards: boolean;
+  /** Persisted final angles in material order, returned as part of the scene JSON. */
+  readonly cardAngles: readonly CollageCardAngle[];
+  /** Persisted per-card row rhythm, returned as part of the scene JSON. */
+  readonly cardOffsets: readonly CollageCardOffset[];
+}
+
+export type EditableCollageSettings = Omit<CollageSettings, "cardAngles" | "cardOffsets" | "rowDirection" | "straightCards"> & {
+  /** Optional for backwards-compatible partial editor updates; omitted values preserve the saved direction. */
+  readonly rowDirection?: CollageSettings["rowDirection"] | undefined;
+  readonly straightCards?: boolean | undefined;
+};
 
 export interface AssetRef { readonly id: string; readonly kind: AssetKind }
 
@@ -102,6 +143,11 @@ export interface AudioTrack extends VideoTrack {
 export type SceneMaterial = ImageMaterial | VideoMaterial;
 export type NewSceneMaterial = Omit<ImageMaterial, "id"> | Omit<VideoMaterial, "id">;
 
+/** Structural scene background: it is never one of the ordered collage cards. */
+export type CollageBackground =
+  | { readonly source: "previous-scene" }
+  | { readonly source: "material"; readonly material: SceneMaterial };
+
 export function getMaterialPresentation(material: SceneMaterial): MaterialEditResult {
   if (material.kind === "video") {
     const source = getMaterialSource(material);
@@ -114,6 +160,21 @@ export function getMaterialPresentation(material: SceneMaterial): MaterialEditRe
     };
   }
   return material.edit?.result ?? material;
+}
+
+/** Displayed dimensions include rotation/crop even before an image derivative is available. */
+export function getMaterialDisplaySize(material: SceneMaterial): { readonly width: number; readonly height: number } {
+  if (material.edit?.result) return material.edit.result;
+  if (!material.edit) return material;
+  const sideways = material.edit.rotation === 90 || material.edit.rotation === 270;
+  const width = sideways ? material.height : material.width;
+  const height = sideways ? material.width : material.height;
+  const { crop } = material.edit;
+  const left = Math.min(width - 1, Math.floor(crop.x * width));
+  const top = Math.min(height - 1, Math.floor(crop.y * height));
+  const right = Math.max(left + 1, Math.min(width, Math.ceil((crop.x + crop.width) * width)));
+  const bottom = Math.max(top + 1, Math.min(height, Math.ceil((crop.y + crop.height) * height)));
+  return { width: right - left, height: bottom - top };
 }
 
 export function getMaterialSource(material: SceneMaterial): MaterialEditResult {
@@ -152,6 +213,8 @@ export interface Scene {
   readonly layoutId?: string;
   readonly motion: SceneMotion;
   readonly focusPoint?: FocusPoint;
+  readonly collage?: CollageSettings;
+  readonly collageBackground?: CollageBackground;
   readonly rendererId?: string;
   readonly title?: string;
   readonly render: { readonly status: JobStatus; readonly artifactId?: string };

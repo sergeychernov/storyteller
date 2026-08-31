@@ -4,14 +4,18 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { sceneRenderFileType, sceneRenderStorageKey, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
 import {
-  renderLastFrame, renderStillImage, renderVideo, type LastFrameRenderSpec, type StillImageRenderSpec, type VideoRenderSpec,
+  sceneRenderFileType, sceneRenderStorageKey, type SceneRenderJob, type SceneRenderProgressPhase, type SceneRenderQueue,
+} from "@storyteller/render-queue";
+import {
+  renderCollage, renderLastFrame, renderStillImage, renderVideo,
+  type CollageRenderSpec, type LastFrameRenderSpec, type StillImageRenderSpec, type VideoRenderSpec,
 } from "@storyteller/renderer";
 import { hashFileContent, type ObjectStorage } from "@storyteller/storage";
 
 export type StillImageRender = (spec: StillImageRenderSpec) => Promise<unknown>;
 export type LastFrameRender = (spec: LastFrameRenderSpec) => Promise<unknown>;
+export type CollageRender = (spec: CollageRenderSpec) => Promise<unknown>;
 
 export interface SceneRenderWorkerLogger {
   info(message: string, details: Record<string, unknown>): void;
@@ -28,6 +32,7 @@ export class SceneRenderWorker {
     private readonly logger: SceneRenderWorkerLogger = console,
     private readonly renderMotionVideo: (spec: VideoRenderSpec) => Promise<unknown> = renderVideo,
     private readonly renderFrame: LastFrameRender = renderLastFrame,
+    private readonly renderPhotoCollage: CollageRender = renderCollage,
   ) {}
 
   async runOnce(): Promise<boolean> {
@@ -52,7 +57,8 @@ export class SceneRenderWorker {
 
   private async renderJob(job: SceneRenderJob): Promise<void> {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "storyteller-render-"));
-    const sourcePath = join(temporaryDirectory, `source${safeExtension(job.input.material.name)}`);
+    const sourcePath = job.input.rendererId === "collage" ? undefined
+      : join(temporaryDirectory, `source${safeExtension(job.input.material.name)}`);
     const file = sceneRenderFileType(job.input);
     const outputPath = join(temporaryDirectory, `scene.${file.extension}`);
     const visualOutputPath = job.input.artifact === "scene-frame" ? join(temporaryDirectory, "base.mp4") : outputPath;
@@ -60,15 +66,65 @@ export class SceneRenderWorker {
     const storageKey = sceneRenderStorageKey(job, randomUUID());
     let uploaded = false;
     let stage: "download" | "render" | "upload" | "complete" = "download";
+    const progress = createRenderProgressReporter(this.queue, job.id, this.workerId, job.progressPercent ?? 1);
     this.logger.info("scene render started", renderLogDetails(job));
     try {
       const input = job.input;
       const frame = input.artifact === "scene-frame" ? input.frame : undefined;
       if (input.artifact === "scene-frame" && (!frame || frame.layerPolicy !== "base-visual" || frame.format !== "png"
         || frame.intermediateCodec !== "h264-lossless")) throw new Error("scene frame manifest is incomplete");
-      const needsVideoSource = input.rendererId !== "video" || input.mode !== "audio" || !input.audio;
-      if (needsVideoSource) await pipeline(await this.storage.open(input.material.storageKey), createWriteStream(sourcePath, { flags: "wx" }));
-      if (needsVideoSource) await verifySource(sourcePath, input.material.contentHash);
+      const prepareCollageSource = async (
+        material: Extract<typeof input, { readonly rendererId: "collage" }>["materials"][number], name: string,
+      ) => {
+        const path = join(temporaryDirectory, `${name}${safeExtension(material.name)}`);
+        await pipeline(await this.storage.open(material.storageKey), createWriteStream(path, { flags: "wx" }));
+        await verifySource(path, material.contentHash);
+        return {
+          id: material.id,
+          kind: material.kind,
+          sourcePath: path,
+          sourceSize: {
+            width: material.sourceWidth ?? material.width,
+            height: material.sourceHeight ?? material.height,
+          },
+          displaySize: { width: material.width, height: material.height },
+          ...(material.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: material.sourceDurationSeconds }),
+          ...(material.edit ? { edit: material.edit } : {}),
+        };
+      };
+      const collageSources = input.rendererId === "collage" ? await Promise.all(input.materials.map(
+        (material, index) => prepareCollageSource(material, `source-${index}`),
+      )) : undefined;
+      const backgroundInput = input.rendererId === "collage" ? input.background : undefined;
+      const collageBackground = backgroundInput?.source === "previous-scene-frame"
+        ? await (async () => {
+            const path = join(temporaryDirectory, "background.png");
+            await pipeline(await this.storage.open(backgroundInput.storageKey), createWriteStream(path, { flags: "wx" }));
+            await verifySource(path, backgroundInput.contentHash);
+            return {
+              treatment: backgroundInput.treatment,
+              kind: "image" as const,
+              sourcePath: path,
+              sourceSize: { width: backgroundInput.width, height: backgroundInput.height },
+            };
+          })()
+        : input.rendererId === "collage"
+          ? await (async () => {
+              const materialId = input.background && input.background.source !== "previous-scene-frame"
+                ? input.background.materialId : input.materials[0]?.id;
+              const cardSource = collageSources?.find(({ id }) => id === materialId);
+              if (cardSource) return { ...cardSource, treatment: input.background?.treatment ?? "darkened" as const };
+              const material = input.background && input.background.source !== "previous-scene-frame"
+                ? input.background.material : undefined;
+              const source = material ? await prepareCollageSource(material, "source-background") : undefined;
+              return source ? { ...source, treatment: input.background?.treatment ?? "darkened" as const } : undefined;
+            })()
+          : undefined;
+      const needsVideoSource = input.rendererId !== "collage" && (input.rendererId !== "video" || input.mode !== "audio" || !input.audio);
+      if (needsVideoSource && sourcePath) {
+        await pipeline(await this.storage.open(input.material.storageKey), createWriteStream(sourcePath, { flags: "wx" }));
+        await verifySource(sourcePath, input.material.contentHash);
+      }
       const audioPath = input.rendererId === "video" && input.mode !== "video" && input.audio
         ? join(temporaryDirectory, `audio${safeExtension(input.audio.name)}`) : undefined;
       if (audioPath && input.rendererId === "video" && input.audio) {
@@ -76,35 +132,61 @@ export class SceneRenderWorker {
         await verifySource(audioPath, input.audio.contentHash);
       }
       stage = "render";
-      if (input.rendererId === "video") await this.renderMotionVideo({
-        ...(needsVideoSource ? { sourcePath } : {}), ...(audioPath ? { audioPath } : {}), outputPath: visualOutputPath,
+      await progress.reportAndWait(10, "rendering");
+      const onRenderProgress = (value: number) => progress.report(10 + value * 78, "rendering");
+      if (input.rendererId === "collage") {
+        if (!collageSources) throw new Error("collage sources were not prepared");
+        await this.renderPhotoCollage({
+          ...(collageBackground ? { background: collageBackground } : {}),
+          materials: collageSources,
+          outputPath: visualOutputPath,
+          layoutId: input.layoutId,
+          layoutRendererId: input.layoutRendererId,
+          layoutOverlapRatio: input.layoutOverlapRatio,
+          settings: input.settings,
+          durationSeconds: input.durationSeconds,
+          width: input.output.width,
+          height: input.output.height,
+          fps: input.output.fps,
+          lossless: input.artifact === "scene-frame",
+          overwrite: true,
+          onProgress: onRenderProgress,
+        });
+      }
+      else if (input.rendererId === "video") await this.renderMotionVideo({
+        ...(needsVideoSource && sourcePath ? { sourcePath } : {}), ...(audioPath ? { audioPath } : {}), outputPath: visualOutputPath,
         sourceSize: { width: input.material.width, height: input.material.height },
         ...(input.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: input.sourceDurationSeconds }),
         hasAudio: input.hasAudio, mode: input.mode, edit: input.edit, lossless: input.artifact === "scene-frame",
+        onProgress: onRenderProgress,
       });
-      else await this.render({
+      else if (sourcePath) await this.render({
         sourcePath,
         outputPath: visualOutputPath,
-        sourceSize: { width: job.input.material.width, height: job.input.material.height },
-        orientation: job.input.material.orientation,
-        durationSeconds: job.input.durationSeconds,
-        motion: job.input.motion,
-        focusPoint: job.input.focusPoint,
-        width: job.input.output.width,
-        height: job.input.output.height,
-        fps: job.input.output.fps,
+        sourceSize: { width: input.material.width, height: input.material.height },
+        orientation: input.material.orientation,
+        durationSeconds: input.durationSeconds,
+        motion: input.motion,
+        focusPoint: input.focusPoint,
+        width: input.output.width,
+        height: input.output.height,
+        fps: input.output.fps,
         lossless: input.artifact === "scene-frame",
         overwrite: true,
+        onProgress: onRenderProgress,
       });
+      await progress.reportAndWait(90, "finalizing");
       if (frame) await this.renderFrame({ sourcePath: visualOutputPath, outputPath, compressionLevel: frame.compressionLevel });
       const output = await stat(outputPath);
       const contentHash = await hashFileContent(outputPath);
       stage = "upload";
+      await progress.reportAndWait(94, "uploading");
       await this.storage.put(storageKey, {
         body: createReadStream(outputPath), contentType: file.mimeType, contentLength: output.size,
       });
       uploaded = true;
       stage = "complete";
+      await progress.reportAndWait(99, "finalizing");
       if (!await this.queue.complete(job.id, this.workerId, storageKey, output.size, contentHash)) {
         await this.queue.scheduleDeletion(storageKey);
         uploaded = false;
@@ -122,7 +204,51 @@ export class SceneRenderWorker {
   }
 }
 
+function createRenderProgressReporter(
+  queue: SceneRenderQueue,
+  renderId: string,
+  workerId: string,
+  initialPercent: number,
+) {
+  let lastPercent = Math.max(0, Math.min(99, Math.round(initialPercent)));
+  let lastPhase: SceneRenderProgressPhase = "downloading";
+  let pending = Promise.resolve();
+  let failure: unknown;
+  const report = (rawPercent: number, phase: SceneRenderProgressPhase) => {
+    const percent = Math.max(lastPercent, Math.min(99, Math.round(rawPercent)));
+    if (percent === lastPercent && phase === lastPhase) return;
+    lastPercent = percent;
+    lastPhase = phase;
+    pending = pending.then(async () => {
+      if (failure) return;
+      if (!await queue.reportProgress(renderId, workerId, percent, phase)) throw new Error("scene render lease was lost");
+    }).catch((error: unknown) => { failure ??= error; });
+  };
+  return {
+    report,
+    async reportAndWait(percent: number, phase: SceneRenderProgressPhase) {
+      report(percent, phase);
+      await pending;
+      if (failure) throw failure;
+    },
+  };
+}
+
 function renderLogDetails(job: SceneRenderJob): Record<string, unknown> {
+  if (job.input.rendererId === "collage") return {
+    renderId: job.id,
+    storyId: job.storyId,
+    sceneId: job.sceneId,
+    rendererId: job.input.rendererId,
+    layoutId: job.input.layoutId,
+    layoutRendererId: job.input.layoutRendererId,
+    artifact: job.input.artifact ?? "scene-render",
+    motion: "rotating-fly-in",
+    durationSeconds: job.input.durationSeconds,
+    materialCount: job.input.materials.length,
+    outputWidth: job.input.output.width,
+    outputHeight: job.input.output.height,
+  };
   return {
     renderId: job.id,
     storyId: job.storyId,

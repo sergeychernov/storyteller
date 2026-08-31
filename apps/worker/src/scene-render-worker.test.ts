@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
-import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue } from "@storyteller/render-queue";
+import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue, StillImageRenderInput } from "@storyteller/render-queue";
 import { sceneRenderStorageKey } from "@storyteller/render-queue";
 import { LocalObjectStorage } from "@storyteller/storage";
 import { SceneRenderWorker } from "./scene-render-worker.js";
@@ -18,6 +18,7 @@ test("worker renders a claimed scene and stores the reusable artifact", async (c
   const queue = new MemoryQueue(renderJob());
   const worker = new SceneRenderWorker("worker-1", queue, storage, async (spec) => {
     assert.deepEqual(spec.focusPoint, { x: 0.25, y: 0.6 });
+    spec.onProgress?.(0.5);
     await writeFile(spec.outputPath, "rendered-mp4");
   });
 
@@ -25,6 +26,184 @@ test("worker renders a claimed scene and stores the reusable artifact", async (c
   assert.ok(queue.ready?.storageKey.startsWith(sceneRenderStorageKey(renderJob()).slice(0, -4)));
   assert.equal(queue.ready?.contentHash, createHash("sha256").update("rendered-mp4").digest("hex"));
   assert.equal((await readFile(join(root, queue.ready!.storageKey))).toString(), "rendered-mp4");
+  assert.deepEqual(queue.progress, [
+    { percent: 10, phase: "rendering" },
+    { percent: 49, phase: "rendering" },
+    { percent: 90, phase: "finalizing" },
+    { percent: 94, phase: "uploading" },
+    { percent: 99, phase: "finalizing" },
+  ]);
+});
+
+test("worker downloads every ordered collage source and invokes the collage renderer", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-collage-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/a.jpg", { body: Readable.from("photo-a"), contentType: "image/jpeg", contentLength: 7 });
+  await storage.put("source/b.jpg", { body: Readable.from("photo-b"), contentType: "image/jpeg", contentLength: 7 });
+  await storage.put("frames/previous.png", { body: Readable.from("previous-frame"), contentType: "image/png", contentLength: 14 });
+  const base = renderJob();
+  const job: SceneRenderJob = { ...base, inputHash: "collage", input: {
+    rendererId: "collage", rendererVersion: 23, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    layoutOverlapRatio: 0.4, durationSeconds: 5,
+    background: {
+      source: "previous-scene-frame", treatment: "darkened", sceneId: "previous", inputHash: "frame-input",
+      storageKey: "frames/previous.png", contentHash: createHash("sha256").update("previous-frame").digest("hex"),
+      name: "previous.png", mimeType: "image/png", width: 1080, height: 1920, orientation: "portrait",
+    },
+    settings: {
+      frame: { width: 12, color: "#FFFFFF", shape: "straight" },
+      entryDurationSeconds: 4,
+      rowDirection: "ascending",
+      straightCards: false,
+      cardAngles: [
+        { materialId: "a", angleDegrees: -4 },
+        { materialId: "b", angleDegrees: 4 },
+      ],
+      cardOffsets: [{ materialId: "a", offsetY: 0 }, { materialId: "b", offsetY: 0 }],
+    },
+    materials: [
+      { id: "a", kind: "image", storageKey: "source/a.jpg", name: "a.jpg", mimeType: "image/jpeg", width: 800, height: 600,
+        orientation: "landscape" },
+      { id: "b", kind: "image", storageKey: "source/b.jpg", name: "b.jpg", mimeType: "image/jpeg", width: 800, height: 600,
+        orientation: "landscape" },
+    ],
+    output: { width: 1080, height: 1920, fps: 30, codec: "h264" },
+  } };
+  const queue = new MemoryQueue(job);
+  let rendered = false;
+  const worker = new SceneRenderWorker(
+    "worker-1", queue, storage, undefined, undefined, undefined, undefined, undefined,
+    async (spec) => {
+      rendered = true;
+      assert.deepEqual(spec.materials.map(({ id, sourceSize }) => ({ id, sourceSize })), [
+        { id: "a", sourceSize: { width: 800, height: 600 } },
+        { id: "b", sourceSize: { width: 800, height: 600 } },
+      ]);
+      assert.match(spec.background!.sourcePath, /background\.png$/u);
+      assert.equal((await readFile(spec.background!.sourcePath)).toString(), "previous-frame");
+      assert.deepEqual(spec.background!.sourceSize, { width: 1080, height: 1920 });
+      assert.equal(spec.background!.treatment, "darkened");
+      assert.equal(spec.layoutId, "stack");
+      assert.equal(spec.layoutRendererId, "animated-collage.stack.v1");
+      assert.equal(spec.settings.frame.width, 12);
+      await writeFile(spec.outputPath, "rendered-collage");
+    },
+  );
+  await worker.runOnce();
+  assert.equal(rendered, true);
+  assert.equal(queue.failed, undefined);
+  assert.ok(queue.ready?.storageKey.startsWith(sceneRenderStorageKey(job).slice(0, -4)));
+});
+
+test("worker passes PPL video edit metadata into the collage card renderer", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-collage-video-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/video.mp4", { body: Readable.from("video"), contentType: "video/mp4", contentLength: 5 });
+  await storage.put("source/portrait.jpg", { body: Readable.from("portrait"), contentType: "image/jpeg", contentLength: 8 });
+  await storage.put("source/landscape.jpg", { body: Readable.from("landscape"), contentType: "image/jpeg", contentLength: 9 });
+  const base = renderJob();
+  const job: SceneRenderJob = { ...base, inputHash: "mixed-collage", input: {
+    rendererId: "collage", rendererVersion: 23, layoutId: "2+1",
+    layoutRendererId: "animated-collage.two-plus-one.v1", durationSeconds: 5,
+    layoutOverlapRatio: 0.4,
+    settings: {
+      frame: { width: 12, color: "#FFFFFF", shape: "straight" },
+      entryDurationSeconds: 4, rowDirection: "ascending", straightCards: false,
+      cardAngles: [
+        { materialId: "video", angleDegrees: -4 }, { materialId: "portrait", angleDegrees: 4 },
+        { materialId: "landscape", angleDegrees: -3 },
+      ],
+      cardOffsets: [
+        { materialId: "video", offsetY: 15 }, { materialId: "portrait", offsetY: -15 },
+        { materialId: "landscape", offsetY: 0 },
+      ],
+    },
+    materials: [
+      {
+        id: "video", kind: "video", storageKey: "source/video.mp4", name: "video.mp4", mimeType: "video/mp4",
+        width: 450, height: 800, sourceWidth: 900, sourceHeight: 1600, sourceDurationSeconds: 8,
+        orientation: "portrait", edit: {
+          rotation: 0, crop: { x: 0.25, y: 0, width: 0.5, height: 1 }, trim: { startSeconds: 1, endSeconds: 4 },
+        },
+      },
+      { id: "portrait", kind: "image", storageKey: "source/portrait.jpg", name: "portrait.jpg", mimeType: "image/jpeg",
+        width: 900, height: 1600, orientation: "portrait" },
+      { id: "landscape", kind: "image", storageKey: "source/landscape.jpg", name: "landscape.jpg", mimeType: "image/jpeg",
+        width: 1600, height: 900, orientation: "landscape" },
+    ],
+    output: { width: 1080, height: 1920, fps: 30, codec: "h264" },
+  } };
+  const queue = new MemoryQueue(job);
+  const worker = new SceneRenderWorker(
+    "worker-1", queue, storage, undefined, undefined, undefined, undefined, undefined,
+    async (spec) => {
+      assert.deepEqual(spec.materials[0], {
+        id: "video", kind: "video", sourcePath: spec.materials[0]!.sourcePath,
+        sourceSize: { width: 900, height: 1600 }, displaySize: { width: 450, height: 800 }, sourceDurationSeconds: 8,
+        edit: { rotation: 0, crop: { x: 0.25, y: 0, width: 0.5, height: 1 }, trim: { startSeconds: 1, endSeconds: 4 } },
+      });
+      assert.match(spec.materials[0]!.sourcePath, /source-0\.mp4$/u);
+      await writeFile(spec.outputPath, "rendered-mixed-collage");
+    },
+  );
+  await worker.runOnce();
+  assert.equal(queue.failed, undefined);
+  assert.ok(queue.ready);
+});
+
+test("worker downloads an original video background separately from its collage cards", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-collage-background-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/background.mp4", { body: Readable.from("background-video"), contentType: "video/mp4", contentLength: 16 });
+  await storage.put("source/a.jpg", { body: Readable.from("photo-a"), contentType: "image/jpeg", contentLength: 7 });
+  await storage.put("source/b.jpg", { body: Readable.from("photo-b"), contentType: "image/jpeg", contentLength: 7 });
+  const base = renderJob();
+  const job: SceneRenderJob = { ...base, inputHash: "video-background", input: {
+    rendererId: "collage", rendererVersion: 23, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    layoutOverlapRatio: 0.4, durationSeconds: 5,
+    background: {
+      source: "custom-material", treatment: "original", materialId: "background",
+      material: {
+        id: "background", kind: "video", storageKey: "source/background.mp4", name: "background.mp4", mimeType: "video/mp4",
+        width: 900, height: 1280, sourceWidth: 900, sourceHeight: 1600, sourceDurationSeconds: 8, orientation: "portrait",
+        edit: { rotation: 0, crop: { x: 0, y: 0.1, width: 1, height: 0.8 }, trim: { startSeconds: 1, endSeconds: 5 } },
+      },
+    },
+    settings: {
+      frame: { width: 12, color: "#FFFFFF", shape: "straight" },
+      entryDurationSeconds: 4, rowDirection: "ascending", straightCards: false,
+      cardAngles: [{ materialId: "a", angleDegrees: -4 }, { materialId: "b", angleDegrees: 4 }],
+      cardOffsets: [{ materialId: "a", offsetY: 0 }, { materialId: "b", offsetY: 0 }],
+    },
+    materials: [
+      { id: "a", kind: "image", storageKey: "source/a.jpg", name: "a.jpg", mimeType: "image/jpeg",
+        width: 800, height: 600, orientation: "landscape" },
+      { id: "b", kind: "image", storageKey: "source/b.jpg", name: "b.jpg", mimeType: "image/jpeg",
+        width: 800, height: 600, orientation: "landscape" },
+    ],
+    output: { width: 1080, height: 1920, fps: 30, codec: "h264" },
+  } };
+  const queue = new MemoryQueue(job);
+  const worker = new SceneRenderWorker(
+    "worker-1", queue, storage, undefined, undefined, undefined, undefined, undefined,
+    async (spec) => {
+      assert.deepEqual(spec.materials.map(({ id }) => id), ["a", "b"]);
+      assert.equal(spec.background?.kind, "video");
+      assert.match(spec.background!.sourcePath, /source-background\.mp4$/u);
+      assert.equal((await readFile(spec.background!.sourcePath)).toString(), "background-video");
+      assert.deepEqual(spec.background?.sourceSize, { width: 900, height: 1600 });
+      assert.equal(spec.background?.edit?.trim?.startSeconds, 1);
+      assert.equal(spec.background?.treatment, "original");
+      await writeFile(spec.outputPath, "rendered-background-collage");
+    },
+  );
+
+  await worker.runOnce();
+  assert.equal(queue.failed, undefined);
+  assert.ok(queue.ready);
 });
 
 test("worker stores the final base visual frame separately as lossless PNG", async (context) => {
@@ -176,6 +355,7 @@ class MemoryQueue implements SceneRenderQueue {
   scheduled?: string;
   private claimed = false;
   private deletionClaimed = false;
+  readonly progress: { percent: number; phase: string }[] = [];
 
   constructor(private readonly job?: SceneRenderJob, private deletion?: ObjectDeletionJob, private readonly completeAccepted = true) {}
   enqueue(): Promise<SceneRenderJob> { throw new Error("not used"); }
@@ -185,6 +365,10 @@ class MemoryQueue implements SceneRenderQueue {
     if (this.claimed) return Promise.resolve(undefined);
     this.claimed = true;
     return Promise.resolve(this.job);
+  }
+  reportProgress(_renderId: string, _workerId: string, percent: number, phase: Parameters<SceneRenderQueue["reportProgress"]>[3]): Promise<boolean> {
+    this.progress.push({ percent, phase });
+    return Promise.resolve(true);
   }
   complete(_renderId: string, _workerId: string, storageKey: string, sizeBytes: number, contentHash: string): Promise<boolean> {
     if (!this.completeAccepted) return Promise.resolve(false);
@@ -207,7 +391,7 @@ class MemoryQueue implements SceneRenderQueue {
   failDeletion(): Promise<void> { throw new Error("deletion unexpectedly failed"); }
 }
 
-function renderJob(): SceneRenderJob {
+function renderJob(): SceneRenderJob & { readonly input: StillImageRenderInput } {
   return {
     id: "render", profileId: "profile", storyId: "story", sceneId: "scene", inputHash: "hash", status: "running",
     input: {

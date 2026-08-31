@@ -103,6 +103,25 @@ export function createFrontendHost({
   });
 }
 
+export function registerFrontendHostShutdown(server, {
+  processTarget = process,
+  exit = (code) => process.exit(code),
+} = {}) {
+  const signals = ["SIGINT", "SIGTERM"];
+  let closing = false;
+  const cleanup = () => {
+    for (const signal of signals) processTarget.removeListener(signal, shutdown);
+  };
+  const shutdown = () => {
+    if (closing) return;
+    closing = true;
+    cleanup();
+    server.close((error) => exit(error ? 1 : 0));
+  };
+  for (const signal of signals) processTarget.once(signal, shutdown);
+  return cleanup;
+}
+
 async function serveApplication(request, response, pathname, prefix, root) {
   if (pathname !== prefix && !pathname.startsWith(`${prefix}/`)) return false;
   const suffix = pathname.slice(prefix.length).replace(/^\/+/, "");
@@ -179,7 +198,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT ?? process.env.WEB_PORT ?? 3000);
   const server = createFrontendHost();
   server.listen(port, host);
-  for (const signal of ["SIGINT", "SIGTERM"]) {
-    process.on(signal, () => server.close(() => process.exit(0)));
-  }
+  registerFrontendHostShutdown(server);
 }

@@ -1,0 +1,8 @@
+.sb-show-main.sb-main-centered #storybook-root {
+  width: 100%;
+}
+
+.sb-show-main.sb-main-fullscreen {
+  min-height: 100vh;
+  background: #ebe8df;
+}

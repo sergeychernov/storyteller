@@ -1,5 +1,9 @@
 import { createCipheriv, randomBytes } from "node:crypto";
-import type { PlatformCredential, PlatformProvider, Profile, ProfileUpdate, Story } from "@storyteller/domain";
+import {
+  collageCardMaterials, createCollageCardAngles, createCollageCardOffsets, getAutomaticCollageLayout, getSelectedCollageLayout,
+  hasCompleteCollageCardAngles, hasCompleteCollageCardOffsets, resolveCollageSettings, type PlatformCredential, type PlatformProvider,
+  type Profile, type ProfileUpdate, type Story,
+} from "@storyteller/domain";
 import { ApplicationError, type PlatformCredentialSummary, type ProfileAuthentication, type SessionRecord, type StoryRepository } from "@storyteller/application";
 import { sceneMaterialSchema, storySchema } from "@storyteller/schemas";
 import { Pool, type PoolClient } from "pg";
@@ -143,21 +147,79 @@ async function persistStoryRevision(client: Pick<Pool | PoolClient, "query">, st
  * uploaded media. A later story mutation persists the normalized payload.
  */
 export function normalizeStoredStory(payload: unknown): Story {
-  if (!isRecord(payload) || !Array.isArray(payload.scenes)) return storySchema.parse(payload) as Story;
+  if (!isRecord(payload) || !Array.isArray(payload.scenes)) return withStoredCollageComposition(storySchema.parse(payload) as Story);
   const scenes = payload.scenes.map((scene) => {
     if (!isRecord(scene) || !Array.isArray(scene.materials)) return scene;
-    const materials = scene.materials.filter((material) => sceneMaterialSchema.safeParse(material).success);
+    let materials = scene.materials.filter((material) => sceneMaterialSchema.safeParse(material).success);
+    const legacyCollage = isRecord(scene.collage) ? scene.collage : undefined;
+    const legacyBackground = legacyCollage && isRecord(legacyCollage.background) ? legacyCollage.background : undefined;
+    let collageBackground = scene.collageBackground;
+    if (scene.rendererId === "collage" && collageBackground === undefined) {
+      if (legacyBackground?.mode === "first-material" && materials[0]) {
+        collageBackground = { source: "material", material: materials[0] };
+        materials = materials.slice(1);
+      } else {
+        collageBackground = { source: "previous-scene" };
+      }
+    }
     const singleImageRenderer = (scene.rendererId === undefined || scene.rendererId === "still-image") && materials.length === 1
       && isRecord(materials[0]) && materials[0].kind === "image";
     const { focusPoint: oldFocusPoint, ...withoutFocus } = scene;
     const withRendererFocus = singleImageRenderer
       ? { ...withoutFocus, rendererId: "still-image", focusPoint: oldFocusPoint ?? { x: 0.5, y: 0.5 } }
       : withoutFocus;
-    if (materials.length === scene.materials.length) return withRendererFocus;
+    const withBackground = collageBackground === undefined ? withRendererFocus : { ...withRendererFocus, collageBackground };
+    if (materials.length === scene.materials.length) return withBackground;
     const { layoutId: _legacyLayout, ...withoutLayout } = withRendererFocus;
-    return { ...withoutLayout, materials, render: { status: "idle" } };
+    return { ...withoutLayout, collageBackground, materials, render: { status: "idle" } };
   });
-  return storySchema.parse({ ...payload, scenes }) as Story;
+  return withStoredCollageComposition(storySchema.parse({ ...payload, scenes }) as Story);
+}
+
+function withStoredCollageComposition(story: Story): Story {
+  return {
+    ...story,
+    scenes: story.scenes.map((scene) => {
+      if (!scene.collage) return scene;
+      const settings = resolveCollageSettings(scene.materials, scene.collage, scene.durationSeconds);
+      const cards = collageCardMaterials(scene.materials, settings);
+      const storedLayout = getSelectedCollageLayout(cards, scene.layoutId);
+      const repairedLayout = !storedLayout && scene.layoutId
+        ? getAutomaticCollageLayout(cards)
+        : undefined;
+      const layout = storedLayout ?? repairedLayout;
+      if (!layout) {
+        if (!scene.layoutId) return { ...scene, collage: settings };
+        const { layoutId: _staleLayoutId, ...withoutStaleLayout } = scene;
+        return { ...withoutStaleLayout, collage: { ...settings, cardAngles: [], cardOffsets: [] }, render: { status: "idle" } };
+      }
+      const normalizedScene = repairedLayout
+        ? { ...scene, layoutId: repairedLayout.id, render: { status: "idle" as const } }
+        : scene;
+      if (!repairedLayout && hasCompleteCollageCardAngles(scene.materials, settings)
+        && hasCompleteCollageCardOffsets(scene.materials, settings, layout.rowSizes)) {
+        return { ...normalizedScene, collage: settings };
+      }
+      return {
+        ...normalizedScene,
+        collage: {
+          ...settings,
+          cardAngles: createCollageCardAngles({
+            layoutId: layout.id,
+            materials: cards,
+            straightCards: settings.straightCards,
+            seedKey: `stored:${story.id}:${scene.id}`,
+          }),
+          cardOffsets: createCollageCardOffsets({
+            layoutId: layout.id,
+            materials: cards,
+            direction: settings.rowDirection,
+            seedKey: `stored:${story.id}:${scene.id}:offsets`,
+          }),
+        },
+      };
+    }),
+  };
 }
 
 export function createPostgresRepository(): { pool: Pool; repository: PostgresStoryRepository } {

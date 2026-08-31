@@ -19,7 +19,10 @@ export interface StillImageRenderSpec {
   readonly fps?: number;
   readonly lossless?: boolean;
   readonly overwrite?: boolean;
+  readonly onProgress?: (progress: number) => void;
 }
+
+type NormalizedStillImageRenderSpec = Required<Omit<StillImageRenderSpec, "onProgress">> & Pick<StillImageRenderSpec, "onProgress">;
 
 export function buildStillImageFilter(spec: StillImageRenderSpec): string {
   const normalized = normalizeSpec(spec);
@@ -58,7 +61,10 @@ export async function renderStillImage(
     ...(normalized.lossless ? ["-preset", "ultrafast", "-qp", "0"] : ["-preset", "veryfast", "-crf", "20"]),
     "-pix_fmt", "yuv420p", "-r", String(normalized.fps),
     "-movflags", "+faststart", normalized.outputPath,
-  ]);
+  ], undefined, normalized.onProgress ? {
+    durationSeconds: normalized.durationSeconds,
+    onProgress: normalized.onProgress,
+  } : undefined);
   if (result.exitCode !== 0) {
     const termination = result.signal ? `signal ${result.signal}` : `exit ${result.exitCode}`;
     throw new Error(`ffmpeg failed (${termination}): ${result.stderr.trim()}`);
@@ -66,7 +72,7 @@ export async function renderStillImage(
   return probeMedia(normalized.outputPath, runner);
 }
 
-function normalizeSpec(spec: StillImageRenderSpec): Required<StillImageRenderSpec> {
+function normalizeSpec(spec: StillImageRenderSpec): NormalizedStillImageRenderSpec {
   const width = spec.width ?? 1080;
   const height = spec.height ?? 1920;
   const fps = spec.fps ?? 30;
@@ -89,7 +95,7 @@ function panCropX(plan: StillImagePanPlan, durationSeconds: number): string {
   return `(iw-ow)*clip(${crop}\\,0\\,1)`;
 }
 
-function zoomPan(spec: Required<StillImageRenderSpec>, plan: StillImageZoomPlan): string {
+function zoomPan(spec: NormalizedStillImageRenderSpec, plan: StillImageZoomPlan): string {
   const frames = Math.max(1, Math.round(spec.durationSeconds * spec.fps) - 1);
   const ease = easingExpression(plan.easing, `on/${frames}`);
   const zoom = interpolateExpression(plan.fromScale, plan.toScale, ease);

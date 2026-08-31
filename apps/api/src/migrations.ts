@@ -402,6 +402,49 @@ export const migrations = [{
           AND (assignment.expires_at IS NULL OR assignment.expires_at > now())
       );
   `,
+}, {
+  version: 8,
+  sql: `
+    ALTER TABLE scene_renders
+      ADD COLUMN progress_percent smallint NOT NULL DEFAULT 0 CHECK (progress_percent BETWEEN 0 AND 100),
+      ADD COLUMN progress_phase varchar(20) NOT NULL DEFAULT 'queued'
+        CHECK (progress_phase IN ('queued', 'downloading', 'rendering', 'finalizing', 'uploading', 'ready'));
+    UPDATE scene_renders SET
+      progress_percent = CASE WHEN status = 'ready' THEN 100 WHEN status = 'running' THEN 1 ELSE 0 END,
+      progress_phase = CASE WHEN status = 'ready' THEN 'ready' WHEN status = 'running' THEN 'downloading' ELSE 'queued' END;
+  `,
+}, {
+  version: 9,
+  sql: `
+    ALTER TABLE scene_renders ADD COLUMN render_slot text GENERATED ALWAYS AS (
+      CASE
+        WHEN input->>'artifact' = 'scene-frame' THEN 'scene-frame'
+        WHEN input->>'rendererId' = 'video' THEN 'scene-render:' || COALESCE(input->>'mode', 'video')
+        ELSE 'scene-render:video'
+      END
+    ) STORED;
+    CREATE INDEX scene_renders_slot_idx ON scene_renders(story_id, scene_id, render_slot);
+
+    WITH ranked AS (
+      SELECT id, storage_key, row_number() OVER (
+        PARTITION BY story_id, scene_id, render_slot ORDER BY created_at DESC, id DESC
+      ) AS position
+      FROM scene_renders
+    )
+    INSERT INTO object_deletion_jobs (storage_key)
+    SELECT DISTINCT storage_key FROM ranked WHERE position > 1 AND storage_key IS NOT NULL
+    ON CONFLICT (storage_key) DO UPDATE SET status = 'queued', attempts = 0, worker_id = NULL,
+      locked_until = NULL, error = NULL, updated_at = now();
+
+    WITH ranked AS (
+      SELECT id, row_number() OVER (
+        PARTITION BY story_id, scene_id, render_slot ORDER BY created_at DESC, id DESC
+      ) AS position
+      FROM scene_renders
+    )
+    DELETE FROM scene_renders render USING ranked
+    WHERE render.id = ranked.id AND ranked.position > 1;
+  `,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

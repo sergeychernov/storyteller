@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { analytics, type MaterialKind } from "@storyteller/analytics";
 import {
-  configureStoryScene,
   createScene,
   deleteSceneMaterial,
   editSceneMaterial,
@@ -17,6 +16,8 @@ import { useReorderSceneMaterials } from "./use-reorder-scene-materials.js";
 import { useReorderStoryScenes } from "./use-reorder-story-scenes.js";
 import { useMoveSceneMaterial } from "./use-move-scene-material.js";
 import { useDeleteScene, type SceneDeletionController } from "./use-delete-scene.js";
+import { useConfigureStoryScene } from "./use-configure-story-scene.js";
+import { useCollageBackground } from "./use-collage-background.js";
 
 interface UseStoryEditorArgs {
   readonly story: Story;
@@ -55,6 +56,7 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     onSuccess: update,
   });
   const reorderMutation = useReorderSceneMaterials(session.accessToken, story.id);
+  const backgroundMutation = useCollageBackground(session.accessToken, story.id, update);
   const reorderScenesMutation = useReorderStoryScenes(session.accessToken, story.id);
   const moveMaterialMutation = useMoveSceneMaterial(session.accessToken, story.id);
   const deleteMaterialMutation = useMutation({
@@ -69,18 +71,15 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     }) => editSceneMaterial(session.accessToken, story.id, sceneId, materialId, edit),
     onSuccess: update,
   });
-  const configureMutation = useMutation({
-    mutationFn: ({ sceneId, change }: { sceneId: string; change: SceneChange }) => configureStoryScene(session.accessToken, story.id, sceneId, change),
-    onSuccess: update,
-  });
+  const configureMutation = useConfigureStoryScene(session.accessToken, story.id);
   const selected = story.scenes.find(({ id }) => id === selectedId) ?? story.scenes[0];
   const saving = addSceneMutation.isPending || uploadMaterialsMutation.isPending || deleteMaterialMutation.isPending
     || editMaterialMutation.isPending || reorderMutation.isPending || reorderScenesMutation.isPending
-    || moveMaterialMutation.isPending || configureMutation.isPending;
+    || moveMaterialMutation.isPending || configureMutation.isPending || backgroundMutation.isPending;
   const deletion = useDeleteScene({ story, session, selectedId, onSelect, copy, saving });
   const operationError = addSceneMutation.error ?? uploadMaterialsMutation.error ?? deleteMaterialMutation.error
     ?? editMaterialMutation.error ?? reorderMutation.error ?? reorderScenesMutation.error ?? moveMaterialMutation.error
-    ?? configureMutation.error;
+    ?? configureMutation.error ?? backgroundMutation.error;
 
   function addScene() {
     if (deletion.target || deletion.pending) return;
@@ -97,6 +96,7 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     deleteDisabled: saving || deletion.pending || (story.status !== "draft" && story.status !== "ready"),
     adding: addSceneMutation.isPending,
     uploading: uploadMaterialsMutation.isPending,
+    backgroundUploading: backgroundMutation.isPending && backgroundMutation.variables?.action.kind === "upload",
     uploadCount: uploadMaterialsMutation.variables?.files.length ?? 0,
     operationErrorMessage: operationError
       ? addSceneMutation.isError ? copy.sceneCreateError
@@ -115,6 +115,16 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     },
     onUpload: (files) => {
       if (selected && !deletion.target && !deletion.pending) uploadMaterialsMutation.mutate({ sceneId: selected.id, files });
+    },
+    onUploadBackground: (file) => {
+      if (selected && !deletion.target && !deletion.pending) {
+        backgroundMutation.mutate({ sceneId: selected.id, action: { kind: "upload", file } });
+      }
+    },
+    onRemoveBackground: () => {
+      if (selected?.collageBackground?.source === "material" && !deletion.target && !deletion.pending) {
+        backgroundMutation.mutate({ sceneId: selected.id, action: { kind: "remove" } });
+      }
     },
     onDeleteMaterial: (materialId) => {
       if (selected && !deletion.target && !deletion.pending) deleteMaterialMutation.mutate({ sceneId: selected.id, materialId });

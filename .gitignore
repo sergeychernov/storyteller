@@ -9,6 +9,7 @@ dist/
 !.yarn/sdks
 !.yarn/versions
 coverage/
+storybook-static/
 .expo/
 .expo-shared/
 .env

@@ -1,0 +1,104 @@
+.card {
+  position: relative;
+  display: grid;
+  flex: 0 0 92px;
+  width: 92px;
+  min-height: 102px;
+  padding: 6px;
+  border: 1px dashed #88955f;
+  border-radius: 8px;
+  color: #4f592e;
+  background: #edf2df;
+  text-align: center;
+}
+
+.card:focus-within {
+  outline: 2px solid #65743b;
+  outline-offset: 2px;
+}
+
+.badge {
+  position: absolute;
+  z-index: 2;
+  top: 4px;
+  left: 4px;
+  max-width: 62px;
+  padding: 2px 4px;
+  overflow: hidden;
+  border-radius: 3px;
+  color: #fff;
+  background: #535c36dd;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.preview {
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 70px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: #34372e;
+}
+
+.preview img,
+.preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: none;
+}
+
+.card > strong {
+  align-self: center;
+  padding-top: 3px;
+  font-size: 8px;
+  line-height: 1.15;
+}
+
+.placeholder {
+  color: #d8ddc9;
+  font-size: 22px;
+}
+
+.fileInput {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.remove {
+  position: absolute;
+  z-index: 3;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  place-items: center;
+  color: #fff;
+  background: #2f3129dc;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.disabled {
+  opacity: 0.55;
+}
+
+.loading {
+  opacity: 0.7;
+}

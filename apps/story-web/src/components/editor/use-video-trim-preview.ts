@@ -11,9 +11,13 @@ interface VideoTrimPreviewOptions {
   readonly disabled: boolean;
   readonly loop?: boolean;
   readonly autoPlay?: boolean;
+  /** Editors use one active preview; collage cards deliberately play in parallel. */
+  readonly exclusivePlayback?: boolean;
 }
 
-export function useVideoTrimPreview({ url, sourceDurationSeconds, trim, disabled, loop = false, autoPlay = false }: VideoTrimPreviewOptions) {
+export function useVideoTrimPreview({
+  url, sourceDurationSeconds, trim, disabled, loop = false, autoPlay = false, exclusivePlayback = true,
+}: VideoTrimPreviewOptions) {
   const video = useRef<HTMLVideoElement>(null);
   const [loadedDuration, setLoadedDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -29,12 +33,12 @@ export function useVideoTrimPreview({ url, sourceDurationSeconds, trim, disabled
     setLoadedDuration(element && Number.isFinite(element.duration) ? element.duration : 0);
     setCurrentTime(element?.currentTime ?? 0);
     setPlaying(element ? !element.paused : false);
-    if (url && !autoPlay && currentPlayback !== element) currentPlayback?.pause();
+    if (exclusivePlayback && url && !autoPlay && currentPlayback !== element) currentPlayback?.pause();
     return () => {
       element?.pause();
       if (currentPlayback === element) currentPlayback = undefined;
     };
-  }, [url, autoPlay]);
+  }, [url, autoPlay, exclusivePlayback]);
 
   useEffect(() => {
     const element = video.current;
@@ -115,8 +119,10 @@ export function useVideoTrimPreview({ url, sourceDurationSeconds, trim, disabled
       },
       onTimeUpdate: timeUpdated,
       onPlay: () => {
-        if (currentPlayback !== video.current) currentPlayback?.pause();
-        currentPlayback = video.current ?? undefined;
+        if (exclusivePlayback) {
+          if (currentPlayback !== video.current) currentPlayback?.pause();
+          currentPlayback = video.current ?? undefined;
+        }
         setPlaying(true);
       },
       onPause: () => setPlaying(false),

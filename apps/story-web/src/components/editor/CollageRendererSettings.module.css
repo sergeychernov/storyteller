@@ -1,0 +1,18 @@
+.frameControls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; margin-top: 8px; }
+.widthControl { display: grid; gap: 4px; color: #77766e; font-size: 9px; }
+.widthOptions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.widthOptions button { min-width: 0; padding: 6px 4px; border: 1px solid transparent; color: #65655d; background: #e9e7e0; font: inherit; white-space: nowrap; }
+.widthOptions button[aria-pressed="true"] { border-color: #9fac73; color: #53612f; background: #f7faed; }
+.colorControl { display: grid; gap: 4px; color: #77766e; font-size: 9px; }
+.colorControl input { width: 38px; height: 28px; padding: 2px; border: 1px solid #cac7bd; background: #fff; }
+.rangeControl { display: grid; grid-template-columns: minmax(68px, auto) minmax(60px, 1fr) auto; align-items: center; gap: 7px; color: #77766e; font-size: 9px; }
+.rangeControl input { min-width: 0; width: 100%; padding: 0; border: 0; box-shadow: none; accent-color: #7f9148; }
+.rangeControl strong { color: #697a3d; font-size: 9px; white-space: nowrap; }
+.straightControl { display: flex; align-items: center; gap: 7px; color: #77766e; font-size: 9px; }
+.straightControl input { width: 14px; height: 14px; margin: 0; accent-color: #7f9148; }
+.rowDirectionControl { display: grid; gap: 5px; color: #77766e; font-size: 9px; }
+.rowDirectionControl > span { display: grid; gap: 2px; }
+.rowDirectionOptions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.rowDirectionOptions button { display: grid; min-width: 0; place-items: center; padding: 6px 4px; border: 1px solid transparent; color: #65655d; background: #e9e7e0; font: inherit; }
+.rowDirectionOptions svg { width: 36px; max-width: 100%; height: 22px; fill: currentColor; }
+.rowDirectionOptions button[aria-pressed="true"] { border-color: #9fac73; color: #53612f; background: #f7faed; }
