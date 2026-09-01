@@ -11,6 +11,7 @@ export type TimelineEditKind = "scene_reordered" | "material_moved_between_scene
 export type ExportFailureStage = "request" | "processing" | "download";
 export type ExportFailureReason = "version_changed" | "queue_timeout" | "render_timeout" | "api_error" | "unknown";
 export type AnalyticsLanguage = "en" | "ru" | "sr-Latn" | "es";
+export type WebLayout = "desktop" | "mobile_web";
 
 export interface AnalyticsEventMap {
   readonly "page viewed": { readonly page: string };
@@ -23,6 +24,7 @@ export interface AnalyticsEventMap {
   readonly "collage background configured": { readonly collage_background_mode: CollageBackgroundMode };
   readonly "collage row direction configured": { readonly collage_row_direction: CollageRowDirection };
   readonly "timeline edited": { readonly timeline_edit_kind: TimelineEditKind };
+  readonly "story preview completed": { readonly web_layout: WebLayout };
   readonly "scene render requested": {
     readonly export_mode: ExportMode; readonly renderer_kind: RendererKind;
     readonly collage_card_orientation: CollageCardOrientation;
@@ -63,6 +65,7 @@ export const analyticsEventPropertyNames = {
   "collage background configured": ["surface", "collage_background_mode"],
   "collage row direction configured": ["surface", "collage_row_direction"],
   "timeline edited": ["surface", "timeline_edit_kind"],
+  "story preview completed": ["surface", "web_layout"],
   "scene render requested": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],
   "scene render succeeded": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],
   "scene exported": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],

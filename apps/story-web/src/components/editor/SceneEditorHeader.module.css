@@ -1,7 +1,7 @@
 .header {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  grid-template-columns: 42px minmax(0, 1fr) 76px;
   align-items: center;
   min-height: calc(72px + env(safe-area-inset-top));
   padding: env(safe-area-inset-top) 10px 4px;
@@ -92,6 +92,30 @@
   color: #25261f;
   background: #d9fb76;
   font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  justify-content: end;
+  gap: 4px;
+}
+
+.preview {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #25261f;
+  background: #d9fb76;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.previewDisabled {
+  color: #7e7f76;
+  background: #2b2c25;
+  cursor: not-allowed;
 }
 
 .saving {

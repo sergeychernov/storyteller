@@ -2,12 +2,14 @@ import { Link } from "react-router-dom";
 import type { Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
+import { storyEditorPath } from "./scene-deletion-model.js";
 import styles from "./SceneEditorHeader.module.css";
 
 export type MobileEditorMode = "scene" | "timeline";
 
 interface SceneEditorHeaderProps {
   readonly storyTitle: string | undefined;
+  readonly storyId: string;
   readonly scenes: readonly Scene[];
   readonly selectedId: string;
   readonly copy: EditorCopy;
@@ -17,7 +19,7 @@ interface SceneEditorHeaderProps {
 }
 
 export function SceneEditorHeader({
-  storyTitle, scenes, selectedId, copy, saving, mode, onModeChange,
+  storyTitle, storyId, scenes, selectedId, copy, saving, mode, onModeChange,
 }: SceneEditorHeaderProps) {
   const selectedIndex = scenes.findIndex(({ id }) => id === selectedId);
   const selected = selectedIndex >= 0 ? scenes[selectedIndex] : undefined;
@@ -35,9 +37,15 @@ export function SceneEditorHeader({
         </div>
         <span className={styles.context}>{context}</span>
       </div>
-      <span className={classNames(styles.saveState, saving && styles.saving)} role="status" aria-label={saving ? copy.saving : copy.saved}>
-        {saving ? "●" : "✓"}
-      </span>
+      <div className={styles.actions}>
+        <span className={classNames(styles.saveState, saving && styles.saving)} role="status" aria-label={saving ? copy.saving : copy.saved}>
+          {saving ? "●" : "✓"}
+        </span>
+        {saving
+          ? <span className={classNames(styles.preview, styles.previewDisabled)} aria-disabled="true">▶</span>
+          : <Link className={styles.preview} aria-label={copy.storyPreview} to={`/${storyId}/preview`}
+              state={{ returnTo: storyEditorPath(storyId, selected?.id ?? "") }}>▶</Link>}
+      </div>
     </header>
   );
 }

@@ -20,6 +20,7 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
     <div className={styles.editor}>
       <SceneEditorHeader
         storyTitle={story.title}
+        storyId={story.id}
         scenes={story.scenes}
         selectedId={selected?.id ?? ""}
         copy={copy}

@@ -74,6 +74,7 @@ Event names follow the `object verb` form and are compile-time checked by
 | `collage background configured` | `surface`, `collage_background_mode` | The dedicated background API confirms a custom upload or restoration of the previous-scene frame |
 | `collage row direction configured` | `surface`, `collage_row_direction` | The scene configuration API confirms the ascending, level, descending, or irregular card alignment |
 | `timeline edited` | `surface`, `timeline_edit_kind` | The scene-order or cross-scene material-move API confirms the edit |
+| `story preview completed` | `surface`, `web_layout` | Continuous Web preview reaches the authoritative timeline end during playback; once per completed pass, never after seek, Stop, error or navigation |
 | `scene render requested` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The API accepts the render request |
 | `scene render succeeded` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | Polling reads the ready render |
 | `scene exported` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The browser receives the artifact and starts saving it |

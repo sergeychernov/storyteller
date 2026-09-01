@@ -18,6 +18,7 @@ export type {
   ProductAnalytics,
   RendererKind,
   TimelineEditKind,
+  WebLayout,
 } from "./core.js";
 export { analyticsEventPropertyNames, createProductAnalytics, resolveAnalyticsRelayUrl, resolveAnalyticsServerZone } from "./core.js";
 

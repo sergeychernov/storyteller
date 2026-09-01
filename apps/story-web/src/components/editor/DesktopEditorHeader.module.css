@@ -63,6 +63,36 @@
   font-size: 10px;
 }
 
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 13px;
+  border-radius: 9px;
+  color: #25261f;
+  background: #d9fb76;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.preview:hover {
+  background: #e5ff94;
+}
+
+.previewDisabled {
+  color: #7e7f76;
+  background: #2b2c25;
+  cursor: not-allowed;
+}
+
 .saveState i {
   display: grid;
   place-items: center;
@@ -87,6 +117,15 @@
 
 .compact .saveState {
   font-size: 0;
+}
+
+.compact .preview {
+  padding-inline: 10px;
+  font-size: 0;
+}
+
+.compact .preview::first-letter {
+  font-size: 12px;
 }
 
 @keyframes pulse {

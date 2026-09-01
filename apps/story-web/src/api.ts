@@ -120,12 +120,14 @@ export function editSceneMaterial(token: string, storyId: string, sceneId: strin
     method: "PATCH", body: JSON.stringify(edit),
   }, token);
 }
-export async function getMaterialContent(token: string, storyId: string, materialId: string): Promise<Blob> {
+export async function getMaterialContent(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<Blob> {
   // This URL follows the current edit, not an immutable storage object.
-  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/content`, { cache: "no-store" }, token);
+  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/content`, {
+    cache: "no-store", ...(signal ? { signal } : {}),
+  }, token);
 }
-export function getMaterialContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
-  return request(`/stories/${storyId}/materials/${materialId}/content-access`, {}, token);
+export function getMaterialContentAccess(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<{ url: string | null; expiresAt?: string }> {
+  return request(`/stories/${storyId}/materials/${materialId}/content-access`, signal ? { signal } : {}, token);
 }
 export async function getMaterialSourceContent(token: string, storyId: string, materialId: string): Promise<Blob> {
   return apiClient.blob(`/stories/${storyId}/materials/${materialId}/source-content`, {}, token);
@@ -136,11 +138,13 @@ export function getMaterialSourceContentAccess(token: string, storyId: string, m
 export function getMaterialWaveform(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<{ peaks: number[] }> {
   return request(`/stories/${storyId}/materials/${materialId}/waveform`, signal ? { signal } : {}, token);
 }
-export function getMaterialAudioContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
-  return request(`/stories/${storyId}/materials/${materialId}/audio-content-access`, {}, token);
+export function getMaterialAudioContentAccess(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<{ url: string | null; expiresAt?: string }> {
+  return request(`/stories/${storyId}/materials/${materialId}/audio-content-access`, signal ? { signal } : {}, token);
 }
-export async function getMaterialAudioContent(token: string, storyId: string, materialId: string): Promise<Blob> {
-  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/audio-content`, { cache: "no-store" }, token);
+export async function getMaterialAudioContent(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<Blob> {
+  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/audio-content`, {
+    cache: "no-store", ...(signal ? { signal } : {}),
+  }, token);
 }
 export function reorderSceneMaterials(token: string, storyId: string, sceneId: string, materialIds: readonly string[]): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}/material-order`, { method: "PUT", body: JSON.stringify({ materialIds }) }, token);

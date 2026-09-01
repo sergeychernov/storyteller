@@ -24,7 +24,7 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
 
   return (
     <div className={styles.editor}>
-      <DesktopEditorHeader storyTitle={story.title} scenes={story.scenes} selected={selected} copy={copy} saving={saving} compact={props.compact} />
+      <DesktopEditorHeader storyTitle={story.title} storyId={story.id} scenes={story.scenes} selected={selected} copy={copy} saving={saving} compact={props.compact} />
       {operationErrorMessage && <div className={classNames(sharedStyles.operationError, styles.operationError)} role="alert">{operationErrorMessage}</div>}
       <div className={classNames(styles.body, props.compact && styles.compact, !showInspector && styles.withoutInspector)}>
         <SceneRail

@@ -7,6 +7,7 @@ import { AppHeader } from "./components/AppHeader.js";
 import { ExternalRedirect, useLocalization } from "@storyteller/web-ui";
 import { AuthenticatedLayout } from "./layouts/AuthenticatedLayout.js";
 import { LazyStoryPage } from "./pages/LazyStoryPage.js";
+import { LazyStoryPreviewPage } from "./pages/LazyStoryPreviewPage.js";
 import { StoriesPage } from "./pages/StoriesPage.js";
 import { usePersistentSession } from "./use-persistent-session.js";
 import { useStoryWebAnalytics } from "./use-story-web-analytics.js";
@@ -19,7 +20,10 @@ export function App() {
   const location = useLocation();
   const { locale, setLocale } = useLocalization();
   const editingStory = useMatch("/:storyId/*");
-  useStoryWebAnalytics(session?.profile.id, session ? editingStory ? "story-editor" : "story-library" : "authentication-redirect");
+  const previewingStory = useMatch("/:storyId/preview");
+  useStoryWebAnalytics(session?.profile.id, session
+    ? previewingStory ? "story-preview" : editingStory ? "story-editor" : "story-library"
+    : "authentication-redirect");
   const updateProfileLanguage = useProfileLanguage({
     language: locale, onChanged: trackProfileLanguageChanged, profileLanguage: session?.profile.language,
     setLanguage: setLocale, updateProfile,
@@ -50,6 +54,7 @@ export function App() {
           <Route index element={<StoriesPage session={session} />} />
           <Route path=":storyId" element={<LazyStoryPage session={session} />} />
           <Route path=":storyId/scenes/:sceneId" element={<LazyStoryPage session={session} />} />
+          <Route path=":storyId/preview" element={<LazyStoryPreviewPage session={session} />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
