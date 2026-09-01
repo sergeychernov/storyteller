@@ -18,6 +18,7 @@ import { useMoveSceneMaterial } from "./use-move-scene-material.js";
 import { useDeleteScene, type SceneDeletionController } from "./use-delete-scene.js";
 import { useConfigureStoryScene } from "./use-configure-story-scene.js";
 import { useCollageBackground } from "./use-collage-background.js";
+import { useStoryTimeline } from "./use-story-timeline.js";
 
 interface UseStoryEditorArgs {
   readonly story: Story;
@@ -32,6 +33,7 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
   const { locale } = useLocalization();
   const copy = getEditorCopy(locale);
   const queryClient = useQueryClient();
+  const timelineQuery = useStoryTimeline(session, story.id, story.revision);
   const update = (changed: Story) => queryClient.setQueryData(["story", story.id], changed);
   const addSceneMutation = useMutation({
     mutationFn: () => createScene(session.csrfToken, story.id),
@@ -104,6 +106,10 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
           : moveMaterialMutation.isError ? getMaterialMoveError(copy, operationError)
           : getEditorOperationError(copy, operationError)
       : undefined,
+    timeline: timelineQuery.isSuccess && !timelineQuery.isFetching ? timelineQuery.data : undefined,
+    timelineLoading: timelineQuery.isFetching,
+    timelineError: timelineQuery.isError,
+    onRetryTimeline: () => { void timelineQuery.refetch(); },
     onSelect: (id) => { if (!deletion.target && !deletion.pending) onSelect(id); },
     onAdd: addScene,
     onDeleteScene: deletion.open,

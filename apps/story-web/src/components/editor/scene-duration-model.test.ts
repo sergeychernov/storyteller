@@ -35,18 +35,9 @@ test("untrimmed and reset videos use the full source duration without photo dura
   assert.equal(getSceneDurationSeconds(scene([{ ...video, edit: spatialEdit }])), 30);
 });
 
-test("untrimmed videos prefer source metadata and fall back to the working video track", () => {
+test("untrimmed videos always use source metadata instead of a derived working track", () => {
   const track = { storageKey: "track.mp4", mimeType: "video/mp4", sizeBytes: 90, durationSeconds: 29.97 };
   assert.equal(getSceneDurationSeconds(scene([{ ...video, videoTrack: track }])), 30);
-  const { sourceDurationSeconds: _duration, ...legacyVideo } = video;
-  assert.equal(getSceneDurationSeconds(scene([{ ...legacyVideo, videoTrack: track }])), 29.97);
-});
-
-test("videos without duration metadata show an unknown value unless trim supplies the range", () => {
-  const { sourceDurationSeconds: _duration, ...legacyVideo } = video;
-  assert.equal(getSceneDurationSeconds(scene([legacyVideo])), undefined);
-  assert.equal(formatSceneDuration(scene([legacyVideo])), "—");
-  assert.equal(getSceneDurationSeconds(scene([{ ...legacyVideo, edit: trimmedVideo(1, 7).edit! }])), 6);
 });
 
 test("empty, photo, and multi-material scenes keep their configured duration", () => {

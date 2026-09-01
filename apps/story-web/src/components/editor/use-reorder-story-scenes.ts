@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { reorderStoryScenes, type Story } from "../../api.js";
+import { analytics } from "@storyteller/analytics";
 
 export function useReorderStoryScenes(csrfToken: string, storyId: string) {
   const queryClient = useQueryClient();
@@ -19,7 +20,10 @@ export function useReorderStoryScenes(csrfToken: string, storyId: string) {
       if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
       void queryClient.invalidateQueries({ queryKey });
     },
-    onSuccess: (changed) => queryClient.setQueryData(queryKey, changed),
+    onSuccess: (changed) => {
+      queryClient.setQueryData(queryKey, changed);
+      analytics.track("timeline edited", { timeline_edit_kind: "scene_reordered" });
+    },
   });
 }
 

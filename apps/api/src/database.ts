@@ -222,7 +222,14 @@ export function normalizeStoredStory(payload: unknown): Story {
   if (!isRecord(payload) || !Array.isArray(payload.scenes)) return withStoredCollageComposition(storySchema.parse(payload) as Story);
   const scenes = payload.scenes.map((scene) => {
     if (!isRecord(scene) || !Array.isArray(scene.materials)) return scene;
-    let materials = scene.materials.filter((material) => sceneMaterialSchema.safeParse(material).success);
+    let materials = scene.materials.filter((material) => {
+      const parsed = sceneMaterialSchema.safeParse(material);
+      if (parsed.success) return true;
+      if (isRecord(material) && typeof material.storageKey === "string" && material.storageKey.length > 0) {
+        sceneMaterialSchema.parse(material);
+      }
+      return false;
+    });
     const legacyCollage = isRecord(scene.collage) ? scene.collage : undefined;
     const legacyBackground = legacyCollage && isRecord(legacyCollage.background) ? legacyCollage.background : undefined;
     let collageBackground = scene.collageBackground;

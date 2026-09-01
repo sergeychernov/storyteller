@@ -30,6 +30,7 @@ test("material order and format validators determine layout choices", () => {
   story = addMaterial(story, "scene-1", imageMaterial("p2", "portrait"));
   story = addMaterial(story, "scene-1", {
     ...fileMetadata("l1", "landscape"), kind: "video", hasAudio: true, audioTags: ["voice", "ambient"],
+    sourceDurationSeconds: 12,
   });
   assert.deepEqual(getCollageLayoutOptions(story.scenes[0]!.materials).map(({ id }) => id), ["2+1"]);
   assert.deepEqual(getLayoutOptions(story.scenes[0]!.materials).map(({ id }) => id), ["2+1"]);
@@ -778,26 +779,19 @@ test("timeline uses configured photo/layout timing, original video duration and 
   assert.equal(story.scenes[1]!.durationSeconds, 5);
 });
 
-test("empty and unknown-duration scenes never fabricate footage or downstream timestamps", () => {
+test("empty scenes add no footage and keep downstream timestamps exact", () => {
   const story = addScene(timelineStory(), "empty");
-  const video = timelineVideo("legacy");
-  const unknown: Story = { ...story, scenes: story.scenes.map((scene) => scene.id === "video" ? { ...scene, materials: [video] } : scene) };
-  const timeline = buildStoryTimeline(unknown, [{ formatId: "test", maxDurationSeconds: 6, requiresVerifiedAccount: false }]);
-  assert.equal(timeline.totalDurationSeconds, null);
-  assert.equal(timeline.knownDurationSeconds, 7.5);
+  const timeline = buildStoryTimeline(story, [{ formatId: "test", maxDurationSeconds: 6, requiresVerifiedAccount: false }]);
+  assert.equal(timeline.totalDurationSeconds, 187.75);
   assert.equal(timeline.scenes[1]!.startSeconds, 5);
-  assert.equal(timeline.scenes[1]!.endSeconds, null);
-  assert.equal(timeline.scenes[2]!.startSeconds, null);
+  assert.equal(timeline.scenes[1]!.endSeconds, 185.25);
+  assert.equal(timeline.scenes[2]!.startSeconds, 185.25);
+  assert.equal(timeline.scenes[3]!.startSeconds, 187.75);
+  assert.equal(timeline.scenes[3]!.endSeconds, 187.75);
   assert.equal(timeline.scenes[3]!.durationSeconds, 0);
-  assert.deepEqual(timeline.warnings, [
-    { code: "unknown_video_duration", sceneId: "video" }, { code: "empty_scene", sceneId: "empty" },
-  ]);
+  assert.deepEqual(timeline.warnings, [{ code: "empty_scene", sceneId: "empty" }]);
   assert.equal(timeline.formatLimits[0]!.status, "exceeded");
-  assert.equal(timeline.formatLimits[0]!.excessSeconds, 1.5);
-  assert.equal(timeline.formatLimits[0]!.isLowerBound, true);
-  assert.equal(buildStoryTimeline(unknown, [{ formatId: "test", maxDurationSeconds: 180, requiresVerifiedAccount: false }]).formatLimits[0]!.status, "unknown");
-  const trackVideo = { ...video, videoTrack: { storageKey: "track.mp4", mimeType: "video/mp4", sizeBytes: 100, durationSeconds: 12.5 } };
-  assert.equal(getSceneDurationSeconds({ ...unknown.scenes[1]!, materials: [trackVideo] }), 12.5);
+  assert.equal(timeline.formatLimits[0]!.excessSeconds, 181.75);
 });
 
 test("duration warnings are advisory, include exact excess and accept a duration exactly at the limit", () => {
@@ -811,9 +805,8 @@ test("duration warnings are advisory, include exact excess and accept a duration
   assert.equal(buildStoryTimeline(createStory({ id: "empty", profileId: "profile" })).totalDurationSeconds, 0);
 });
 
-function timelineVideo(id: string, sourceDurationSeconds?: number): VideoMaterial {
-  return { ...fileMetadata(id, "landscape"), kind: "video", hasAudio: false, audioTags: [],
-    ...(sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds }) };
+function timelineVideo(id: string, sourceDurationSeconds: number): VideoMaterial {
+  return { ...fileMetadata(id, "landscape"), kind: "video", hasAudio: false, audioTags: [], sourceDurationSeconds };
 }
 
 function timelineStory(): Story {

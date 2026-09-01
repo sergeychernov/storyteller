@@ -70,7 +70,7 @@ export class MediaStorage {
       const material: NewSceneMaterial = kind === "video"
         ? {
           ...common, kind, hasAudio: detected.hasAudio, audioTags: [],
-          ...(detected.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: detected.sourceDurationSeconds }),
+          sourceDurationSeconds: detected.sourceDurationSeconds!,
           ...await storeVideoTracks({
             sourcePath: temporaryPath, directory: temporaryDirectory,
             keyPrefix: `${scope.profileId}/${scope.storyId}/${scope.sceneId}/${id}`, extension, mimeType,
@@ -164,20 +164,10 @@ export class MediaStorage {
 
   async validateVideoEdit(material: VideoMaterial, edit: MaterialEdit): Promise<void> {
     if (!edit.trim) return;
-    let duration = material.sourceDurationSeconds ?? material.videoTrack?.durationSeconds;
-    if (duration === undefined) {
-      const directory = await mkdtemp(join(tmpdir(), "storyteller-probe-"));
-      const source = join(directory, "source.media");
-      try {
-        await pipeline(await this.objects.open(material.storageKey), createWriteStream(source));
-        duration = detectMediaMetadata(await probeMedia(source, this.processRunner), "video").sourceDurationSeconds;
-      } finally {
-        await rm(directory, { recursive: true, force: true }).catch(() => undefined);
-      }
-    }
+    const duration = material.sourceDurationSeconds;
     const { startSeconds, endSeconds } = edit.trim;
     if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds) || startSeconds < 0
-      || endSeconds <= startSeconds || duration === undefined || endSeconds > duration) {
+      || endSeconds <= startSeconds || endSeconds > duration) {
       throw new MediaUploadError("video trim must be within the source duration", 422);
     }
   }

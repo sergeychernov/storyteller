@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { AuthSession, Scene } from "../../api.js";
+import type { AuthSession, Scene, StoryTimeline } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { formatSceneDuration } from "./scene-duration-model.js";
@@ -9,8 +9,9 @@ import { SceneFrameImage } from "./SceneFrameImage.js";
 import { SceneDragGhost } from "./SceneDragGhost.js";
 import { useSceneDrag } from "./use-scene-drag.js";
 import { useMaterialSceneDrag } from "./MaterialSceneDragContext.js";
+import { TimelineSummary } from "./TimelineSummary.js";
 
-interface SceneRailProps {
+export interface SceneRailProps {
   readonly scenes: readonly Scene[];
   readonly storyId?: string;
   readonly session?: AuthSession;
@@ -22,10 +23,15 @@ interface SceneRailProps {
   readonly saving?: boolean;
   readonly onReorder?: (ids: readonly string[]) => void;
   readonly variant?: "default" | "desktop" | "mobileTimeline";
+  readonly timeline?: StoryTimeline | undefined;
+  readonly timelineLoading?: boolean;
+  readonly timelineError?: boolean;
+  readonly onRetryTimeline?: () => void;
 }
 
 export function SceneRail({
   scenes, storyId, session, selectedId, copy, onSelect, onAdd, onReorder, adding, saving = false, variant = "default",
+  timeline, timelineLoading = false, timelineError = false, onRetryTimeline = () => undefined,
 }: SceneRailProps) {
   const railRef = useRef<HTMLElement>(null);
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -45,12 +51,20 @@ export function SceneRail({
       aria-label={variant === "mobileTimeline" ? copy.timeline : undefined}
     >
       <div className={styles.sectionHead}><h2>{copy.scenes}</h2><span>{scenes.length}</span></div>
+      {(variant === "desktop" || variant === "mobileTimeline") && <TimelineSummary
+        timeline={timeline}
+        loading={timelineLoading}
+        error={timelineError}
+        copy={copy}
+        onRetry={onRetryTimeline}
+      />}
       <div
         className={styles.list}
         {...(variant !== "mobileTimeline" ? { "data-scene-drop-scroll": "true" } : {})}
         ref={(node) => { drag.listRef.current = node; listScrollRef.current = node; }}
       >
         {drag.orderedScenes.map((scene, index) => {
+          const emptyTimelineScene = timeline?.warnings.some((warning) => warning.sceneId === scene.id) === true;
           const materialDropCandidate = !!materialDrag.state && materialDrag.state.sourceSceneId !== scene.id;
           const materialDropTarget = materialDropCandidate && materialDrag.state?.targetSceneId === scene.id;
           return (
@@ -75,8 +89,11 @@ export function SceneRail({
               <span className={styles.thumbnail}>
                 {storyId && session && <SceneFrameImage scene={scene} storyId={storyId} session={session} presentation="timeline" />}
                 <span className={styles.number}>{String(index + 1).padStart(2, "0")}</span>
+                {emptyTimelineScene && <span className={styles.emptyMarker} aria-hidden="true">!</span>}
               </span>
-              <span><strong>{scene.title || `${copy.scene} ${index + 1}`}</strong><small>{formatSceneDuration(scene)} {copy.seconds} · {scene.materials.length}</small></span>
+              <span><strong>{scene.title || `${copy.scene} ${index + 1}`}</strong><small className={emptyTimelineScene ? styles.emptyLabel : undefined}>
+                {emptyTimelineScene ? copy.timelineEmptySceneLabel : `${formatSceneDuration(scene)} ${copy.seconds} · ${scene.materials.length}`}
+              </small></span>
             </button>
             <button
               type="button"

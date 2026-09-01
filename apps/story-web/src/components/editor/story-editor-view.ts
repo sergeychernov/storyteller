@@ -1,4 +1,4 @@
-import type { AuthSession, EditableCollageSettings, FocusPoint, MaterialEdit, Scene, SceneMotion, Story } from "../../api.js";
+import type { AuthSession, EditableCollageSettings, FocusPoint, MaterialEdit, Scene, SceneMotion, Story, StoryTimeline } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 
 export interface SceneChange {
@@ -25,6 +25,10 @@ export interface StoryEditorViewProps {
   readonly backgroundUploading: boolean;
   readonly uploadCount: number;
   readonly operationErrorMessage: string | undefined;
+  readonly timeline: StoryTimeline | undefined;
+  readonly timelineLoading: boolean;
+  readonly timelineError: boolean;
+  readonly onRetryTimeline: () => void;
   readonly onSelect: (id: string) => void;
   readonly onAdd: () => void;
   readonly onDeleteScene: (sceneId: string) => void;

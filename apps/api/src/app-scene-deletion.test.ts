@@ -110,6 +110,7 @@ test("scene deletion deduplicates cleanup keys and preserves media referenced by
   const video: SceneMaterial = {
     id: randomUUID(), kind: "video", name: "clip.mp4", orientation: "landscape", width: 1920, height: 1080,
     storageKey: "source.mp4", mimeType: "video/mp4", sizeBytes: 1_000, hasAudio: true, audioTags: [],
+    sourceDurationSeconds: 5,
     videoTrack: { storageKey: "video.mp4", mimeType: "video/mp4", sizeBytes: 800, durationSeconds: 5 },
     audioTrack: {
       storageKey: "audio.m4a", mimeType: "audio/mp4", sizeBytes: 200, durationSeconds: 5, channels: 2, sampleRate: 48_000,

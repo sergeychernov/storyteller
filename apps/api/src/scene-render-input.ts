@@ -46,15 +46,13 @@ export async function buildSceneRenderInput(
       const presentation = getMaterialPresentation(material);
       if (material.kind === "video") {
         const source = getMaterialSource(material);
-        const sourceDurationSeconds = material.sourceDurationSeconds ?? material.videoTrack?.durationSeconds;
         const contentHash = material.videoTrack
           ? await dependency("video-track", material.videoTrack, { materialId: material.id, index, role, operation: "demux-video", version: 1 })
           : originalHash;
         return {
           id: material.id, kind: material.kind, storageKey: source.storageKey, name: source.storageKey, mimeType: source.mimeType,
           width: presentation.width, height: presentation.height, orientation: presentation.orientation, contentHash,
-          sourceWidth: material.width, sourceHeight: material.height,
-          ...(sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds }),
+          sourceWidth: material.width, sourceHeight: material.height, sourceDurationSeconds: material.sourceDurationSeconds,
           edit: material.edit ?? { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } },
         };
       }
@@ -147,17 +145,16 @@ export async function buildSceneRenderInput(
     output: { width: 1080, height: 1920, fps: 30, codec: "h264" as const },
   };
   if (material.kind === "image") return { ...common, rendererId: "still-image", rendererVersion: stillImageRendererVersion };
-  const sourceDurationSeconds = material.sourceDurationSeconds ?? material.videoTrack?.durationSeconds;
   return {
     ...common, rendererId: "video", rendererVersion: videoRendererVersion, mode: exportMode, hasAudio: material.hasAudio,
     edit: { rotation: material.edit?.rotation ?? 0, crop: material.edit?.crop ?? { x: 0, y: 0, width: 1, height: 1 },
       ...(material.edit?.trim ? { trim: material.edit.trim } : {}) },
-    ...(sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds }),
+    sourceDurationSeconds: material.sourceDurationSeconds,
     ...(material.audioTrack && audioHash ? { audio: {
       storageKey: material.audioTrack.storageKey, name: material.audioTrack.storageKey,
       mimeType: material.audioTrack.mimeType, contentHash: audioHash,
     } } : {}),
-    durationSeconds: presentation.durationSeconds ?? sourceDurationSeconds ?? scene.durationSeconds,
+    durationSeconds: presentation.durationSeconds ?? material.sourceDurationSeconds,
     output: { ...common.output, width: presentation.width, height: presentation.height },
   };
 }

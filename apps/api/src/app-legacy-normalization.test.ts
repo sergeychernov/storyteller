@@ -57,6 +57,37 @@ test("opens a legacy story without fileless material placeholders", () => {
   assert.deepEqual(normalized.scenes[0]?.render, { status: "idle" });
 });
 
+test("rejects invalid file-backed video metadata instead of silently removing the material", () => {
+  assert.throws(() => normalizeStoredStory({
+    id: "e95428cd-ae65-4334-8497-1f31b88c8124",
+    profileId: "675efe5b-18a4-46f9-a210-00a8ebf9a01d",
+    title: "Invalid stored video",
+    status: "draft",
+    revision: 1,
+    scenes: [{
+      id: "f89171cc-9473-4a01-a02a-fb93e5d4da6f",
+      durationSeconds: 5,
+      motion: "none",
+      materials: [{
+        id: "08140c76-10ba-48c5-a000-fa56c9e7364a",
+        kind: "video",
+        name: "clip.mp4",
+        orientation: "portrait",
+        storageKey: "profile/story/clip.mp4",
+        mimeType: "video/mp4",
+        sizeBytes: 1024,
+        width: 1080,
+        height: 1920,
+        hasAudio: false,
+        audioTags: [],
+      }],
+      render: { status: "idle" },
+    }],
+    narrations: [],
+    music: { generationStatus: "idle", applied: false },
+  }), /sourceDurationSeconds/);
+});
+
 test("upgrades a legacy scene with one image to the still-image renderer", () => {
   const normalized = normalizeStoredStory({
     id: "e95428cd-ae65-4334-8497-1f31b88c8124",

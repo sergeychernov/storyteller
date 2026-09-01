@@ -6,7 +6,7 @@ let currentPlayback: HTMLVideoElement | undefined;
 
 interface VideoTrimPreviewOptions {
   readonly url: string | undefined;
-  readonly sourceDurationSeconds: number | undefined;
+  readonly sourceDurationSeconds: number;
   readonly trim: VideoTrim | undefined;
   readonly disabled: boolean;
   readonly loop?: boolean;
@@ -19,18 +19,16 @@ export function useVideoTrimPreview({
   url, sourceDurationSeconds, trim, disabled, loop = false, autoPlay = false, exclusivePlayback = true,
 }: VideoTrimPreviewOptions) {
   const video = useRef<HTMLVideoElement>(null);
-  const [loadedDuration, setLoadedDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [failed, setFailed] = useState(false);
-  const duration = sourceDurationSeconds ?? loadedDuration;
+  const duration = sourceDurationSeconds;
   const startSeconds = trim?.startSeconds ?? 0;
   const endSeconds = trim?.endSeconds ?? duration;
 
   useEffect(() => {
     const element = video.current;
     setFailed(Boolean(element?.error));
-    setLoadedDuration(element && Number.isFinite(element.duration) ? element.duration : 0);
     setCurrentTime(element?.currentTime ?? 0);
     setPlaying(element ? !element.paused : false);
     if (exclusivePlayback && url && !autoPlay && currentPlayback !== element) currentPlayback?.pause();
@@ -84,7 +82,6 @@ export function useVideoTrimPreview({
   function loadedMetadata() {
     const element = video.current;
     if (!element) return;
-    if (Number.isFinite(element.duration) && element.duration > 0) setLoadedDuration(element.duration);
     seek(startSeconds);
     if (autoPlay && !disabled) void element.play().catch(() => undefined);
   }
@@ -113,10 +110,6 @@ export function useVideoTrimPreview({
     video, duration, currentTime, playing, failed, seek, togglePlayback,
     mediaEvents: {
       onLoadedMetadata: loadedMetadata,
-      onDurationChange: () => {
-        const value = video.current?.duration;
-        if (value !== undefined && Number.isFinite(value) && value > 0) setLoadedDuration(value);
-      },
       onTimeUpdate: timeUpdated,
       onPlay: () => {
         if (exclusivePlayback) {

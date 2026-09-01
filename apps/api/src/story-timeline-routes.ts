@@ -16,7 +16,8 @@ export function registerStoryTimelineRoutes(instance: FastifyInstance, applicati
     schema: {
       operationId: "getStoryTimeline", summary: "Read the editorial timeline and duration warnings",
       description: "Derives timing from the persisted scene order, photo/layout durations and original-time video trims. "
-        + "Empty scenes contribute zero with a warning; unknown video durations yield null totals and subsequent offsets. "
+        + "Every uploaded video has a positive source duration; invalid stored media metadata fails schema validation. "
+        + "Empty scenes contribute zero with a warning. "
         + "Only hard cuts are supported. YouTube duration profiles are advisory, not publication eligibility or a selected destination.",
       security: bearerSecurity, params: storyParams,
       response: { 200: storyTimelineSchema, 400: errorSchema, 401: errorSchema, 404: errorSchema },

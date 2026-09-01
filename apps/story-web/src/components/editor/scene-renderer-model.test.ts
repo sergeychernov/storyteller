@@ -15,11 +15,11 @@ test("still-image renderer owns only a scene with exactly one image", () => {
   assert.equal(resolveEditorRenderer(scene({ materials: [image] })), "still-image");
   assert.equal(resolveEditorRenderer(scene({ rendererId: "ai-animation", materials: [image] })), "layout");
   assert.equal(resolveEditorRenderer(scene({ rendererId: "still-image", materials: [image, { ...image, id: "second" }] })), "layout");
-  assert.equal(isSingleImageScene(scene({ materials: [{ ...image, kind: "video", hasAudio: false, audioTags: [] }] })), false);
+  assert.equal(isSingleImageScene(scene({ materials: [{ ...image, kind: "video", hasAudio: false, audioTags: [], sourceDurationSeconds: 10 }] })), false);
 });
 
 test("only a single video omits scene composition controls", () => {
-  const video = { ...image, kind: "video" as const, hasAudio: false, audioTags: [] };
+  const video = { ...image, kind: "video" as const, hasAudio: false, audioTags: [], sourceDurationSeconds: 10 };
   assert.equal(isSingleVideoScene(scene({ materials: [video] })), true);
   assert.equal(isSingleVideoScene(scene({ materials: [image] })), false);
   assert.equal(isSingleVideoScene(scene({ materials: [video, image] })), false);

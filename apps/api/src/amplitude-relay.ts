@@ -16,6 +16,7 @@ const allowedCollageCardOrientations = new Set(["angled", "straight", "not_appli
 const allowedCollageMediaMixes = new Set(["images_only", "includes_video", "not_applicable"]);
 const allowedCollageBackgroundModes = new Set(["previous_scene_darkened", "custom_material_original"]);
 const allowedCollageRowDirections = new Set(["ascending", "level", "descending", "random"]);
+const allowedTimelineEditKinds = new Set(["scene_reordered", "material_moved_between_scenes"]);
 const allowedFailureStages = new Set(["request", "processing", "download"]);
 const allowedFailureReasons = new Set(["version_changed", "queue_timeout", "render_timeout", "api_error", "unknown"]);
 const safePage = /^[a-z0-9:/_-]+$/;
@@ -172,6 +173,9 @@ function sanitizeEventProperties(eventType: AnalyticsEventName, value: unknown):
   }
   if (eventType === "collage row direction configured" && !allowedCollageRowDirections.has(value.collage_row_direction as string)) {
     return { ok: false, message: "analytics collage row direction is invalid" };
+  }
+  if (eventType === "timeline edited" && !allowedTimelineEditKinds.has(value.timeline_edit_kind as string)) {
+    return { ok: false, message: "analytics timeline edit kind is invalid" };
   }
   if (eventType.includes("render") || eventType.includes("export")) {
     if (!allowedExportModes.has(value.export_mode as string)) return { ok: false, message: "analytics export mode is invalid" };

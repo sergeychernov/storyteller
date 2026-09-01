@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { moveSceneMaterials, type Story } from "../../api.js";
+import { analytics } from "@storyteller/analytics";
 import { moveMaterialBetweenScenes } from "./material-scene-move-model.js";
 
 interface MoveSceneMaterialVariables {
@@ -39,6 +40,9 @@ export function useMoveSceneMaterial(csrfToken: string, storyId: string) {
       if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
       void queryClient.invalidateQueries({ queryKey });
     },
-    onSuccess: (changed) => queryClient.setQueryData(queryKey, changed),
+    onSuccess: (changed) => {
+      queryClient.setQueryData(queryKey, changed);
+      analytics.track("timeline edited", { timeline_edit_kind: "material_moved_between_scenes" });
+    },
   });
 }

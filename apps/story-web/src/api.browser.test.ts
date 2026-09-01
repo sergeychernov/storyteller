@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { ApiError, createStory, uploadSceneMaterial } from "./api.js";
+import { ApiError, createStory, getStoryTimeline, uploadSceneMaterial } from "./api.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -46,6 +46,27 @@ describe("Story API transport", () => {
     expect(requestInit?.body).toBeInstanceOf(FormData);
     expect(new Headers(requestInit?.headers).has("content-type")).toBe(false);
     expect(new Headers(requestInit?.headers).get("x-csrf-token")).toBe("csrf-token");
+  });
+
+  test("reads the server timeline without a request body and disables HTTP caching", async () => {
+    let request: { readonly url: string; readonly init: RequestInit } | undefined;
+    vi.stubGlobal("fetch", vi.fn<typeof globalThis.fetch>(async (input, init = {}) => {
+      request = { url: String(input), init };
+      return new Response(JSON.stringify({ storyId: "story-id", revision: 4, sceneOrder: [], scenes: [], totalDurationSeconds: 0,
+        transitionOverlapSeconds: 0, warnings: [], formatLimits: [] }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }));
+
+    const timeline = await getStoryTimeline("csrf-token", "story-id");
+
+    expect(timeline.revision).toBe(4);
+    expect(request?.url).toBe("http://localhost:3001/stories/story-id/timeline");
+    expect(request?.init.method).toBeUndefined();
+    expect(request?.init.body).toBeUndefined();
+    expect(request?.init.cache).toBe("no-store");
+    expect(new Headers(request?.init.headers).get("x-csrf-token")).toBe(null);
+    expect(request?.init.credentials).toBe("include");
   });
 
   test("turns structured API failures into the shared error type", async () => {

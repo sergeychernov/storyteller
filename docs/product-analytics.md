@@ -73,6 +73,7 @@ Event names follow the `object verb` form and are compile-time checked by
 | `material uploaded` | `surface`, `material_kind` | Each image/video upload succeeds |
 | `collage background configured` | `surface`, `collage_background_mode` | The dedicated background API confirms a custom upload or restoration of the previous-scene frame |
 | `collage row direction configured` | `surface`, `collage_row_direction` | The scene configuration API confirms the ascending, level, descending, or irregular card alignment |
+| `timeline edited` | `surface`, `timeline_edit_kind` | The scene-order or cross-scene material-move API confirms the edit |
 | `scene render requested` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The API accepts the render request |
 | `scene render succeeded` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | Polling reads the ready render |
 | `scene exported` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The browser receives the artifact and starts saving it |
@@ -105,6 +106,10 @@ not expose counts, order, filenames, IDs, or content.
 `collage_background_mode` distinguishes `previous_scene_darkened` from
 `custom_material_original`. It is emitted only after the dedicated background
 operation succeeds and never exposes the material kind, ID, filename, or content.
+`timeline_edit_kind` is restricted to `scene_reordered` or
+`material_moved_between_scenes`. The event is emitted only after the API returns
+the updated story; optimistic movement, failed requests and revision conflicts do
+not emit it. Scene, material and story identifiers are never included.
 
 ### B13 access-control instrumentation decision
 

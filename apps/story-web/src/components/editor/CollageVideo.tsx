@@ -18,7 +18,7 @@ export function CollageVideo({ active, loop = false, material, session, storyId 
   const content = useMaterialContentUrl({ storyId, material, session });
   const preview = useVideoTrimPreview({
     url: content.url,
-    sourceDurationSeconds: material.sourceDurationSeconds ?? material.videoTrack?.durationSeconds,
+    sourceDurationSeconds: material.sourceDurationSeconds,
     trim: material.edit?.trim,
     disabled: !active,
     autoPlay: true,

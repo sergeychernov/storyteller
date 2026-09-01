@@ -3,6 +3,10 @@ import type { Locale } from "@storyteller/localization";
 const copies = {
   en: {
     scenes: "Scenes", addScene: "Add scene", scene: "Scene", timeline: "Timeline", editorModes: "Editor mode", emptyScene: "Start by adding a photo or video",
+    timelineSummary: "Story duration and timeline problems", timelineDurationLabel: "Total duration", timelineProblems: "Problems: {{count}}",
+    timelineCalculating: "Calculating the timeline…", timelineLoadError: "Could not calculate the timeline. The editor is still available.", retryTimeline: "Try again",
+    timelineEmptyScenes: "Empty scenes: {{count}}", timelineEmptySceneLabel: "Empty · 0 sec", timelineFormatExceeded: "{{format}}: over by {{duration}}",
+    timelineFormatShorts: "YouTube Shorts", timelineFormatVideo: "YouTube video", timelineFormatVerifiedVideo: "YouTube video · verified account",
     materials: "Materials", addMaterial: "Upload materials", uploadingMaterials: "Uploading {{count}}…",
     portrait: "Portrait", landscape: "Landscape", silent: "Silent", audioUnclassified: "Audio needs labels", voice: "Voice", music: "Music", ambient: "Background sound",
     layout: "Composition", layoutHint: "Options follow the orientation sequence", settings: "Settings", motion: "Movement", duration: "Duration",
@@ -61,6 +65,10 @@ const copies = {
   },
   ru: {
     scenes: "Сцены", addScene: "Добавить сцену", scene: "Сцена", timeline: "Таймлайн", editorModes: "Режим редактора", emptyScene: "Добавьте фотографию или видео",
+    timelineSummary: "Длительность истории и проблемы таймлайна", timelineDurationLabel: "Общая длительность", timelineProblems: "Проблемы: {{count}}",
+    timelineCalculating: "Рассчитываем таймлайн…", timelineLoadError: "Не удалось рассчитать таймлайн. Редактор остаётся доступен.", retryTimeline: "Повторить",
+    timelineEmptyScenes: "Пустые сцены: {{count}}", timelineEmptySceneLabel: "Пустая · 0 сек", timelineFormatExceeded: "{{format}}: превышение на {{duration}}",
+    timelineFormatShorts: "YouTube Shorts", timelineFormatVideo: "Видео YouTube", timelineFormatVerifiedVideo: "Видео YouTube · подтверждённый аккаунт",
     materials: "Материалы", addMaterial: "Загрузить материалы", uploadingMaterials: "Загружаем: {{count}}…",
     portrait: "Портрет", landscape: "Альбом", silent: "Без звука", audioUnclassified: "Звук нужно разметить", voice: "Голос", music: "Музыка", ambient: "Фоновый звук",
     layout: "Композиция", layoutHint: "Варианты зависят от последовательности ориентаций", settings: "Настройки", motion: "Движение", duration: "Длительность",
@@ -119,6 +127,10 @@ const copies = {
   },
   "sr-Latn": {
     scenes: "Scene", addScene: "Dodaj scenu", scene: "Scena", timeline: "Vremenska linija", editorModes: "Režim uređivača", emptyScene: "Dodajte fotografiju ili video",
+    timelineSummary: "Trajanje priče i problemi vremenske linije", timelineDurationLabel: "Ukupno trajanje", timelineProblems: "Problemi: {{count}}",
+    timelineCalculating: "Računanje vremenske linije…", timelineLoadError: "Vremenska linija nije izračunata. Uređivač je i dalje dostupan.", retryTimeline: "Pokušaj ponovo",
+    timelineEmptyScenes: "Prazne scene: {{count}}", timelineEmptySceneLabel: "Prazna · 0 sek", timelineFormatExceeded: "{{format}}: prekoračenje za {{duration}}",
+    timelineFormatShorts: "YouTube Shorts", timelineFormatVideo: "YouTube video", timelineFormatVerifiedVideo: "YouTube video · potvrđen nalog",
     materials: "Materijali", addMaterial: "Otpremi materijale", uploadingMaterials: "Otpremanje: {{count}}…",
     portrait: "Portret", landscape: "Pejzaž", silent: "Bez zvuka", audioUnclassified: "Zvuk treba označiti", voice: "Glas", music: "Muzika", ambient: "Pozadinski zvuk",
     layout: "Kompozicija", layoutHint: "Opcije prate redosled orijentacija", settings: "Podešavanja", motion: "Kretanje", duration: "Trajanje",
@@ -177,6 +189,10 @@ const copies = {
   },
   es: {
     scenes: "Escenas", addScene: "Añadir escena", scene: "Escena", timeline: "Línea de tiempo", editorModes: "Modo del editor", emptyScene: "Empieza añadiendo una foto o un vídeo",
+    timelineSummary: "Duración de la historia y problemas de la línea de tiempo", timelineDurationLabel: "Duración total", timelineProblems: "Problemas: {{count}}",
+    timelineCalculating: "Calculando la línea de tiempo…", timelineLoadError: "No se pudo calcular la línea de tiempo. El editor sigue disponible.", retryTimeline: "Reintentar",
+    timelineEmptyScenes: "Escenas vacías: {{count}}", timelineEmptySceneLabel: "Vacía · 0 s", timelineFormatExceeded: "{{format}}: supera por {{duration}}",
+    timelineFormatShorts: "YouTube Shorts", timelineFormatVideo: "Vídeo de YouTube", timelineFormatVerifiedVideo: "Vídeo de YouTube · cuenta verificada",
     materials: "Materiales", addMaterial: "Subir materiales", uploadingMaterials: "Subiendo {{count}}…",
     portrait: "Vertical", landscape: "Horizontal", silent: "Sin sonido", audioUnclassified: "El audio necesita etiquetas", voice: "Voz", music: "Música", ambient: "Sonido ambiente",
     layout: "Composición", layoutHint: "Las opciones siguen la secuencia de orientaciones", settings: "Ajustes", motion: "Movimiento", duration: "Duración",

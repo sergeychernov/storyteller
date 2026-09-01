@@ -156,7 +156,15 @@ test("OpenAPI exposes timeline contracts with required revision guards and docum
   const { api } = await sceneDeletionFixture(context, 0);
   await api.ready();
   const document = api.swagger() as OpenAPIV3.Document;
-  assert.equal(document.paths["/stories/{storyId}/timeline"]?.get?.operationId, "getStoryTimeline");
+  const timelineOperation = document.paths["/stories/{storyId}/timeline"]?.get;
+  assert.equal(timelineOperation?.operationId, "getStoryTimeline");
+  const timelineContract = JSON.stringify(timelineOperation?.responses[200]);
+  for (const requiredField of ["totalDurationSeconds", "startSeconds", "endSeconds", "durationSeconds", "empty_scene", "within_limit", "exceeded"]) {
+    assert.match(timelineContract, new RegExp(requiredField));
+  }
+  for (const removedField of ["knownDurationSeconds", "unknown_video_duration", "isLowerBound", '"unknown"']) {
+    assert.doesNotMatch(timelineContract, new RegExp(removedField));
+  }
   for (const operation of [document.paths["/stories/{storyId}/scene-order"]?.put,
     document.paths["/stories/{storyId}/scenes/{sceneId}/materials/move"]?.post]) {
     assert.ok(operation?.requestBody && "content" in operation.requestBody);

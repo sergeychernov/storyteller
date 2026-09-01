@@ -16,6 +16,7 @@ import type {
   SceneMaterial,
   SceneMotion,
   Story,
+  StoryTimeline,
   VideoAudioTag,
   VideoMaterial,
   VideoTrack,
@@ -41,6 +42,7 @@ export type {
   SceneMaterial,
   SceneMotion,
   Story,
+  StoryTimeline,
   VideoAudioTag,
   VideoMaterial,
   VideoTrack,
@@ -85,6 +87,9 @@ export function listStories(token: string): Promise<StorySummary[]> {
 }
 export function getStory(token: string, storyId: string, signal?: AbortSignal): Promise<Story> {
   return request(`/stories/${storyId}`, signal ? { signal } : {}, token);
+}
+export function getStoryTimeline(token: string, storyId: string, signal?: AbortSignal): Promise<StoryTimeline> {
+  return request(`/stories/${storyId}/timeline`, { cache: "no-store", ...(signal ? { signal } : {}) }, token);
 }
 export function createScene(token: string, storyId: string): Promise<Story> {
   return request(`/stories/${storyId}/scenes`, { method: "POST" }, token);

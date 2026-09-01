@@ -12,6 +12,7 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
   const [mode, setMode] = useState<MobileEditorMode>("scene");
   const {
     story, session, selected, copy, saving, adding, uploading, backgroundUploading, uploadCount, operationErrorMessage, deleteDisabled,
+    timeline, timelineLoading, timelineError, onRetryTimeline,
     onSelect, onAdd, onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
   } = props;
 
@@ -52,6 +53,10 @@ export function MobileStoryEditor(props: StoryEditorViewProps) {
           onSelect={onSelect}
           onAdd={onAdd}
           onReorder={onReorderScenes}
+          timeline={timeline}
+          timelineLoading={timelineLoading}
+          timelineError={timelineError}
+          onRetryTimeline={onRetryTimeline}
           variant="mobileTimeline"
         />}
       </div>

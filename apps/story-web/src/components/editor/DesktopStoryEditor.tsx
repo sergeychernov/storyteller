@@ -17,6 +17,7 @@ interface DesktopStoryEditorProps extends StoryEditorViewProps {
 export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
   const {
     story, session, selected, copy, saving, adding, uploading, backgroundUploading, uploadCount, operationErrorMessage, deleteDisabled,
+    timeline, timelineLoading, timelineError, onRetryTimeline,
     onSelect, onAdd, onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
   } = props;
   const showInspector = !!selected && !isSingleVideoScene(selected);
@@ -37,6 +38,10 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
           onSelect={onSelect}
           onAdd={onAdd}
           onReorder={onReorderScenes}
+          timeline={timeline}
+          timelineLoading={timelineLoading}
+          timelineError={timelineError}
+          onRetryTimeline={onRetryTimeline}
           variant="desktop"
         />
         {selected ? <>

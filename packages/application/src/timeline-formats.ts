@@ -1,6 +1,6 @@
 import type { TimelineDurationLimit } from "@storyteller/domain";
 
-// Advisory duration profiles for the P0 YouTube scope, not publication eligibility.
+// Advisory duration profiles for the Web YouTube MVP milestone, not publication eligibility.
 // Verified 2026-08-28 against:
 // https://support.google.com/youtube/answer/15424877?hl=en (Shorts)
 // https://support.google.com/youtube/answer/71673?hl=en (default / verified uploads)

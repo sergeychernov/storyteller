@@ -140,7 +140,7 @@ export const sceneMaterialSchema = z.discriminatedUnion("kind", [
   z.object({ ...materialFileShape, kind: z.literal("image") }),
   z.object({
     ...materialFileShape, kind: z.literal("video"), hasAudio: z.boolean(),
-    sourceDurationSeconds: z.number().positive().optional(), audioTags: z.array(videoAudioTagSchema),
+    sourceDurationSeconds: z.number().positive(), audioTags: z.array(videoAudioTagSchema),
     videoTrack: videoTrackSchema.optional(), audioTrack: audioTrackSchema.optional(),
   }),
 ]);
@@ -180,15 +180,15 @@ export const storyTimelineSchema = z.object({
   storyId: z.string().uuid(), revision: z.number().int().positive(), sceneOrder: z.array(z.string().uuid()),
   scenes: z.array(z.object({
     sceneId: z.string().uuid(), index: z.number().int().nonnegative(), materialIds: z.array(z.string().uuid()),
-    startSeconds: z.number().nonnegative().nullable(), endSeconds: z.number().nonnegative().nullable(),
-    durationSeconds: z.number().nonnegative().nullable(), durationSource: z.enum(["empty", "scene", "video", "trim", "unknown"]),
+    startSeconds: z.number().nonnegative(), endSeconds: z.number().nonnegative(),
+    durationSeconds: z.number().nonnegative(), durationSource: z.enum(["empty", "scene", "video", "trim"]),
   })),
-  totalDurationSeconds: z.number().nonnegative().nullable(), knownDurationSeconds: z.number().nonnegative(),
+  totalDurationSeconds: z.number().nonnegative(),
   transitionOverlapSeconds: z.literal(0),
-  warnings: z.array(z.object({ code: z.enum(["empty_scene", "unknown_video_duration"]), sceneId: z.string().uuid() })),
+  warnings: z.array(z.object({ code: z.literal("empty_scene"), sceneId: z.string().uuid() })),
   formatLimits: z.array(z.object({
     formatId: z.string(), maxDurationSeconds: z.number().positive(), requiresVerifiedAccount: z.boolean(),
-    status: z.enum(["within_limit", "exceeded", "unknown"]), excessSeconds: z.number().nonnegative(), isLowerBound: z.boolean(),
+    status: z.enum(["within_limit", "exceeded"]), excessSeconds: z.number().nonnegative(),
   })),
 });
 export const deleteSceneSchema = z.object({ expectedRevision: z.number().int().positive().optional() }).strict();

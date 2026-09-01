@@ -4,5 +4,5 @@ export { getSceneDurationSeconds } from "@storyteller/domain";
 
 export function formatSceneDuration(scene: Scene): string {
   const duration = getSceneDurationSeconds(scene);
-  return duration === undefined ? "—" : String(Number(duration.toFixed(2)));
+  return String(Number(duration.toFixed(2)));
 }
