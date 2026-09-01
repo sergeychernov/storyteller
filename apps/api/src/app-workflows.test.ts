@@ -251,7 +251,7 @@ test("protects a profile, uploads media and stores its stories", async (context)
   if (collageJob.input.rendererId !== "collage") throw new Error("expected collage render input");
   assert.equal(collageJob.input.layoutRendererId, "animated-collage.stack.v1");
   assert.equal(collageJob.input.layoutOverlapRatio, 0.4);
-  assert.equal(collageJob.input.rendererVersion, 23);
+  assert.equal(collageJob.input.rendererVersion, 24);
   assert.equal(collageJob.input.background?.source, "custom-material");
   if (collageJob.input.background?.source !== "custom-material") throw new Error("expected custom background");
   assert.equal(collageJob.input.background.materialId, backgroundMaterial.id);

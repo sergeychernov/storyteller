@@ -7,7 +7,7 @@ import {
 import { dirname, join } from "node:path";
 import { probeMedia, type MediaProcessRunner, SpawnMediaProcessRunner } from "./ffmpeg.js";
 
-export const collageRendererVersion = 23;
+export const collageRendererVersion = 24;
 
 export interface CollageBackgroundSpec {
   readonly treatment: "darkened" | "original";

@@ -469,6 +469,15 @@ function renderPaperCards(
     verticalOverlapRatio = fitVerticalOverlapRatio(rowHeights, overlapRatio, maximumStackHeight);
   }
 
+  const finalAngles = collageCardAngleMap(input.settings.cardAngles);
+  rowCards = rowCards.map((row, rowIndex) => row.map((card, column) => {
+    const material = rows[rowIndex]![column]!;
+    const angleDegrees = input.settings.straightCards ? 0 : finalAngles.get(material.id) ?? 0;
+    return fitRotationSafeCard(card, angleDegrees, input.width, input.height, frame);
+  }));
+  rowHeights = rowCards.map((row) => Math.max(...row.map(({ height }) => height)));
+  verticalOverlapRatio = fitVerticalOverlapRatio(rowHeights, overlapRatio, maximumStackHeight);
+
   const totalHeight = stackHeight(rowHeights, verticalOverlapRatio);
   const rowY: number[] = [];
   let y = Math.round((input.height - totalHeight) / 2);
@@ -504,7 +513,6 @@ function renderPaperCards(
 
   const travel = Math.min(0.7, Math.max(0.35, input.settings.entryDurationSeconds * 0.38));
   const ranks = appearanceRanks(rowSizes, appearance);
-  const finalAngles = collageCardAngleMap(input.settings.cardAngles);
   return boxes.map((box, index) => {
     const rank = ranks[index]!;
     const startSeconds = boxes.length === 1 ? 0
@@ -555,6 +563,50 @@ function rotatedBounds(width: number, height: number, angleDegrees: number): { r
   return {
     width: Math.ceil(width * Math.abs(Math.cos(radians)) + height * Math.abs(Math.sin(radians))),
     height: Math.ceil(width * Math.abs(Math.sin(radians)) + height * Math.abs(Math.cos(radians))),
+  };
+}
+
+function fitRotationSafeCard(
+  card: Pick<CollageBox, "width" | "height">,
+  angleDegrees: number,
+  canvasWidth: number,
+  canvasHeight: number,
+  frameWidth: number,
+): Pick<CollageBox, "width" | "height"> {
+  const fits = ({ width, height }: Pick<CollageBox, "width" | "height">) => {
+    const inset = rotationInsets(width, height, angleDegrees);
+    return width + inset.x * 2 <= canvasWidth && height + inset.y * 2 <= canvasHeight;
+  };
+  if (fits(card)) return card;
+
+  const frameSpan = frameWidth * 2;
+  const innerWidth = Math.max(2, card.width - frameSpan);
+  const innerHeight = Math.max(2, card.height - frameSpan);
+  const scaleCard = (scale: number) => ({
+    width: Math.max(frameSpan + 2, Math.floor(innerWidth * scale) + frameSpan),
+    height: Math.max(frameSpan + 2, Math.floor(innerHeight * scale) + frameSpan),
+  });
+  let lowerScale = 0;
+  let upperScale = 1;
+  let fitted = scaleCard(lowerScale);
+  for (let iteration = 0; iteration < 32; iteration += 1) {
+    const scale = (lowerScale + upperScale) / 2;
+    const candidate = scaleCard(scale);
+    if (fits(candidate)) {
+      lowerScale = scale;
+      fitted = candidate;
+    } else {
+      upperScale = scale;
+    }
+  }
+  return fitted;
+}
+
+function rotationInsets(width: number, height: number, angleDegrees: number): { readonly x: number; readonly y: number } {
+  const rotated = rotatedBounds(width, height, angleDegrees);
+  return {
+    x: Math.ceil((rotated.width - width) / 2),
+    y: Math.ceil((rotated.height - height) / 2),
   };
 }
 
@@ -626,11 +678,7 @@ function roundAngle(value: number): number {
 function rotationSafeBox(
   box: CollageBox, angleDegrees: number, canvasWidth: number, canvasHeight: number, layoutId: string,
 ): CollageBox {
-  const radians = Math.abs(angleDegrees) * Math.PI / 180;
-  const rotatedWidth = Math.ceil(box.width * Math.abs(Math.cos(radians)) + box.height * Math.abs(Math.sin(radians)));
-  const rotatedHeight = Math.ceil(box.width * Math.abs(Math.sin(radians)) + box.height * Math.abs(Math.cos(radians)));
-  const insetX = Math.ceil((rotatedWidth - box.width) / 2);
-  const insetY = Math.ceil((rotatedHeight - box.height) / 2);
+  const { x: insetX, y: insetY } = rotationInsets(box.width, box.height, angleDegrees);
   const minimumX = insetX, maximumX = canvasWidth - box.width - insetX;
   const minimumY = insetY, maximumY = canvasHeight - box.height - insetY;
   if (minimumX > maximumX || minimumY > maximumY) {

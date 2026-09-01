@@ -193,6 +193,49 @@ test("collage renderer preserves full photo aspects, paper frame, rotation and e
     "the last decoded video-card frame must remain visible for the rest of the scene");
 });
 
+test("collage renderer consumes the fitted schedule for a square final crop in two-plus-one", () => {
+  const materials = [
+    { id: "left", kind: "image" as const, sourcePath: "left.jpg", sourceSize: { width: 900, height: 1600 } },
+    { id: "right", kind: "image" as const, sourcePath: "right.jpg", sourceSize: { width: 900, height: 1600 } },
+    {
+      id: "square", kind: "image" as const, sourcePath: "square.jpg",
+      sourceSize: { width: 1600, height: 900 }, displaySize: { width: 900, height: 900 },
+    },
+  ];
+  const settings = {
+    frame: { width: 12 as const, color: "#FFFFFF", shape: "straight" as const },
+    entryDurationSeconds: 4,
+    rowDirection: "ascending" as const,
+    straightCards: false,
+    cardAngles: [
+      { materialId: "left", angleDegrees: -4 },
+      { materialId: "right", angleDegrees: 4 },
+      { materialId: "square", angleDegrees: 5.4208 },
+    ],
+    cardOffsets: [
+      { materialId: "left", offsetY: 20 },
+      { materialId: "right", offsetY: -20 },
+      { materialId: "square", offsetY: 0 },
+    ],
+  };
+  const spec = {
+    materials, settings, durationSeconds: 5, outputPath: "square-crop.mp4",
+    layoutId: "2+1", layoutRendererId: "animated-collage.two-plus-one.v1", layoutOverlapRatio: 0.4,
+  };
+  const card = createCollageEntranceSchedule({
+    layoutId: spec.layoutId,
+    layoutRendererId: spec.layoutRendererId,
+    layoutOverlapRatio: spec.layoutOverlapRatio,
+    materials: materials.map(({ id, kind, sourceSize, displaySize }) => ({ id, kind, ...(displaySize ?? sourceSize) })),
+    width: 1080,
+    height: 1920,
+    settings,
+  })[2]!;
+
+  assert.doesNotThrow(() => buildCollageFilter(spec));
+  assert.match(buildCollageCardFilter(spec, 2), new RegExp(`scale=${card.width - 24}:${card.height - 24}`));
+});
+
 test("a non-PPL collage keeps trimmed video moving inside a framed card", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "storyteller-collage-video-"));
   context.after(() => rm(root, { recursive: true, force: true }));

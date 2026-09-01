@@ -44,7 +44,7 @@ test("worker downloads every ordered collage source and invokes the collage rend
   await storage.put("frames/previous.png", { body: Readable.from("previous-frame"), contentType: "image/png", contentLength: 14 });
   const base = renderJob();
   const job: SceneRenderJob = { ...base, inputHash: "collage", input: {
-    rendererId: "collage", rendererVersion: 23, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    rendererId: "collage", rendererVersion: 24, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
     layoutOverlapRatio: 0.4, durationSeconds: 5,
     background: {
       source: "previous-scene-frame", treatment: "darkened", sceneId: "previous", inputHash: "frame-input",
@@ -105,7 +105,7 @@ test("worker passes PPL video edit metadata into the collage card renderer", asy
   await storage.put("source/landscape.jpg", { body: Readable.from("landscape"), contentType: "image/jpeg", contentLength: 9 });
   const base = renderJob();
   const job: SceneRenderJob = { ...base, inputHash: "mixed-collage", input: {
-    rendererId: "collage", rendererVersion: 23, layoutId: "2+1",
+    rendererId: "collage", rendererVersion: 24, layoutId: "2+1",
     layoutRendererId: "animated-collage.two-plus-one.v1", durationSeconds: 5,
     layoutOverlapRatio: 0.4,
     settings: {
@@ -162,7 +162,7 @@ test("worker downloads an original video background separately from its collage 
   await storage.put("source/b.jpg", { body: Readable.from("photo-b"), contentType: "image/jpeg", contentLength: 7 });
   const base = renderJob();
   const job: SceneRenderJob = { ...base, inputHash: "video-background", input: {
-    rendererId: "collage", rendererVersion: 23, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    rendererId: "collage", rendererVersion: 24, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
     layoutOverlapRatio: 0.4, durationSeconds: 5,
     background: {
       source: "custom-material", treatment: "original", materialId: "background",

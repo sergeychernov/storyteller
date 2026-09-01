@@ -69,7 +69,7 @@ test("builds a crop-aware mixed PPL render job with a silent video card", async 
   }, "video");
   assert.equal(input.rendererId, "collage");
   if (input.rendererId !== "collage") throw new Error("expected collage input");
-  assert.equal(input.rendererVersion, 23);
+  assert.equal(input.rendererVersion, 24);
   assert.equal(input.layoutOverlapRatio, 0.4);
   assert.equal(input.background?.source, "card-fallback");
   if (input.background?.source !== "card-fallback") throw new Error("expected card fallback background");
@@ -113,7 +113,7 @@ test("builds a mixed image/video render job for a non-PPL layout", async () => {
   }, "video");
   assert.equal(input.rendererId, "collage");
   if (input.rendererId !== "collage") throw new Error("expected collage input");
-  assert.equal(input.rendererVersion, 23);
+  assert.equal(input.rendererVersion, 24);
   assert.equal(input.layoutId, "stack");
   assert.equal(input.layoutOverlapRatio, 0.4);
   assert.deepEqual(input.materials.map(({ kind }) => kind), ["video", "image"]);
@@ -151,7 +151,7 @@ test("builds a moving custom background that is absent from collage cards", asyn
 
   assert.equal(input.rendererId, "collage");
   if (input.rendererId !== "collage") throw new Error("expected collage input");
-  assert.equal(input.rendererVersion, 23);
+  assert.equal(input.rendererVersion, 24);
   assert.deepEqual(input.materials.map(({ id }) => id), ["left", "right"]);
   assert.equal(input.background?.source, "custom-material");
   if (input.background?.source !== "custom-material") throw new Error("expected custom material background");

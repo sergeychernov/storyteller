@@ -75,6 +75,46 @@ describe("CollageRendererPreview", () => {
     });
   });
 
+  test("opens a two-plus-one preview when the final card has a square crop and a persisted angle", () => {
+    const square = {
+      ...photo("square", "landscape"),
+      edit: {
+        rotation: 0 as const,
+        crop: { x: 0.21875, y: 0, width: 0.5625, height: 1 },
+        result: {
+          storageKey: "square-edited.jpg", mimeType: "image/jpeg", sizeBytes: 80,
+          width: 900, height: 900, orientation: "landscape" as const,
+        },
+      },
+    };
+    const materials = [photo("left", "portrait"), photo("right", "portrait"), square];
+    const defaults = defaultCollageSettings(materials);
+    const scene: Scene = {
+      id: "square-crop", rendererId: "collage", layoutId: "2+1", materials,
+      durationSeconds: 5, motion: "none",
+      collage: {
+        ...defaults,
+        cardAngles: [
+          { materialId: "left", angleDegrees: -4 },
+          { materialId: "right", angleDegrees: 4 },
+          { materialId: "square", angleDegrees: 5.4208 },
+        ],
+        cardOffsets: createCollageCardOffsets({
+          layoutId: "2+1", materials, direction: defaults.rowDirection, seedKey: "square-crop-preview",
+        }),
+      },
+      render: { status: "idle" },
+    };
+
+    const { container } = render(<CollageRendererPreview scene={scene} copy={getEditorCopy("en")}
+      storyId="story" session={session} active saving={false} />);
+    const schedule = createCollageSchedule(scene);
+
+    expect(container.querySelectorAll("[data-collage-card]")).toHaveLength(3);
+    expect(schedule[2]!.width).toBe(schedule[2]!.height);
+    expect(schedule[2]!.width).toBeLessThan(994);
+  });
+
   test("reinitializes its entire subtree through the preview lifecycle", () => {
     const materials = [photo("first"), photo("second")];
     const scene = collageScene(materials, 5);

@@ -22,7 +22,7 @@ test("scene render input hash is deterministic", () => {
 
 test("collage fingerprint follows layout, crop-aware size, frame settings and ordered source contents", () => {
   const collage: SceneRenderInput = {
-    rendererId: "collage", rendererVersion: 23, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
+    rendererId: "collage", rendererVersion: 24, layoutId: "stack", layoutRendererId: "animated-collage.stack.v1",
     layoutOverlapRatio: 0.4, durationSeconds: 5,
     settings: {
       frame: { width: 12, color: "#FFFFFF", shape: "torn" },

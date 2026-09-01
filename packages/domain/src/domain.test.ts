@@ -594,6 +594,54 @@ test("every persisted angled layout still fits its final rotated cards inside th
   }
 });
 
+test("a square final crop in two-plus-one is reduced enough to keep its persisted angle inside the story frame", () => {
+  const square = {
+    ...imageMaterial("square", "landscape"),
+    edit: {
+      rotation: 0 as const,
+      crop: { x: 0.21875, y: 0, width: 0.5625, height: 1 },
+      result: {
+        storageKey: "square-edited.jpg", mimeType: "image/jpeg", sizeBytes: 80,
+        width: 900, height: 900, orientation: "landscape" as const,
+      },
+    },
+  };
+  const materials = [imageMaterial("left", "portrait"), imageMaterial("right", "portrait"), square];
+  const layout = getCollageLayoutDefinition("2+1")!;
+  const defaults = defaultCollageSettings(materials);
+  const settings = {
+    ...defaults,
+    cardAngles: [
+      { materialId: "left", angleDegrees: -4 },
+      { materialId: "right", angleDegrees: 4 },
+      { materialId: "square", angleDegrees: 5.4208 },
+    ],
+    cardOffsets: createCollageCardOffsets({
+      layoutId: layout.id, materials, direction: defaults.rowDirection, seedKey: "square-crop-fit",
+    }),
+  };
+
+  const card = createCollageEntranceSchedule({
+    layoutId: layout.id,
+    layoutRendererId: layout.renderer.id,
+    layoutOverlapRatio: layout.overlapRatio,
+    materials: collageLayoutMaterials(materials),
+    width: 1080,
+    height: 1920,
+    settings,
+  })[2]!;
+  const radians = Math.abs(card.finalAngleDegrees) * Math.PI / 180;
+  const rotatedWidth = Math.ceil(card.width * Math.cos(radians) + card.height * Math.sin(radians));
+  const rotatedHeight = Math.ceil(card.width * Math.sin(radians) + card.height * Math.cos(radians));
+  const insetX = Math.ceil((rotatedWidth - card.width) / 2);
+  const insetY = Math.ceil((rotatedHeight - card.height) / 2);
+
+  assert.equal(card.width, card.height, "the square crop must keep its full aspect after fitting");
+  assert.ok(rotatedWidth <= 1080 && rotatedHeight <= 1920);
+  assert.ok(card.x >= insetX && card.x + card.width + insetX <= 1080);
+  assert.ok(card.y >= insetY && card.y + card.height + insetY <= 1920);
+});
+
 test("torn paper uses a deterministic fine-grained contour instead of a repeating wave", () => {
   const input = { width: 900, height: 600, frameWidth: 6, seed: 17_041 };
   const first = createTornPaperClipPath(input);
