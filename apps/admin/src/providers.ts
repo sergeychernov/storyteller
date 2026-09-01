@@ -1,7 +1,9 @@
 import { ApiError, createBrowserApiClient } from "@storyteller/api-client";
 import { createAuthClient, type AuthSession } from "@storyteller/auth-client";
 import type { DataProvider, GetListParams, GetManyReferenceParams, GetOneParams, RaRecord } from "react-admin";
-import type { AdminPage } from "@storyteller/schemas";
+import type {
+  AdminAccessApplyResult, AdminAccessOperation, AdminAccessPreview, AdminPage,
+} from "@storyteller/schemas";
 import type { AuthProvider } from "react-admin";
 import { i18nProvider } from "./i18n.js";
 
@@ -56,8 +58,7 @@ export const authProvider: AuthProvider = {
   canAccess: async ({ action, resource }) => {
     const identity = await ensureIdentity();
     if (!resource) return true;
-    const capability = capabilityFor(resource, action);
-    return !capability || identity.capabilities.includes(capability);
+    return requiredCapabilitiesFor(resource, action).every((capability) => identity.capabilities.includes(capability));
   },
 };
 
@@ -67,6 +68,7 @@ export const dataProvider: DataProvider = {
     await ensureIdentity();
     if (resource === "users") return { data: await api.json<RecordType>(`/admin/users/${encodeURIComponent(String(params.id))}`) };
     if (resource === "access") return { data: { id: params.id, ...await api.json<object>(`/admin/users/${encodeURIComponent(String(params.id))}/access`) } as RecordType };
+    if (resource === "accessManagement") return { data: await api.json<RecordType>(`/admin/users/${encodeURIComponent(String(params.id))}/access-management`) };
     if (resource === "overview") return { data: { id: "overview", ...await api.json<object>("/admin/overview") } as RecordType };
     throw new Error(`Unsupported read-only resource: ${resource}`);
   },
@@ -113,7 +115,42 @@ async function getAdminList<RecordType extends RaRecord = RaRecord>(resource: st
     return listResult(await api.json<AdminPage<RecordType>>(`/admin/users/${encodeURIComponent(profileId)}/sessions?${pageQuery(params)}`));
   }
   if (resource === "audit") return listResult(await api.json<AdminPage<RecordType>>(`/admin/audit?${pageQuery(params, ["action"])}`));
+  const catalogPath = ({
+    accessCapabilities: "/admin/access/capabilities",
+    accessLimits: "/admin/access/limits",
+    accessRoles: "/admin/access/roles",
+    accessCohorts: "/admin/access/cohorts",
+  } as const)[resource as "accessCapabilities"];
+  if (catalogPath) return listResult(await api.json<AdminPage<RecordType>>(catalogPath));
   throw new Error(`Unsupported read-only resource: ${resource}`);
+}
+
+export async function previewAccessChange(
+  profileIds: readonly string[],
+  operation: AdminAccessOperation,
+  reason: string,
+): Promise<AdminAccessPreview> {
+  return mutation<AdminAccessPreview>("/admin/access/previews", {
+    method: "POST", body: JSON.stringify({ profileIds, operation, reason }),
+  });
+}
+
+export async function applyAccessPreview(previewId: string, confirmation?: string): Promise<AdminAccessApplyResult> {
+  return mutation<AdminAccessApplyResult>(`/admin/access/previews/${encodeURIComponent(previewId)}/apply`, {
+    method: "POST", body: JSON.stringify(confirmation ? { confirmation } : {}),
+  });
+}
+
+export async function revokeAdminSession(profileId: string, sessionId: string, reason: string): Promise<void> {
+  await mutation(`/admin/users/${encodeURIComponent(profileId)}/sessions/${encodeURIComponent(sessionId)}/revoke`, {
+    method: "POST", body: JSON.stringify({ reason }),
+  });
+}
+
+async function mutation<T>(path: string, init: RequestInit): Promise<T> {
+  const session = currentSession ?? await authClient.getSession();
+  currentSession = session;
+  return api.json<T>(path, init, session.csrfToken);
 }
 
 async function ensureIdentity(): Promise<AdminIdentityResponse> {
@@ -163,13 +200,21 @@ function readOnlyReject(..._arguments: unknown[]): Promise<never> {
   return Promise.reject(new Error("The Admin data provider is read-only"));
 }
 
-function capabilityFor(resource: string, action: string): string | undefined {
-  if (resource === "users") return action === "list" ? "admin.users.list" : "admin.users.read";
-  if (resource === "activity") return "admin.users.activity.read";
-  if (resource === "sessions") return "admin.sessions.metadata.read";
-  if (resource === "access") return "admin.access.explain";
-  if (resource === "audit") return "admin.audit.read";
-  return undefined;
+export function requiredCapabilitiesFor(resource: string, action: string): readonly string[] {
+  if (resource === "users") return [action === "list" ? "admin.users.list" : "admin.users.read"];
+  if (resource === "activity") return ["admin.users.activity.read"];
+  if (resource === "sessions") return ["admin.sessions.metadata.read"];
+  if (resource === "access") return ["admin.access.explain"];
+  if (resource === "accessManagement") return ["admin.access.explain"];
+  if (resource === "accessCapabilities") return ["admin.permissions.read"];
+  if (resource === "accessLimits") return ["admin.permissions.read"];
+  if (resource === "accessRoles") return ["admin.roles.read"];
+  if (resource === "accessCohorts") return ["admin.cohorts.read"];
+  if (resource === "accessReference") return [
+    "admin.access.explain", "admin.permissions.read", "admin.roles.read", "admin.cohorts.read",
+  ];
+  if (resource === "audit") return ["admin.audit.read"];
+  return [];
 }
 
 export function resetProviderStateForTest(): void {

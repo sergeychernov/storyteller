@@ -102,7 +102,7 @@ export class AdminReadModel {
     });
   }
 
-  sessions(actorProfileId: string, profileId: string, input: PageInput): Promise<AdminPage<AdminSessionMetadata>> {
+  sessions(actorProfileId: string, profileId: string, input: PageInput, currentSessionId?: string): Promise<AdminPage<AdminSessionMetadata>> {
     return this.audited(actorProfileId, { action: "users.sessions.read", targetType: "session", targetProfileId: profileId }, async (client) => {
       await requireProfile(client, profileId);
       const total = await client.query<{ count: string }>("SELECT count(*) FROM sessions WHERE profile_id = $1", [profileId]);
@@ -113,6 +113,7 @@ export class AdminReadModel {
         id: row.id, createdAt: toIso(row.created_at), lastSeenAt: toIso(row.last_seen_at), expiresAt: toIso(row.expires_at),
         revokedAt: row.revoked_at ? toIso(row.revoked_at) : null,
         status: row.revoked_at ? "revoked" : new Date(row.expires_at).getTime() <= Date.now() ? "expired" : "active",
+        isCurrent: row.id === currentSessionId,
       })), Number(total.rows[0]?.count ?? 0), input);
     });
   }
@@ -123,9 +124,11 @@ export class AdminReadModel {
       const filter = input.action ? `WHERE action = $${values.push(input.action)}` : "";
       const union = `
         SELECT 'admin:' || id::text AS id, actor_profile_id, action, target_type, target_profile_id,
-          created_at, 'admin_read' AS source FROM admin_audit_log
+          target_entity_id, reason, batch_id, change, created_at, 'admin_read' AS source FROM admin_audit_log
         UNION ALL
-        SELECT 'access:' || id::text AS id, actor_profile_id, action, entity_type AS target_type, NULL::uuid AS target_profile_id,
+        SELECT 'access:' || id::text AS id, actor_profile_id, action, entity_type AS target_type, target_profile_id,
+          entity_key AS target_entity_id, reason, batch_id,
+          jsonb_build_object('before', old_data, 'after', new_data) AS change,
           created_at, 'access_change' AS source FROM access_audit_log`;
       const total = await client.query<{ count: string }>(`SELECT count(*) FROM (${union}) audit ${filter}`, values);
       values.push(input.perPage, (input.page - 1) * input.perPage);
@@ -133,7 +136,9 @@ export class AdminReadModel {
         ORDER BY created_at DESC, id DESC LIMIT $${values.length - 1} OFFSET $${values.length}`, values);
       return page(result.rows.map((row) => ({
         id: row.id, actorProfileId: row.actor_profile_id, action: row.action, targetType: row.target_type,
-        targetProfileId: row.target_profile_id, occurredAt: toIso(row.created_at), source: row.source,
+        targetProfileId: row.target_profile_id, targetEntityId: row.target_entity_id, occurredAt: toIso(row.created_at),
+        source: row.source, reason: row.reason, batchId: row.batch_id,
+        change: row.change ? { before: row.change.before ?? null, after: row.change.after ?? null } : null,
       })), Number(total.rows[0]?.count ?? 0), input);
     });
   }
@@ -171,7 +176,8 @@ interface AdminUserRow extends QueryResultRow {
 }
 interface AdminAuditRow extends QueryResultRow {
   id: string; actor_profile_id: string | null; action: string; target_type: string; target_profile_id: string | null;
-  created_at: Date | string; source: "admin_read" | "access_change";
+  target_entity_id: string | null; reason: string | null; batch_id: string | null;
+  change: { before?: unknown; after?: unknown } | null; created_at: Date | string; source: "admin_read" | "access_change";
 }
 
 function mapUserSummary(row: AdminUserRow): AdminUserSummary {

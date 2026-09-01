@@ -9,10 +9,33 @@ body { margin: 0; background: #f6f7f8; }
 .mobile-records { display: none; }
 .access-panel { max-width: 50rem; overflow-wrap: anywhere; }
 .access-panel ul { columns: 2; padding-left: 1.4rem; }
+.access-panel details, .access-management, .access-preview { max-width: 100%; overflow-wrap: anywhere; }
+.access-panel summary, .access-preview summary { cursor: pointer; }
+.access-sources { columns: 1 !important; }
+.access-management { margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid #dfe3e8; }
+.access-management > section { margin: 1rem 0; }
+.access-management ul, .access-preview ul { padding-left: 1.4rem; }
+.access-preview details { margin: 0.75rem 0; }
+.access-option { max-width: min(52rem, 92vw); white-space: normal !important; }
+.access-option .MuiListItemText-secondary { white-space: normal; }
+.access-option-help h3 { margin: 0 0 0.25rem; }
+.access-option-help .MuiTypography-caption { display: block; margin-top: 0.5rem; overflow-wrap: anywhere; }
+.access-reference-page { box-sizing: border-box; max-width: 1180px; padding: clamp(1rem, 3vw, 2rem); }
+.access-reference-intro { margin: 0.5rem 0 1.25rem !important; color: #59636e; }
+.access-reference-page .MuiAlert-root ol { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+.access-reference-search { margin: 1.5rem 0 !important; max-width: 40rem; }
+.access-reference-section { margin: 2rem 0; }
+.access-reference-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 0.9rem; margin-top: 0.75rem; }
+.access-reference-card { min-width: 0; padding: 1rem; overflow-wrap: anywhere; }
+.access-reference-card h3 { margin: 0; }
+.access-reference-card > p { margin: 0.75rem 0; color: #39434d; }
+.access-reference-card ul { margin: 0.35rem 0 0; padding-left: 1.25rem; }
+.access-reference-card code { font-size: 0.8rem; }
 .admin-login { padding: 2rem; }
 @media (max-width: 600px) {
   .desktop-records { display: none; }
   .mobile-records { display: block; }
   .access-panel ul { columns: 1; }
   .RaList-main, .RaShow-main { min-width: 0; }
+  .access-reference-page { padding: 1rem; }
 }

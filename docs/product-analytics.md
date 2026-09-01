@@ -128,6 +128,22 @@ stable outcome codes and profile UUIDs; it is not forwarded to Amplitude and has
 no free-form payload. Existing public product analytics and their privacy
 defaults remain unchanged.
 
+### Issue #16 Admin access-management instrumentation decision
+
+Issue #16 does not add an external Amplitude event. Assigning roles or cohorts,
+creating capability or limit overrides, previewing effective access, and revoking
+a session are internal administrative security operations rather than confirmed
+customer product outcomes. Successful mutations are recorded in immutable access
+or admin audit with actor UUID, target UUID, a required internal reason, batch UUID
+and a typed before/after change. None of those values, capability codes, reasons or
+access explanations are forwarded to Amplitude. Existing product events continue
+to be emitted only after their protected customer operation succeeds.
+
+The read-only access guide and its inline descriptions also add no Amplitude
+event: reading reference text has no independently confirmed product outcome and
+does not change access. Catalog visibility remains capability-gated, while actual
+access mutations continue to be measured by immutable internal audit.
+
 ## First Amplitude dashboard
 
 Keep the first dashboard small:

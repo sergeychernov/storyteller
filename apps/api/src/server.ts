@@ -26,6 +26,7 @@ import { registerAmplitudeRelayRoutes, type AmplitudeRelayOptions } from "./ampl
 import { accessPolicyForRoute, registerAccessControl } from "./access-control.js";
 import { registerAdminRoutes } from "./admin-routes.js";
 import type { AdminReadModel } from "./admin-database.js";
+import type { AdminAccessService } from "./admin-access.js";
 
 export async function buildApi(application: StoryApplication, options: {
   readonly mediaStorage?: MediaStorage;
@@ -34,6 +35,7 @@ export async function buildApi(application: StoryApplication, options: {
   readonly amplitudeRelay?: AmplitudeRelayOptions;
   readonly accessControl?: AccessControlService;
   readonly adminReadModel?: AdminReadModel;
+  readonly adminAccessService?: AdminAccessService;
 } = {}) {
   const mediaStorage = options.mediaStorage ?? new MediaStorage();
   const renderService = options.renderQueue && new SceneRenderService(application, options.renderQueue, mediaStorage);
@@ -112,7 +114,7 @@ export async function buildApi(application: StoryApplication, options: {
   registerAmplitudeRelayRoutes(app, options.amplitudeRelay);
   registerAccessControl(app, application, accessControl, browserOrigins);
   registerBrowserAuthRoutes(app, application, browserOrigins);
-  if (options.adminReadModel) registerAdminRoutes(app, application, accessControl, options.adminReadModel);
+  if (options.adminReadModel) registerAdminRoutes(app, application, accessControl, options.adminReadModel, options.adminAccessService);
   app.post("/auth/register", {
     schema: { body: registerSchema, response: { 201: authenticationSchema, 409: errorSchema } },
   }, async (request, reply) => reply.status(201).send(await application.register({

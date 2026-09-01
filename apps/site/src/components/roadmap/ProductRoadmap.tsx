@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Locale } from "@storyteller/localization";
 import { getPublicSiteCopy } from "../public/public-site-copy.js";
+import { loadPublicRoadmap } from "./public-roadmap-client.js";
 import { RoadmapMilestone } from "./RoadmapMilestone.js";
-import type { PublicRoadmap } from "./roadmap-types.js";
 import styles from "./ProductRoadmap.module.css";
 
 interface ProductRoadmapProps { readonly locale: Locale }
@@ -11,7 +11,7 @@ export function ProductRoadmap({ locale }: ProductRoadmapProps) {
   const copy = getPublicSiteCopy(locale);
   const query = useQuery({
     queryKey: ["public-product-roadmap"],
-    queryFn: loadPublicRoadmap,
+    queryFn: () => loadPublicRoadmap(),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
   });
@@ -50,14 +50,4 @@ export function ProductRoadmap({ locale }: ProductRoadmapProps) {
       <p className={styles.note}>{copy.progressNote}<br />{copy.updated}</p>
     </section>
   );
-}
-
-async function loadPublicRoadmap(): Promise<PublicRoadmap> {
-  const response = await fetch("/product-roadmap.json", { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`Product roadmap request failed with ${response.status}`);
-  const roadmap: unknown = await response.json();
-  if (!roadmap || typeof roadmap !== "object" || !Array.isArray((roadmap as PublicRoadmap).milestones)) {
-    throw new Error("Invalid product roadmap response");
-  }
-  return roadmap as PublicRoadmap;
 }

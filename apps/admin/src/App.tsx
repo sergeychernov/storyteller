@@ -1,7 +1,9 @@
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
+import VpnKeyOutlinedIcon from "@mui/icons-material/VpnKeyOutlined";
 import { Admin, Resource } from "react-admin";
+import { AccessReferencePage } from "./AccessReference.js";
 import { ActivityList } from "./Activity.js";
 import { AdminLayout } from "./AdminLayout.js";
 import { AdminLogin } from "./AdminLogin.js";
@@ -15,6 +17,7 @@ export function App() {
   return <Admin title="Storyteller Admin" dashboard={Dashboard} authProvider={authProvider} dataProvider={dataProvider}
     i18nProvider={i18nProvider} loginPage={AdminLogin} layout={AdminLayout} requireAuth disableTelemetry>
     <Resource name="users" list={UserList} show={UserShow} icon={PeopleAltOutlinedIcon} />
+    <Resource name="accessReference" list={AccessReferencePage} icon={VpnKeyOutlinedIcon} />
     <Resource name="activity" list={ActivityList} icon={TimelineOutlinedIcon} />
     <Resource name="audit" list={AuditList} icon={FactCheckOutlinedIcon} />
   </Admin>;

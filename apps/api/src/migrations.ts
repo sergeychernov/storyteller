@@ -502,6 +502,160 @@ export const migrations = [{
     CREATE INDEX admin_audit_log_actor_idx ON admin_audit_log(actor_profile_id, created_at DESC, id DESC);
     CREATE INDEX admin_audit_log_target_idx ON admin_audit_log(target_profile_id, created_at DESC, id DESC);
   `,
+}, {
+  version: 11,
+  sql: `
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM access_role_assignments WHERE profile_id IS NOT NULL
+        GROUP BY profile_id, role_code HAVING count(*) > 1
+      ) OR EXISTS (
+        SELECT 1 FROM access_capability_assignments WHERE profile_id IS NOT NULL
+        GROUP BY profile_id, capability_code HAVING count(*) > 1
+      ) OR EXISTS (
+        SELECT 1 FROM access_limit_assignments WHERE profile_id IS NOT NULL
+        GROUP BY profile_id, limit_code HAVING count(*) > 1
+      ) THEN
+        RAISE EXCEPTION 'manual access assignments contain duplicates; resolve them before migration 11';
+      END IF;
+    END $$;
+
+    ALTER TABLE profiles ADD COLUMN access_revision bigint NOT NULL DEFAULT 0 CHECK (access_revision >= 0);
+    CREATE UNIQUE INDEX access_role_assignments_profile_role_unique
+      ON access_role_assignments(profile_id, role_code) WHERE profile_id IS NOT NULL;
+    CREATE UNIQUE INDEX access_capability_assignments_profile_capability_unique
+      ON access_capability_assignments(profile_id, capability_code) WHERE profile_id IS NOT NULL;
+    CREATE UNIQUE INDEX access_limit_assignments_profile_limit_unique
+      ON access_limit_assignments(profile_id, limit_code) WHERE profile_id IS NOT NULL;
+
+    CREATE TABLE access_global_revision (
+      singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+      revision bigint NOT NULL DEFAULT 0 CHECK (revision >= 0)
+    );
+    INSERT INTO access_global_revision DEFAULT VALUES;
+
+    CREATE TABLE admin_access_previews (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      actor_profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      target_profile_ids uuid[] NOT NULL CHECK (cardinality(target_profile_ids) BETWEEN 1 AND 100),
+      operation jsonb NOT NULL,
+      reason text NOT NULL CHECK (length(btrim(reason)) BETWEEN 1 AND 500),
+      target_revisions jsonb NOT NULL,
+      global_revision bigint NOT NULL,
+      result_hash char(64) NOT NULL CHECK (result_hash ~ '^[a-f0-9]{64}$'),
+      created_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL,
+      consumed_at timestamptz,
+      CHECK (expires_at > created_at)
+    );
+    CREATE INDEX admin_access_previews_expiry_idx ON admin_access_previews(expires_at);
+    CREATE INDEX admin_access_previews_actor_idx ON admin_access_previews(actor_profile_id, created_at DESC);
+
+    ALTER TABLE access_audit_log
+      ADD COLUMN target_profile_id uuid REFERENCES profiles(id) ON DELETE SET NULL,
+      ADD COLUMN batch_id uuid;
+    ALTER TABLE admin_audit_log
+      ADD COLUMN target_entity_id text,
+      ADD COLUMN reason text CHECK (reason IS NULL OR length(btrim(reason)) BETWEEN 1 AND 500),
+      ADD COLUMN batch_id uuid,
+      ADD COLUMN change jsonb;
+
+    CREATE OR REPLACE FUNCTION record_access_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    DECLARE
+      payload jsonb;
+      actor_value text;
+      reason_value text;
+      entity_value text;
+      target_profile_value text;
+      batch_value text;
+    BEGIN
+      payload := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
+      actor_value := COALESCE(
+        NULLIF(current_setting('storyteller.actor_profile_id', true), ''),
+        payload->>'created_by', payload->>'updated_by'
+      );
+      reason_value := COALESCE(
+        NULLIF(current_setting('storyteller.access_reason', true), ''),
+        NULLIF(payload->>'reason', ''), 'system access change'
+      );
+      batch_value := NULLIF(current_setting('storyteller.access_batch_id', true), '');
+      target_profile_value := COALESCE(payload->>'profile_id', NULLIF(current_setting('storyteller.target_profile_id', true), ''));
+      entity_value := COALESCE(payload->>'id', payload->>'capability_code', payload->>'profile_id', payload->>'cohort_code', 'unknown');
+      INSERT INTO access_audit_log (
+        actor_profile_id, action, entity_type, entity_key, target_profile_id, batch_id,
+        reason, old_data, new_data
+      ) VALUES (
+        CASE WHEN actor_value IS NULL OR actor_value = '' THEN NULL ELSE actor_value::uuid END,
+        lower(TG_OP), TG_TABLE_NAME, entity_value,
+        CASE WHEN target_profile_value IS NULL OR target_profile_value = '' THEN NULL ELSE target_profile_value::uuid END,
+        CASE WHEN batch_value IS NULL THEN NULL ELSE batch_value::uuid END,
+        reason_value,
+        CASE WHEN TG_OP IN ('UPDATE', 'DELETE') THEN to_jsonb(OLD) ELSE NULL END,
+        CASE WHEN TG_OP IN ('INSERT', 'UPDATE') THEN to_jsonb(NEW) ELSE NULL END
+      );
+      RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+    END $$;
+
+    CREATE FUNCTION bump_access_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+    DECLARE profile_value uuid;
+    BEGIN
+      profile_value := CASE WHEN TG_OP = 'DELETE' THEN OLD.profile_id ELSE NEW.profile_id END;
+      IF profile_value IS NULL THEN
+        UPDATE access_global_revision SET revision = revision + 1 WHERE singleton;
+      ELSE
+        UPDATE profiles SET access_revision = access_revision + 1 WHERE id = profile_value;
+      END IF;
+      RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+    END $$;
+    CREATE TRIGGER access_cohort_memberships_revision AFTER INSERT OR UPDATE OR DELETE ON access_cohort_memberships
+      FOR EACH ROW EXECUTE FUNCTION bump_access_revision();
+    CREATE TRIGGER access_role_assignments_revision AFTER INSERT OR UPDATE OR DELETE ON access_role_assignments
+      FOR EACH ROW EXECUTE FUNCTION bump_access_revision();
+    CREATE TRIGGER access_capability_assignments_revision AFTER INSERT OR UPDATE OR DELETE ON access_capability_assignments
+      FOR EACH ROW EXECUTE FUNCTION bump_access_revision();
+    CREATE TRIGGER access_limit_assignments_revision AFTER INSERT OR UPDATE OR DELETE ON access_limit_assignments
+      FOR EACH ROW EXECUTE FUNCTION bump_access_revision();
+
+    CREATE FUNCTION bump_global_access_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      UPDATE access_global_revision SET revision = revision + 1 WHERE singleton;
+      RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+    END $$;
+    CREATE TRIGGER access_role_capabilities_revision AFTER INSERT OR UPDATE OR DELETE ON access_role_capabilities
+      FOR EACH ROW EXECUTE FUNCTION bump_global_access_revision();
+    CREATE TRIGGER access_operational_switches_revision AFTER INSERT OR UPDATE OR DELETE ON access_operational_switches
+      FOR EACH ROW EXECUTE FUNCTION bump_global_access_revision();
+    CREATE TRIGGER access_capabilities_revision AFTER INSERT OR UPDATE OR DELETE ON access_capabilities
+      FOR EACH ROW EXECUTE FUNCTION bump_global_access_revision();
+    CREATE TRIGGER access_limit_definitions_revision AFTER INSERT OR UPDATE OR DELETE ON access_limit_definitions
+      FOR EACH ROW EXECUTE FUNCTION bump_global_access_revision();
+    CREATE TRIGGER access_roles_revision AFTER INSERT OR UPDATE OR DELETE ON access_roles
+      FOR EACH ROW EXECUTE FUNCTION bump_global_access_revision();
+    CREATE TRIGGER access_cohorts_revision AFTER INSERT OR UPDATE OR DELETE ON access_cohorts
+      FOR EACH ROW EXECUTE FUNCTION bump_global_access_revision();
+    CREATE TRIGGER access_plan_versions_revision AFTER INSERT OR UPDATE OR DELETE ON access_plan_versions
+      FOR EACH ROW EXECUTE FUNCTION bump_global_access_revision();
+
+    CREATE FUNCTION bump_profile_plan_access_revision() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.access_plan_version_code IS DISTINCT FROM OLD.access_plan_version_code THEN
+        NEW.access_revision := OLD.access_revision + 1;
+      END IF;
+      RETURN NEW;
+    END $$;
+    CREATE TRIGGER profiles_plan_access_revision BEFORE UPDATE OF access_plan_version_code ON profiles
+      FOR EACH ROW EXECUTE FUNCTION bump_profile_plan_access_revision();
+
+    CREATE FUNCTION protect_audit_history() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      RAISE EXCEPTION 'audit history is immutable';
+    END $$;
+    CREATE TRIGGER access_audit_log_immutable BEFORE UPDATE OR DELETE ON access_audit_log
+      FOR EACH ROW EXECUTE FUNCTION protect_audit_history();
+    CREATE TRIGGER admin_audit_log_immutable BEFORE UPDATE OR DELETE ON admin_audit_log
+      FOR EACH ROW EXECUTE FUNCTION protect_audit_history();
+  `,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

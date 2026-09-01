@@ -1,8 +1,9 @@
 # План управления доступом и внутренней админки
 
-Дата решения: 29.08.2026. Статус актуализирован 31.08.2026: B13 Web и B14 Web
-реализованы; B14 развёрнут на Railway, принят в production и выполнен в P0.
-B15, B13 для native Mobile и MCP, а также F17 не реализованы.
+Дата решения: 29.08.2026. Статус актуализирован 01.09.2026: управление ручным
+доступом из issue #16 реализовано локально поверх завершённых Web-этапов прав и
+read-only админки; production deployment и приёмка issue #16 ещё не выполнены.
+Применение прав в native Mobile и MCP, а также тарифы, billing и usage не реализованы.
 
 Связанные задачи product roadmap:
 
@@ -451,6 +452,49 @@ publication.failed
   получила `200` от API/Admin healthchecks и корня Admin, подтвердила security
   headers и полностью закрытый `robots.txt`.
 
+## Запись локальной реализации issue #16 — 01.09.2026
+
+- Migration 11 добавляет per-profile и global access revisions, одноразовые
+  десятиминутные preview, unique constraints для прямых role/capability/limit
+  назначений и останавливается на старых дублях без автоматического удаления.
+- Общий command contract поддерживает назначение и снятие ролей, memberships,
+  capability allow/deny и limit add/replace. Одна операция применяется к 1–100
+  пользователям; bulk выполняется только целиком и требует `APPLY <count>`.
+- Preview сохраняет нормализованную операцию, actor, revisions и hash эффективного
+  результата. Apply повторяет resolver в serializable-транзакции, блокирует stale,
+  expired, consumed и no-op preview и сериализует административные изменения
+  advisory lock. Изменение, лишающее текущего оператора нужных прав или оставляющее
+  систему без эффективного access manager, отклоняется.
+- Проверка последнего manager не обходит всю таблицу profiles под advisory lock:
+  SQL заранее выбирает только активных direct-, plan- и cohort-holders роли
+  `access_manager`, после чего добавляет не более 100 изменяемых preview targets.
+  PostgreSQL regression с 250 нерелевантными профилями проверяет постоянный бюджет
+  запросов и отсутствие прежнего полного scan.
+- Audit triggers получают фактические actor, reason, target profile и batch из
+  транзакционного контекста; access/admin audit защищены от update/delete. Session
+  revoke работает только по безопасному UUID, не читает token/hash и запрещает
+  отзыв текущей сессии самим оператором.
+- Admin показывает сырые ручные назначения отдельно от effective access, источники
+  decisive/overridden решений, preview before/after, полные bulk-действия, revoke
+  активной сессии и безопасный audit diff. Отдельный permission-aware справочник
+  объясняет все текущие роли, capabilities, когорты, лимиты и правила приоритета;
+  те же RU/EN описания показываются прямо в списке выбора и после выбора кода.
+  Неизвестный новый код получает заметное предупреждение вместо пустой подсказки.
+  Формы остаются RU/EN и адаптивными.
+- Добавлены unit, provider/UI и PostgreSQL/API fixtures для no-op, expiry, stale и
+  consumed preview, all-or-nothing bulk, audit actor/reason, self-lockout и revoke.
+  PostgreSQL fixtures требуют явно заданную disposable test database. Финальная
+  локальная проверка прошла: `yarn check`; `yarn test` (192 backend/unit и 46 Web
+  tests); `yarn test:api:postgres` (22 tests на изолированном PostgreSQL);
+  `yarn test:admin` (11 Vitest tests и отдельный static-header test);
+  `yarn build:admin`.
+- Внешнее Amplitude-событие не добавляется: ручное изменение доступа является
+  административной security-операцией и подтверждается внутренним audit, а не
+  пользовательским продуктовым outcome.
+- Эта запись не утверждает deployment или production-приёмку. Issue #16 остаётся
+  открытой до прохождения обязательных проверок и проверки обратимого сценария на
+  выделенном production test profile.
+
 ## Критерии завершения задач
 
 ### B13 Web
@@ -476,7 +520,7 @@ publication.failed
   explanation проверены на production-данных без секретов и контента;
 - security headers, CORS/CSRF, `noindex`, audit и responsive layout проверены.
 
-### B15 Web
+### Issue #16 Web
 
 - роли, когорты, memberships и user overrides управляются из админки;
 - start/expiry, reason, preview, audit, revoke и self-lockout guard проверены;

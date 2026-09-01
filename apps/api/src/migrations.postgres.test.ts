@@ -20,7 +20,7 @@ test("PostgreSQL: release migration works on a fresh database, concurrently and 
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 0);
 });
 
-test("PostgreSQL: migrations 4–10 preserve legacy rows, baseline access, and old API/worker writes", options, async (context) => {
+test("PostgreSQL: migrations 4–11 preserve legacy rows, baseline access, and old API/worker writes", options, async (context) => {
   const { pool } = await createPostgresTestPool(context);
   await applyVersion3(pool);
   const profileId = randomUUID(), storyId = randomUUID(), sceneId = randomUUID(), renderId = randomUUID();
@@ -41,6 +41,7 @@ test("PostgreSQL: migrations 4–10 preserve legacy rows, baseline access, and o
   await migrateDatabase(pool);
   assert.equal((await pool.query("SELECT language FROM profiles WHERE id = $1", [profileId])).rows[0].language, "en");
   assert.equal((await pool.query("SELECT access_plan_version_code FROM profiles WHERE id = $1", [profileId])).rows[0].access_plan_version_code, "free-v1");
+  assert.equal(Number((await pool.query("SELECT access_revision FROM profiles WHERE id = $1", [profileId])).rows[0].access_revision), 0);
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_roles")).rows[0].count, 2);
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_capabilities")).rows[0].count, 35);
   const migratedSession = (await pool.query("SELECT id, last_seen_at, revoked_at FROM sessions WHERE token_hash = $1", ["a".repeat(64)])).rows[0];
@@ -112,8 +113,10 @@ test("PostgreSQL: migration 7 grants the requested existing profile access_manag
     [targetProfileId],
   );
 
-  await migrateDatabase(pool);
-  await migrateDatabase(pool);
+  const migration7 = migrations.find(({ version }) => version === 7)!;
+  await pool.query(migration7.sql);
+  await pool.query("INSERT INTO schema_migrations (version) VALUES (7)");
+  await pool.query(migration7.sql);
 
   const assignments = await pool.query<{ profile_id: string; role_code: string; reason: string }>(
     `SELECT profile_id, role_code, reason FROM access_role_assignments
@@ -139,6 +142,11 @@ test("PostgreSQL: migration 7 grants the requested existing profile access_manag
     entity_type: "access_role_assignments",
     reason: "bootstrap initial access manager requested by product owner",
   }]);
+  await assert.rejects(migrateDatabase(pool), /manual access assignments contain duplicates/);
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM schema_migrations WHERE version = 11")).rows[0].count, 0);
+  await pool.query("DELETE FROM access_role_assignments WHERE reason = 'expired fixture'");
+  await migrateDatabase(pool);
+  await migrateDatabase(pool);
 });
 
 test("PostgreSQL: a failed release migration exits nonzero, rolls back DDL and can be retried", options, async (context) => {

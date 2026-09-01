@@ -11,7 +11,9 @@ import {
   type LimitAssignment,
   type OperationalSwitch,
 } from "@storyteller/application";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
+
+type Queryable = Pick<Pool | PoolClient, "query">;
 
 export class PostgresAccessRepository implements AccessStateRepository {
   constructor(private readonly pool: Pool) {}
@@ -20,55 +22,9 @@ export class PostgresAccessRepository implements AccessStateRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
-      const profile = (await client.query<{ access_plan_version_code: string }>(
-        "SELECT access_plan_version_code FROM profiles WHERE id = $1",
-        [profileId],
-      )).rows[0];
-      if (!profile) {
-        await client.query("COMMIT");
-        return emptyAccessState(profileId);
-      }
-
-      const planVersionCode = profile.access_plan_version_code;
-      const membershipsResult = await client.query<MembershipRow>(
-        `SELECT cohort_code, starts_at, expires_at, reason
-         FROM access_cohort_memberships WHERE profile_id = $1 ORDER BY cohort_code`,
-        [profileId],
-      );
-      const rolesResult = await client.query<RoleAssignmentRow>(
-        `${assignmentSelect("role_code")} FROM access_role_assignments
-         WHERE plan_version_code = $2 OR profile_id = $1 OR cohort_code IN (
-           SELECT cohort_code FROM access_cohort_memberships WHERE profile_id = $1
-         ) ORDER BY id`,
-        [profileId, planVersionCode],
-      );
-      const capabilitiesResult = await client.query<CapabilityAssignmentRow>(
-        `${assignmentSelect("capability_code, effect")} FROM access_capability_assignments
-         WHERE plan_version_code = $2 OR profile_id = $1 OR cohort_code IN (
-           SELECT cohort_code FROM access_cohort_memberships WHERE profile_id = $1
-         ) ORDER BY id`,
-        [profileId, planVersionCode],
-      );
-      const limitsResult = await client.query<LimitAssignmentRow>(
-        `${assignmentSelect("limit_code, operation, value, unlimited")} FROM access_limit_assignments
-         WHERE plan_version_code = $2 OR profile_id = $1 OR cohort_code IN (
-           SELECT cohort_code FROM access_cohort_memberships WHERE profile_id = $1
-         ) ORDER BY id`,
-        [profileId, planVersionCode],
-      );
-      const switchesResult = await client.query<OperationalSwitchRow>(
-        "SELECT capability_code, disabled, reason FROM access_operational_switches ORDER BY capability_code",
-      );
+      const state = await loadAccessState(client, profileId);
       await client.query("COMMIT");
-      return {
-        profileId,
-        planVersionCode,
-        memberships: membershipsResult.rows.map(mapMembership),
-        roleAssignments: rolesResult.rows.flatMap(mapRoleAssignment),
-        capabilityAssignments: capabilitiesResult.rows.flatMap(mapCapabilityAssignment),
-        limitAssignments: limitsResult.rows.flatMap(mapLimitAssignment),
-        operationalSwitches: switchesResult.rows.flatMap(mapOperationalSwitch),
-      };
+      return state;
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -76,6 +32,54 @@ export class PostgresAccessRepository implements AccessStateRepository {
       client.release();
     }
   }
+}
+
+export async function loadAccessState(queryable: Queryable, profileId: string): Promise<AccessState> {
+  const profile = (await queryable.query<{ access_plan_version_code: string }>(
+    "SELECT access_plan_version_code FROM profiles WHERE id = $1",
+    [profileId],
+  )).rows[0];
+  if (!profile) return emptyAccessState(profileId);
+
+  const planVersionCode = profile.access_plan_version_code;
+  const membershipsResult = await queryable.query<MembershipRow>(
+    `SELECT cohort_code, starts_at, expires_at, reason
+     FROM access_cohort_memberships WHERE profile_id = $1 ORDER BY cohort_code`,
+    [profileId],
+  );
+  const rolesResult = await queryable.query<RoleAssignmentRow>(
+    `${assignmentSelect("role_code")} FROM access_role_assignments
+     WHERE plan_version_code = $2 OR profile_id = $1 OR cohort_code IN (
+       SELECT cohort_code FROM access_cohort_memberships WHERE profile_id = $1
+     ) ORDER BY id`,
+    [profileId, planVersionCode],
+  );
+  const capabilitiesResult = await queryable.query<CapabilityAssignmentRow>(
+    `${assignmentSelect("capability_code, effect")} FROM access_capability_assignments
+     WHERE plan_version_code = $2 OR profile_id = $1 OR cohort_code IN (
+       SELECT cohort_code FROM access_cohort_memberships WHERE profile_id = $1
+     ) ORDER BY id`,
+    [profileId, planVersionCode],
+  );
+  const limitsResult = await queryable.query<LimitAssignmentRow>(
+    `${assignmentSelect("limit_code, operation, value, unlimited")} FROM access_limit_assignments
+     WHERE plan_version_code = $2 OR profile_id = $1 OR cohort_code IN (
+       SELECT cohort_code FROM access_cohort_memberships WHERE profile_id = $1
+     ) ORDER BY id`,
+    [profileId, planVersionCode],
+  );
+  const switchesResult = await queryable.query<OperationalSwitchRow>(
+    "SELECT capability_code, disabled, reason FROM access_operational_switches ORDER BY capability_code",
+  );
+  return {
+    profileId,
+    planVersionCode,
+    memberships: membershipsResult.rows.map(mapMembership),
+    roleAssignments: rolesResult.rows.flatMap(mapRoleAssignment),
+    capabilityAssignments: capabilitiesResult.rows.flatMap(mapCapabilityAssignment),
+    limitAssignments: limitsResult.rows.flatMap(mapLimitAssignment),
+    operationalSwitches: switchesResult.rows.flatMap(mapOperationalSwitch),
+  };
 }
 
 function assignmentSelect(columns: string): string {

@@ -268,11 +268,13 @@ export const adminActivityEventSchema = z.object({
 });
 export const adminSessionMetadataSchema = z.object({
   id: z.string().uuid(), createdAt: z.iso.datetime(), lastSeenAt: z.iso.datetime(), expiresAt: z.iso.datetime(),
-  revokedAt: z.iso.datetime().nullable(), status: z.enum(["active", "expired", "revoked"]),
+  revokedAt: z.iso.datetime().nullable(), status: z.enum(["active", "expired", "revoked"]), isCurrent: z.boolean(),
 });
 export const adminAuditEntrySchema = z.object({
   id: z.string(), actorProfileId: z.string().uuid().nullable(), action: z.string(), targetType: z.string(),
-  targetProfileId: z.string().uuid().nullable(), occurredAt: z.iso.datetime(), source: z.enum(["admin_read", "access_change"]),
+  targetProfileId: z.string().uuid().nullable(), targetEntityId: z.string().nullable(), occurredAt: z.iso.datetime(),
+  source: z.enum(["admin_read", "access_change"]), reason: z.string().nullable(), batchId: z.string().uuid().nullable(),
+  change: z.object({ before: z.unknown().nullable(), after: z.unknown().nullable() }).nullable(),
 });
 export const adminMeSchema = z.object({ profile: profileSchema, capabilities: z.array(z.string()) });
 const adminAccessSourceSchema = z.object({
@@ -285,6 +287,64 @@ export const adminEffectiveAccessSchema = z.object({
   limits: z.array(z.object({ code: z.string(), value: z.union([z.number(), z.literal("unlimited"), z.null()]), expiresAt: z.iso.datetime().optional(), sources: z.array(adminAccessSourceSchema) })),
   evaluatedAt: z.iso.datetime(),
 });
+const adminAccessWindowSchema = z.object({
+  startsAt: z.iso.datetime().nullable(), expiresAt: z.iso.datetime().nullable(), reason: z.string(),
+  createdBy: z.string().uuid().nullable(), createdAt: z.iso.datetime(),
+});
+export const adminAccessCatalogEntrySchema = z.object({
+  id: z.string(), code: z.string(), archived: z.boolean(),
+});
+export const adminAccessRoleSchema = adminAccessCatalogEntrySchema.extend({ capabilities: z.array(z.string()) });
+export const adminAccessManagementSchema = z.object({
+  id: z.string().uuid(), revision: z.number().int().nonnegative(),
+  memberships: z.array(adminAccessWindowSchema.extend({ cohortCode: z.string() })),
+  roles: z.array(adminAccessWindowSchema.extend({ id: z.string(), roleCode: z.string() })),
+  capabilityOverrides: z.array(adminAccessWindowSchema.extend({
+    id: z.string(), capabilityCode: z.string(), effect: z.enum(["allow", "deny"]),
+  })),
+  limitOverrides: z.array(adminAccessWindowSchema.extend({
+    id: z.string(), limitCode: z.string(), operation: z.enum(["add", "replace"]),
+    value: z.union([z.number().int().nonnegative(), z.literal("unlimited")]),
+  })),
+  effective: adminEffectiveAccessSchema,
+});
+
+const adminAccessTimedOperationSchema = z.object({
+  startsAt: z.iso.datetime().optional(), expiresAt: z.iso.datetime().optional(),
+});
+export const adminAccessOperationSchema = z.discriminatedUnion("type", [
+  adminAccessTimedOperationSchema.extend({ type: z.literal("set_role"), roleCode: z.string().min(1).max(100) }),
+  z.object({ type: z.literal("remove_role"), roleCode: z.string().min(1).max(100) }),
+  adminAccessTimedOperationSchema.extend({ type: z.literal("set_cohort_membership"), cohortCode: z.string().min(1).max(100) }),
+  z.object({ type: z.literal("remove_cohort_membership"), cohortCode: z.string().min(1).max(100) }),
+  adminAccessTimedOperationSchema.extend({
+    type: z.literal("set_capability_override"), capabilityCode: z.string().min(1).max(120), effect: z.enum(["allow", "deny"]),
+  }),
+  z.object({ type: z.literal("remove_capability_override"), capabilityCode: z.string().min(1).max(120) }),
+  adminAccessTimedOperationSchema.extend({
+    type: z.literal("set_limit_override"), limitCode: z.string().min(1).max(120), operation: z.enum(["add", "replace"]),
+    value: z.union([z.number().int().nonnegative(), z.literal("unlimited")]),
+  }),
+  z.object({ type: z.literal("remove_limit_override"), limitCode: z.string().min(1).max(120) }),
+]);
+export const adminAccessPreviewRequestSchema = z.object({
+  profileIds: z.array(z.string().uuid()).min(1).max(100).refine((values) => new Set(values).size === values.length, "profileIds must be unique"),
+  operation: adminAccessOperationSchema,
+  reason: z.string().trim().min(1).max(500),
+}).strict();
+export const adminAccessPreviewTargetSchema = z.object({
+  profileId: z.string().uuid(), changed: z.boolean(), blockers: z.array(z.string()),
+  before: adminEffectiveAccessSchema.nullable(), after: adminEffectiveAccessSchema.nullable(),
+});
+export const adminAccessPreviewSchema = z.object({
+  id: z.string().uuid(), expiresAt: z.iso.datetime(), reason: z.string(), targetCount: z.number().int().positive(),
+  changedCount: z.number().int().nonnegative(), noOpCount: z.number().int().nonnegative(), blockedCount: z.number().int().nonnegative(),
+  operation: adminAccessOperationSchema, targets: z.array(adminAccessPreviewTargetSchema), applicable: z.boolean(),
+});
+export const adminAccessApplyRequestSchema = z.object({ confirmation: z.string().max(40).optional() }).strict();
+export const adminAccessApplyResultSchema = adminAccessPreviewSchema.extend({ appliedAt: z.iso.datetime() });
+export const adminSessionRevokeSchema = z.object({ reason: z.string().trim().min(1).max(500) }).strict();
+export const adminSessionRevokedSchema = z.object({ id: z.string().uuid(), revokedAt: z.iso.datetime() });
 export function adminPageSchema<T extends z.ZodType>(item: T) {
   return z.object({ data: z.array(item), total: z.number().int().nonnegative(), page: z.number().int().positive(), perPage: z.number().int().positive() });
 }
@@ -303,6 +363,13 @@ export type AdminUserDetail = z.infer<typeof adminUserDetailSchema>;
 export type AdminActivityEvent = z.infer<typeof adminActivityEventSchema>;
 export type AdminSessionMetadata = z.infer<typeof adminSessionMetadataSchema>;
 export type AdminAuditEntry = z.infer<typeof adminAuditEntrySchema>;
+export type AdminAccessCatalogEntry = z.infer<typeof adminAccessCatalogEntrySchema>;
+export type AdminAccessRole = z.infer<typeof adminAccessRoleSchema>;
+export type AdminAccessManagement = z.infer<typeof adminAccessManagementSchema>;
+export type AdminAccessOperation = z.infer<typeof adminAccessOperationSchema>;
+export type AdminAccessPreviewRequest = z.infer<typeof adminAccessPreviewRequestSchema>;
+export type AdminAccessPreview = z.infer<typeof adminAccessPreviewSchema>;
+export type AdminAccessApplyResult = z.infer<typeof adminAccessApplyResultSchema>;
 export type AdminPage<T> = { readonly data: readonly T[]; readonly total: number; readonly page: number; readonly perPage: number };
 export type CreateStoryRequest = z.infer<typeof createStorySchema>;
 export type DeleteSceneRequest = z.infer<typeof deleteSceneSchema>;

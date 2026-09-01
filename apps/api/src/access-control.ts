@@ -90,6 +90,16 @@ const routePolicies = new Map<string, RouteAccessPolicy>([
   route("GET", "/admin/users/:profileId/activity", ["admin.console.access", "admin.users.activity.read"]),
   route("GET", "/admin/users/:profileId/sessions", ["admin.console.access", "admin.sessions.metadata.read"]),
   route("GET", "/admin/users/:profileId/access", ["admin.console.access", "admin.access.explain"]),
+  route("GET", "/admin/access/capabilities", ["admin.console.access", "admin.permissions.read"]),
+  route("GET", "/admin/access/limits", ["admin.console.access", "admin.permissions.read"]),
+  route("GET", "/admin/access/roles", ["admin.console.access", "admin.roles.read"]),
+  route("GET", "/admin/access/cohorts", ["admin.console.access", "admin.cohorts.read"]),
+  route("GET", "/admin/users/:profileId/access-management", [
+    "admin.console.access", "admin.access.explain", "admin.permissions.read", "admin.roles.read", "admin.cohorts.read",
+  ]),
+  route("POST", "/admin/access/previews", ["admin.console.access", "admin.access.explain"]),
+  route("POST", "/admin/access/previews/:previewId/apply", ["admin.console.access", "admin.access.explain"]),
+  route("POST", "/admin/users/:profileId/sessions/:sessionId/revoke", ["admin.console.access", "admin.sessions.revoke"]),
   route("GET", "/admin/audit", ["admin.console.access", "admin.audit.read"]),
 ]);
 

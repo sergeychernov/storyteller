@@ -9,6 +9,7 @@ import { createConfiguredObjectStorage } from "@storyteller/storage";
 import { AccessControlService } from "@storyteller/application";
 import { PostgresAccessRepository } from "./access-control-database.js";
 import { AdminReadModel } from "./admin-database.js";
+import { AdminAccessService } from "./admin-access.js";
 
 loadLocalEnvironment();
 const { pool, repository } = createPostgresRepository();
@@ -20,6 +21,7 @@ const api = await buildApi(new StoryApplication(repository), {
   renderQueue: new PostgresSceneRenderQueue(pool),
   accessControl: new AccessControlService(new PostgresAccessRepository(pool)),
   adminReadModel: new AdminReadModel(pool),
+  adminAccessService: new AdminAccessService(pool),
 });
 
 api.addHook("onClose", async () => pool.end());

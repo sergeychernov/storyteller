@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { authProvider, dataProvider, resetProviderStateForTest, wasAccessDenied } from "./providers.js";
+import {
+  applyAccessPreview, authProvider, dataProvider, previewAccessChange, resetProviderStateForTest,
+  requiredCapabilitiesFor, revokeAdminSession, wasAccessDenied,
+} from "./providers.js";
 
 describe("admin providers", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     resetProviderStateForTest();
+  });
+
+  it("requires every catalog permission before showing the access reference", () => {
+    expect(requiredCapabilitiesFor("accessReference", "list")).toEqual([
+      "admin.access.explain", "admin.permissions.read", "admin.roles.read", "admin.cohorts.read",
+    ]);
   });
 
   it("uses cookie credentials and CSRF for the POST-only user search", async () => {
@@ -38,6 +47,38 @@ describe("admin providers", () => {
     await expect(dataProvider.create("users", { data: { id: "new" } })).rejects.toThrow("read-only");
     await expect(dataProvider.update("users", { id: "one", data: {}, previousData: { id: "one" } })).rejects.toThrow("read-only");
     await expect(dataProvider.delete("users", { id: "one", previousData: { id: "one" } })).rejects.toThrow("read-only");
+  });
+
+  it("uses CSRF-protected preview/apply and session-revoke commands", async () => {
+    const requests: { readonly url: string; readonly init?: RequestInit }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      requests.push({ url, ...(init ? { init } : {}) });
+      if (url.endsWith("/auth/browser/session")) return Response.json({
+        csrfToken: "csrf-token", expiresAt: "2026-10-01T00:00:00.000Z",
+        profile: { id: "4fbb3ca0-88d7-4aa0-a925-eaec3572a420", name: "Admin", email: "admin@example.com", language: "en" },
+      });
+      if (url.endsWith("/apply")) return Response.json({ id: "preview-id", appliedAt: "2026-09-01T00:00:00.000Z" });
+      if (url.endsWith("/revoke")) return Response.json({ id: "session-id", revokedAt: "2026-09-01T00:00:00.000Z" });
+      return Response.json({ id: "preview-id", applicable: true });
+    }));
+
+    await previewAccessChange(
+      ["4fbb3ca0-88d7-4aa0-a925-eaec3572a420"],
+      { type: "set_role", roleCode: "access_manager" },
+      "support rotation",
+    );
+    await applyAccessPreview("preview-id", "APPLY 2");
+    await revokeAdminSession("profile/id", "session/id", "security response");
+
+    const commands = requests.filter(({ init }) => init?.method === "POST");
+    expect(commands.map(({ url }) => url)).toEqual([
+      "http://localhost:3001/admin/access/previews",
+      "http://localhost:3001/admin/access/previews/preview-id/apply",
+      "http://localhost:3001/admin/users/profile%2Fid/sessions/session%2Fid/revoke",
+    ]);
+    for (const request of commands) expect(new Headers(request.init?.headers).get("x-csrf-token")).toBe("csrf-token");
+    expect(JSON.parse(String(commands[1]?.init?.body))).toEqual({ confirmation: "APPLY 2" });
   });
 
   it.each([

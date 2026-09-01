@@ -302,4 +302,15 @@ distinct `401` and `403`, one allowed and one forbidden CORS origin, missing and
 invalid CSRF, read-only data on desktop and 390/320 px, and absence of database
 credentials in the Admin service. Run `yarn test:admin` and `yarn build:admin`.
 
+For issue #16, deploy the additive database migration first, then API, then Admin;
+the previous read-only Admin remains compatible during the sequence. Run
+`yarn check`, `yarn test`, `yarn test:api:postgres`, `yarn test:admin`, and
+`yarn build:admin`. On a dedicated test profile, preview and reverse one role,
+cohort membership, capability override and limit override; verify bulk refuses a
+missing or stale target without partial changes, session revoke never exposes a
+token/hash, and every committed change has the real actor, reason, target and batch
+in immutable audit. Also verify self-demotion, last-manager removal, current-session
+revoke, missing/invalid CSRF, ordinary-user access and an expired preview are all
+rejected. Do not close issue #16 until these production checks are recorded there.
+
 Registration, sessions, stories, and encrypted platform credentials persist in PostgreSQL and can be shared safely by multiple API replicas.
