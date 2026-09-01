@@ -1,9 +1,10 @@
 import {
   BooleanField, Datagrid, DateField, List, Pagination, ReferenceManyField, SearchInput, Show, SimpleList, TabbedShowLayout,
-  TextField, useGetOne, useRecordContext, useTranslate,
+  TabbedShowLayoutTabs, TextField, useGetOne, useRecordContext, useTranslate,
 } from "react-admin";
 import { AccessManagementPanel, BulkAccessActions } from "./AccessManagement.js";
 import { RevokeSessionButton } from "./SessionRevoke.js";
+import { userShowTabsProps } from "./responsive-layout.js";
 
 const userFilters = [<SearchInput key="q" source="q" alwaysOn />];
 
@@ -27,7 +28,7 @@ export function UserList() {
 export function UserShow() {
   const translate = useTranslate();
   return <Show actions={false}>
-    <TabbedShowLayout>
+    <TabbedShowLayout tabs={<TabbedShowLayoutTabs {...userShowTabsProps} />}>
       <TabbedShowLayout.Tab label={translate("admin.overview")}>
         <TextField source="id" />
         <TextField source="name" />

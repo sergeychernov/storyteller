@@ -32,10 +32,16 @@ body { margin: 0; background: #f6f7f8; }
 .access-reference-card ul { margin: 0.35rem 0 0; padding-left: 1.25rem; }
 .access-reference-card code { font-size: 0.8rem; }
 .admin-login { padding: 2rem; }
+.user-show-tabs .MuiTabs-scroller { min-width: 0; }
 @media (max-width: 600px) {
   .desktop-records { display: none; }
   .mobile-records { display: block; }
   .access-panel ul { columns: 1; }
-  .RaList-main, .RaShow-main { min-width: 0; }
+  .layout.layout, .RaLayout-appFrame, .RaLayout-contentWithSidebar, .RaLayout-content,
+  .RaList-main, .show-page, .RaShow-main, .RaShow-card, .RaTabbedShowLayout-content {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+  }
   .access-reference-page { padding: 1rem; }
 }

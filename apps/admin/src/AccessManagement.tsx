@@ -13,6 +13,7 @@ import {
 import { ApiError } from "@storyteller/api-client";
 import { getAccessReference, type AccessReferenceKind } from "./access-reference.js";
 import { applyAccessPreview, previewAccessChange } from "./providers.js";
+import { accessManagementHeaderSx } from "./responsive-layout.js";
 
 type OperationType = AdminAccessOperation["type"];
 
@@ -42,7 +43,7 @@ export function AccessManagementPanel() {
   if (!management.data) return <Alert severity="error">{translate("admin.accessLoadFailed")}</Alert>;
   const allowed = canMutateAccess(permissions.data);
   return <section className="access-management">
-    <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 2 }}>
+    <Stack sx={accessManagementHeaderSx}>
       <div><h3>{translate("admin.manualAccess")}</h3><small>Revision {management.data.revision}</small></div>
       {allowed && <Button variant="contained" onClick={() => setOpen(true)}>{translate("admin.changeAccess")}</Button>}
     </Stack>
