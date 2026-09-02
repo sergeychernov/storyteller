@@ -261,6 +261,7 @@ export class PostgresStoryExportQueue implements StoryExportQueue {
            SELECT 1 FROM story_export_segments active_link
            JOIN story_exports active_export ON active_export.id = active_link.export_id
            WHERE active_link.scene_render_id = render.id AND active_export.status IN ('queued', 'assembling')
+             AND NOT EXISTS (SELECT 1 FROM stale stale_export WHERE stale_export.id = active_export.id)
          )
        )
        UPDATE scene_renders render SET status = 'canceled', error = 'story revision changed',

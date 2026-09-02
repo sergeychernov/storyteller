@@ -101,16 +101,32 @@ test("PostgreSQL: a 30-scene export overlaps bounded claim waves, waits at the b
   for (const [index, job] of firstWave.slice(1).entries()) {
     await renderQueue.complete(job!.id, `bounded-${index + 1}`, `ready-${index}.mp4`, 100, "a".repeat(64));
   }
+  for (const attempt of [2, 3]) {
+    for (let claimIndex = 0; ; claimIndex += 1) {
+      const workerId = `bounded-retry-${attempt}-${claimIndex}`;
+      const retried = await renderQueue.claim(workerId, 10_000, "story-export-segment");
+      assert.ok(retried);
+      if (retried.id === failedId) {
+        await renderQueue.fail(failedId, workerId, "persistent segment failure");
+        break;
+      }
+      await renderQueue.complete(retried.id, workerId, `retry-ready-${retried.id}.mp4`, 100, "c".repeat(64));
+    }
+  }
   const failedParent = await queue.findAuthorized(profileId, storyId, exportId);
   assert.equal(failedParent?.status, "failed");
+  const readyBeforeRetry = (await pool.query(
+    "SELECT count(*)::integer AS count FROM scene_renders WHERE story_id = $1 AND status = 'ready'", [storyId],
+  )).rows[0].count as number;
+  assert.ok(readyBeforeRetry >= 3 && readyBeforeRetry < 30);
   const retried = await queue.enqueue({ id: randomUUID(), profileId, storyId, manifestHash: "9".repeat(64), manifest });
   assert.equal(retried?.id, exportId);
   assert.equal((await pool.query(
     "SELECT count(*)::integer AS count FROM scene_renders WHERE story_id = $1 AND status = 'ready'", [storyId],
-  )).rows[0].count, 3);
+  )).rows[0].count, readyBeforeRetry);
   assert.equal((await pool.query(
     "SELECT count(*)::integer AS count FROM scene_renders WHERE story_id = $1 AND status = 'queued'", [storyId],
-  )).rows[0].count, 27);
+  )).rows[0].count, 30 - readyBeforeRetry);
   assert.equal((await pool.query("SELECT status FROM scene_renders WHERE id = $1", [failedId])).rows[0].status, "queued");
 });
 
@@ -120,7 +136,7 @@ function exportManifest(sceneIds: readonly string[]): StoryExportManifest {
     frameRate: { numerator: 30, denominator: 1 }, totalFrames: 300,
     approvedMix: { storageKey: "mix.m4a", contentHash: "b".repeat(64), durationFrames: 300 },
     segments: sceneIds.map((sceneId, position) => ({
-      position, sceneId, durationFrames: 150, inputHash: String(position + 1).repeat(64),
+      position, sceneId, durationFrames: 150, inputHash: (position + 1).toString(16).padStart(64, "0"),
       input: {
         artifact: "story-export-segment", rendererId: "still-image", rendererVersion: 1,
         material: { storageKey: `${sceneId}.png`, name: `${sceneId}.png`, mimeType: "image/png", width: 1080, height: 1920, orientation: "portrait" },
