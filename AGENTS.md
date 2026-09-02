@@ -33,6 +33,11 @@
 - Preserve the repository's ESM import convention: TypeScript source imports local modules using the emitted `.js` extension.
 - Before completing frontend work, review every changed page and component for meaningful decomposition and run `yarn check` and the relevant tests.
 
+## Frontend visual design
+
+- Keep the interface visually light and restrained. Avoid heavy frames, thick borders, oversized shadows, stacked decorative containers, and other chrome that competes with the user's content. Prefer spacing, typography, and subtle color or surface changes to establish hierarchy.
+- Keep focus states accessible but visually compact. Prefer a localized indicator on the active control instead of a prominent frame around an entire track, section, or control group, and never introduce layout shifts when focus changes.
+
 ## Reuse and third-party libraries
 
 - Before implementing a common capability from scratch, inspect the repository and its workspace dependencies for an existing utility, service, hook, component, or established pattern that already solves the problem. Prefer extending or composing the canonical existing solution over creating a parallel abstraction or duplicating behavior.

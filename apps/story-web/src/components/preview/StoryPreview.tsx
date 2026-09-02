@@ -6,6 +6,7 @@ import { getEditorCopy } from "../editor/editor-copy.js";
 import { storyEditorPath } from "../editor/scene-deletion-model.js";
 import { useMediaQuery } from "../editor/use-media-query.js";
 import { getPreviewCopy, interpolatePreviewCopy } from "./preview-copy.js";
+import { PreviewScrubber } from "./PreviewScrubber.js";
 import { formatPreviewClock, positionAtPlayhead } from "./story-preview-model.js";
 import { StoryPreviewStage } from "./StoryPreviewStage.js";
 import { useStoryPreviewController } from "./use-story-preview-controller.js";
@@ -41,7 +42,8 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
   const resumeAudibleMedia = () => {
     if (muted) return;
     const media = previewRoot.current?.querySelectorAll<HTMLMediaElement>(
-      '[data-preview-shell="current"] audio[data-preview-processed-audio="true"], [data-preview-shell="current"] video[data-preview-native-audio="true"]',
+      '[data-preview-shell="current"] audio[data-preview-processed-audio="true"][data-preview-audio-enabled="true"], '
+      + '[data-preview-shell="current"] video[data-preview-native-audio="true"][data-preview-audio-enabled="true"]',
     );
     for (const element of media ?? []) {
       element.muted = false;
@@ -57,7 +59,8 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
     setMuted(!muted);
     if (!enabling || controller.snapshot.status !== "playing") return;
     const media = previewRoot.current?.querySelectorAll<HTMLMediaElement>(
-      '[data-preview-shell="current"] audio[data-preview-processed-audio="true"], [data-preview-shell="current"] video[data-preview-native-audio="true"]',
+      '[data-preview-shell="current"] audio[data-preview-processed-audio="true"][data-preview-audio-enabled="true"], '
+      + '[data-preview-shell="current"] video[data-preview-native-audio="true"][data-preview-audio-enabled="true"]',
     );
     for (const element of media ?? []) {
       element.muted = false;
@@ -94,29 +97,30 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
 
       <section className={styles.transport} aria-label={previewCopy.totalDuration}>
         <div className={styles.buttons}>
-          <button type="button" className={styles.primaryButton} disabled={!position}
+          <button type="button" className={`${styles.primaryButton} ${styles.transportToggle}`} disabled={!position}
             aria-label={playing ? previewCopy.pause : previewCopy.play}
             onClick={playing ? controller.pause : play}>
-            {playing ? "Ⅱ" : "▶"}<span>{playing ? previewCopy.pause : previewCopy.play}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d={playing ? "M6 5h4v14H6zm8 0h4v14h-4z" : "M7 4.5v15l12-7.5z"} />
+            </svg>
           </button>
-          <button type="button" disabled={!position || controller.snapshot.playheadSeconds === 0 && controller.snapshot.status === "ready"}
-            onClick={controller.stop}>■ <span>{previewCopy.stop}</span></button>
           <span className={styles.clock}>{formatPreviewClock(controller.snapshot.playheadSeconds)}</span>
-          <input
-            className={styles.scrubber}
-            type="range"
-            min="0"
-            max={timeline.totalDurationSeconds || 0}
-            step="0.01"
+          <PreviewScrubber
+            timeline={timeline}
             value={controller.snapshot.playheadSeconds}
             disabled={!position}
-            aria-label={previewCopy.totalDuration}
-            onChange={(event) => controller.seek(Number(event.currentTarget.value))}
+            label={previewCopy.totalDuration}
+            onChange={controller.seek}
           />
           <span className={styles.clock}>{formatPreviewClock(timeline.totalDurationSeconds)}</span>
-          <button type="button" aria-pressed={!muted} disabled={!containsAudio}
+          <button type="button" className={styles.iconButton} aria-pressed={!muted} disabled={!containsAudio}
             aria-label={muted ? previewCopy.soundOn : previewCopy.soundOff}
-            onClick={toggleSound}>{muted ? "◖×" : "◖))"}<span>{muted ? previewCopy.soundOn : previewCopy.soundOff}</span></button>
+            onClick={toggleSound}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 9h4l6-5v16l-6-5H3z" />
+              <path d={muted ? "m17 9 5 6m0-6-5 6" : "M17 7q7 5 0 10"} className={styles.soundMark} />
+            </svg>
+          </button>
         </div>
         <div className={styles.status} role={controller.snapshot.status === "failed" ? "alert" : "status"} aria-live="polite">
           {position ? statusText(controller.snapshot.status, previewCopy, pendingScene?.index) : previewCopy.noPlayableScenes}

@@ -33,6 +33,12 @@ export function useStoryPreviewController({ timeline, onCompleted }: UseStoryPre
   const completedThisPass = useRef(false);
   const revision = useRef(timeline.revision);
 
+  const resetSceneResources = useCallback(() => {
+    readyScenes.current.clear();
+    failedScenes.current.clear();
+    resumeAfterBuffering.current = false;
+  }, []);
+
   const update = useCallback((change: (current: StoryPreviewSnapshot) => StoryPreviewSnapshot) => {
     setSnapshot((current) => {
       const changed = change(current);
@@ -44,15 +50,13 @@ export function useStoryPreviewController({ timeline, onCompleted }: UseStoryPre
   useEffect(() => {
     if (revision.current === timeline.revision) return;
     revision.current = timeline.revision;
-    readyScenes.current.clear();
-    failedScenes.current.clear();
-    resumeAfterBuffering.current = false;
+    resetSceneResources();
     completedThisPass.current = false;
     update((current) => ({
       status: "ready", playheadSeconds: 0, currentTimelineIndex: firstPlayableTimelineIndex(timeline),
       pendingTimelineIndex: undefined, retryKey: current.retryKey + 1, revisionReset: true,
     }));
-  }, [timeline, update]);
+  }, [resetSceneResources, timeline, update]);
 
   useEffect(() => {
     if (snapshot.status !== "playing") return;
@@ -98,7 +102,16 @@ export function useStoryPreviewController({ timeline, onCompleted }: UseStoryPre
 
     const nextIndex = nextPlayableTimelineIndex(timeline, current.currentTimelineIndex);
     if (nextIndex === undefined) {
-      update((value) => ({ ...value, status: "completed", playheadSeconds: timeline.totalDurationSeconds }));
+      resetSceneResources();
+      update((value) => ({
+        ...value,
+        status: "completed",
+        playheadSeconds: 0,
+        currentTimelineIndex: firstPlayableTimelineIndex(timeline),
+        pendingTimelineIndex: undefined,
+        retryKey: value.retryKey + 1,
+        revisionReset: false,
+      }));
       if (!completedThisPass.current) {
         completedThisPass.current = true;
         onCompleted();
@@ -131,6 +144,20 @@ export function useStoryPreviewController({ timeline, onCompleted }: UseStoryPre
       playheadSeconds = 0;
       currentTimelineIndex = firstPlayableTimelineIndex(timeline)!;
       completedThisPass.current = false;
+      if (current.playheadSeconds !== 0 || current.currentTimelineIndex !== currentTimelineIndex) {
+        resetSceneResources();
+        resumeAfterBuffering.current = true;
+        update((value) => ({
+          ...value,
+          status: "buffering",
+          playheadSeconds,
+          currentTimelineIndex,
+          pendingTimelineIndex: currentTimelineIndex,
+          retryKey: value.retryKey + 1,
+          revisionReset: false,
+        }));
+        return;
+      }
     }
     resumeAfterBuffering.current = true;
     const ready = readyScenes.current.has(currentTimelineIndex);
@@ -138,7 +165,7 @@ export function useStoryPreviewController({ timeline, onCompleted }: UseStoryPre
       ...value, status: ready ? "playing" : "buffering", playheadSeconds, currentTimelineIndex,
       pendingTimelineIndex: ready ? undefined : currentTimelineIndex, revisionReset: false,
     }));
-  }, [timeline, update]);
+  }, [resetSceneResources, timeline, update]);
 
   const pause = useCallback(() => {
     const current = snapshotRef.current;
@@ -146,15 +173,6 @@ export function useStoryPreviewController({ timeline, onCompleted }: UseStoryPre
     resumeAfterBuffering.current = false;
     update((value) => ({ ...value, status: "paused", pendingTimelineIndex: undefined }));
   }, [update]);
-
-  const stop = useCallback(() => {
-    resumeAfterBuffering.current = false;
-    completedThisPass.current = false;
-    update((value) => ({
-      ...value, status: "ready", playheadSeconds: 0, currentTimelineIndex: firstPlayableTimelineIndex(timeline),
-      pendingTimelineIndex: undefined, revisionReset: false,
-    }));
-  }, [timeline, update]);
 
   const seek = useCallback((playheadSeconds: number) => {
     const current = snapshotRef.current;
@@ -222,5 +240,5 @@ export function useStoryPreviewController({ timeline, onCompleted }: UseStoryPre
     update((value) => ({ ...value, status: "paused", pendingTimelineIndex: undefined }));
   }, [update]);
 
-  return { snapshot, play, pause, stop, seek, retry, onSceneReady, onSceneWaiting, onSceneFailed, onUnexpectedPause };
+  return { snapshot, play, pause, seek, retry, onSceneReady, onSceneWaiting, onSceneFailed, onUnexpectedPause };
 }

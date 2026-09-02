@@ -19,7 +19,7 @@ vi.mock("./CollageVideo.js", () => ({
 }));
 
 describe("CollageRendererPreview", () => {
-  test("plays the entrance and computed final hold once per initialized scene", () => {
+  test("renders the entrance from the shared controlled scene frame", () => {
     const materials = [photo("first"), photo("second")];
     const defaults = defaultCollageSettings(materials);
     const cardAngles = createCollageCardAngles({
@@ -51,9 +51,9 @@ describe("CollageRendererPreview", () => {
     const schedule = createCollageSchedule(scene);
     expect(cards).toHaveLength(2);
     cards.forEach((card, index) => {
-      expect(card.style.animationDuration).toBe("5s");
-      expect(card.style.animationIterationCount).toBe("1");
-      expect(card.style.animationName).toMatch(/^collage-preview-scene-/u);
+      expect(card.style.animationDuration).toBe("");
+      expect(card.style.animationIterationCount).toBe("");
+      expect(card.style.animationName).toBe("");
       expect(card.style.filter).toContain("drop-shadow");
       expect(card.style.height).toBe("auto");
       expect(card.style.aspectRatio).not.toBe("");
@@ -64,15 +64,12 @@ describe("CollageRendererPreview", () => {
       expect(content?.style.clipPath).toBe("");
       expect(innerEdge?.querySelector("path")?.getAttribute("d")).toMatch(/^M0 0H/u);
       expect(shape?.style.filter).toBe("");
-      expect(card.style.transform).toBe(`rotate(${cardAngles[index]!.angleDegrees}deg)`);
+      expect(card.style.transform).toBe(`translate(${schedule[index]!.startOffsetX / schedule[index]!.width * 100}%, ${schedule[index]!.startOffsetY / schedule[index]!.height * 100}%) rotate(${schedule[index]!.startAngleDegrees}deg)`);
       expect(card.style.zIndex).toBe(String(index + 1));
-      expect(card.style.getPropertyValue("--enter-x")).toBe(`${schedule[index]!.startOffsetX / schedule[index]!.width * 100}%`);
-      expect(card.style.getPropertyValue("--enter-y")).toBe(`${schedule[index]!.startOffsetY / schedule[index]!.height * 100}%`);
+      expect(card.style.getPropertyValue("--enter-x")).toBe("");
+      expect(card.style.getPropertyValue("--enter-y")).toBe("");
     });
-    const keyframes = container.querySelector("style")?.textContent ?? "";
-    cardAngles.forEach(({ angleDegrees }) => {
-      expect(keyframes).toContain(`rotate(${angleDegrees}deg)}100%{transform:translate(0,0) rotate(${angleDegrees}deg)}`);
-    });
+    expect(container.querySelector("style")).toBeNull();
   });
 
   test("opens a two-plus-one preview when the final card has a square crop and a persisted angle", () => {
@@ -227,7 +224,7 @@ describe("CollageRendererPreview", () => {
     expect(fall).toBeGreaterThanOrEqual(-40);
   });
 
-  test("renders video as moving media inside the shared card for any matching layout", () => {
+  test("renders video inside the shared card without restarting it after its trim ends", () => {
     const materials = [video("first", "landscape"), photo("second", "landscape")];
     const defaults = defaultCollageSettings(materials);
     const scene: Scene = {

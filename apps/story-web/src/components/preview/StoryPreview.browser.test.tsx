@@ -36,7 +36,14 @@ describe("StoryPreview", () => {
   it("returns a direct preview entry to the first available scene", () => {
     renderPreview("/story-1/preview");
     expect(screen.getByRole<HTMLAnchorElement>("link", { name: /Back to editor/ }).getAttribute("href")).toBe("/story-1/scenes/scene-1");
-    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Play" }).disabled).toBe(true);
+    const play = screen.getByRole<HTMLButtonElement>("button", { name: "Play" });
+    expect(play.disabled).toBe(true);
+    expect(play.textContent).toBe("");
+    expect(play.querySelector("svg")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+    const sound = screen.getByRole<HTMLButtonElement>("button", { name: "Sound on" });
+    expect(sound.textContent).toBe("");
+    expect(sound.querySelector("svg")).not.toBeNull();
     expect(screen.getByText("Empty scenes: 2")).toBeTruthy();
   });
 

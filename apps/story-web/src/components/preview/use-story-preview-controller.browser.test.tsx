@@ -80,16 +80,30 @@ describe("story preview controller", () => {
     expect(result.current.snapshot.status).toBe("completed");
     expect(completed).not.toHaveBeenCalled();
 
+    const seekRetryKey = result.current.snapshot.retryKey;
     act(() => result.current.play());
-    expect(result.current.snapshot).toMatchObject({ status: "playing", playheadSeconds: 0, currentTimelineIndex: 0 });
+    expect(result.current.snapshot).toMatchObject({
+      status: "buffering", playheadSeconds: 0, currentTimelineIndex: 0,
+      pendingTimelineIndex: 0, retryKey: seekRetryKey + 1,
+    });
+    act(() => result.current.onSceneReady(0));
+    expect(result.current.snapshot.status).toBe("playing");
     frame(1_000);
-    frame(3_000);
-    expect(result.current.snapshot.status).toBe("completed");
+    expect(result.current.snapshot).toMatchObject({ status: "buffering", pendingTimelineIndex: 2 });
+    act(() => result.current.onSceneReady(2));
+    frame(2_000);
+    expect(result.current.snapshot).toMatchObject({
+      status: "completed", playheadSeconds: 0, currentTimelineIndex: 0, pendingTimelineIndex: undefined,
+    });
     expect(completed).toHaveBeenCalledTimes(1);
 
+    act(() => result.current.onSceneReady(0));
     act(() => result.current.play());
+    expect(result.current.snapshot.status).toBe("playing");
     frame(1_000);
-    frame(3_000);
+    expect(result.current.snapshot.status).toBe("buffering");
+    act(() => result.current.onSceneReady(2));
+    frame(2_000);
     expect(completed).toHaveBeenCalledTimes(2);
   });
 
@@ -113,17 +127,16 @@ describe("story preview controller", () => {
     expect(latestCompleted).toHaveBeenCalledTimes(1);
   });
 
-  it("stop returns to zero and a new revision requires a fresh Play", () => {
+  it("a new revision returns to zero and requires a fresh Play", () => {
     const revised = { ...timeline, revision: 2 };
     const { result, rerender } = renderHook(({ value }) => useStoryPreviewController({ timeline: value, onCompleted: vi.fn() }), {
       initialProps: { value: timeline },
     });
     act(() => result.current.onSceneReady(0));
     act(() => result.current.play());
-    act(() => result.current.stop());
-    expect(result.current.snapshot).toMatchObject({ status: "ready", playheadSeconds: 0, currentTimelineIndex: 0 });
-
     rerender({ value: revised });
     expect(result.current.snapshot).toMatchObject({ status: "ready", playheadSeconds: 0, revisionReset: true });
+    act(() => result.current.play());
+    expect(result.current.snapshot).toMatchObject({ status: "buffering", pendingTimelineIndex: 0 });
   });
 });

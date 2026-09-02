@@ -2,7 +2,7 @@ import type { Locale } from "@storyteller/localization";
 
 const copies = {
   en: {
-    back: "Back to editor", play: "Play", pause: "Pause", stop: "Stop", soundOn: "Sound on", soundOff: "Sound off",
+    back: "Back to editor", play: "Play", pause: "Pause", soundOn: "Sound on", soundOff: "Sound off",
     scene: "Scene", canvas: "Current canvas", loading: "Loading preview…", loadingScene: "Loading scene {{number}}…",
     ready: "Ready", paused: "Paused", buffering: "Buffering…", failed: "This scene could not be played.", retry: "Retry",
     completed: "Preview completed", noPlayableScenes: "There are no non-empty scenes to play.", totalDuration: "Total duration",
@@ -10,7 +10,7 @@ const copies = {
     changed: "The story changed. Preview was reset; press Play to start the current revision.", loadError: "Could not load the story preview.",
   },
   ru: {
-    back: "В редактор", play: "Воспроизвести", pause: "Пауза", stop: "Стоп", soundOn: "Включить звук", soundOff: "Выключить звук",
+    back: "В редактор", play: "Воспроизвести", pause: "Пауза", soundOn: "Включить звук", soundOff: "Выключить звук",
     scene: "Сцена", canvas: "Текущий canvas", loading: "Загружаем просмотр…", loadingScene: "Загружаем сцену {{number}}…",
     ready: "Готово", paused: "Пауза", buffering: "Буферизация…", failed: "Не удалось воспроизвести эту сцену.", retry: "Повторить",
     completed: "Просмотр завершён", noPlayableScenes: "В истории нет непустых сцен для просмотра.", totalDuration: "Общая длительность",
@@ -18,7 +18,7 @@ const copies = {
     changed: "История изменилась. Просмотр сброшен; нажмите Play, чтобы запустить актуальную версию.", loadError: "Не удалось загрузить просмотр истории.",
   },
   "sr-Latn": {
-    back: "Nazad u uređivač", play: "Pusti", pause: "Pauza", stop: "Zaustavi", soundOn: "Uključi zvuk", soundOff: "Isključi zvuk",
+    back: "Nazad u uređivač", play: "Pusti", pause: "Pauza", soundOn: "Uključi zvuk", soundOff: "Isključi zvuk",
     scene: "Scena", canvas: "Aktuelno platno", loading: "Učitavanje pregleda…", loadingScene: "Učitavanje scene {{number}}…",
     ready: "Spremno", paused: "Pauzirano", buffering: "Učitavanje…", failed: "Ova scena ne može da se reprodukuje.", retry: "Pokušaj ponovo",
     completed: "Pregled je završen", noPlayableScenes: "Nema nepraznih scena za reprodukciju.", totalDuration: "Ukupno trajanje",
@@ -26,7 +26,7 @@ const copies = {
     changed: "Priča je promenjena. Pregled je vraćen na početak; pritisnite Play za aktuelnu verziju.", loadError: "Pregled priče nije mogao da se učita.",
   },
   es: {
-    back: "Volver al editor", play: "Reproducir", pause: "Pausar", stop: "Detener", soundOn: "Activar sonido", soundOff: "Silenciar",
+    back: "Volver al editor", play: "Reproducir", pause: "Pausar", soundOn: "Activar sonido", soundOff: "Silenciar",
     scene: "Escena", canvas: "Lienzo actual", loading: "Cargando la vista previa…", loadingScene: "Cargando la escena {{number}}…",
     ready: "Lista", paused: "Pausada", buffering: "Cargando…", failed: "No se pudo reproducir esta escena.", retry: "Reintentar",
     completed: "Vista previa completada", noPlayableScenes: "No hay escenas con contenido para reproducir.", totalDuration: "Duración total",

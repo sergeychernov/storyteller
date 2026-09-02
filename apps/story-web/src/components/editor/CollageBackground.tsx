@@ -1,10 +1,9 @@
-import { collageBackgroundTreatment } from "@storyteller/domain";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { AuthSession, Scene } from "../../api.js";
 import { MaterialThumbnail } from "./MaterialThumbnail.js";
 import { CollageVideo } from "./CollageVideo.js";
+import { SceneFrameCollageBackground } from "./SceneFrameRenderer.js";
 import { useSceneFrameUrl } from "./use-scene-frame-url.js";
-import styles from "./CollageBackground.module.css";
 
 interface CollageBackgroundProps {
   readonly scene: Scene;
@@ -14,18 +13,14 @@ interface CollageBackgroundProps {
   readonly active: boolean;
 }
 
-const treatmentStyle = {
-  filter: `brightness(${1 + collageBackgroundTreatment.brightness}) saturate(${collageBackgroundTreatment.saturation})`,
-} satisfies CSSProperties;
-
 export function CollageBackground({ scene, previousScene, storyId, session, active }: CollageBackgroundProps) {
   if (scene.collageBackground?.source === "material") {
     const material = scene.collageBackground.material;
-    return <div className={styles.background} data-collage-background-mode="custom-material" aria-hidden="true">
+    return <SceneFrameCollageBackground mode="custom-material">
       {material.kind === "video"
         ? <CollageVideo active={active} storyId={storyId} material={material} session={session} />
         : <MaterialThumbnail storyId={storyId} material={material} session={session} presentation="preview" />}
-    </div>;
+    </SceneFrameCollageBackground>;
   }
   const fallback = <FirstCardFallback scene={scene} storyId={storyId} session={session} />;
   return previousScene
@@ -43,10 +38,9 @@ function PreviousSceneBackground({
 }) {
   const frame = useSceneFrameUrl(scene, storyId, session);
   if (!frame.url) return fallback;
-  return <div className={styles.background} style={treatmentStyle}
-    data-collage-background-mode="previous-scene" aria-hidden="true">
+  return <SceneFrameCollageBackground treated mode="previous-scene">
     <img src={frame.url} alt="" draggable={false} />
-  </div>;
+  </SceneFrameCollageBackground>;
 }
 
 function FirstCardFallback({
@@ -54,8 +48,7 @@ function FirstCardFallback({
 }: Omit<CollageBackgroundProps, "previousScene" | "active">) {
   const material = scene.materials[0];
   if (!material) return null;
-  return <div className={styles.background} style={treatmentStyle}
-    data-collage-background-mode="card-fallback" aria-hidden="true">
+  return <SceneFrameCollageBackground treated mode="card-fallback">
     <MaterialThumbnail storyId={storyId} material={material} session={session} presentation="preview" />
-  </div>;
+  </SceneFrameCollageBackground>;
 }
