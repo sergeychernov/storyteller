@@ -79,6 +79,9 @@ describe("PreviewMaterial", () => {
 
   it("pauses a non-looping trimmed video on its final frame while the scene continues", () => {
     lifecycleInstances.length = 0;
+    const callbacks = {
+      onReady: vi.fn(), onWaiting: vi.fn(), onFailed: vi.fn(), onUnexpectedPause: vi.fn(),
+    };
     const trimmed = {
       ...material,
       edit: { rotation: 0 as const, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 0, endSeconds: 3.06 } },
@@ -96,10 +99,7 @@ describe("PreviewMaterial", () => {
       loopVideo={false}
       preload="auto"
       retryKey={0}
-      onReady={vi.fn()}
-      onWaiting={vi.fn()}
-      onFailed={vi.fn()}
-      onUnexpectedPause={vi.fn()}
+      {...callbacks}
     />);
 
     expect(lifecycleInstances).toHaveLength(2);
@@ -107,6 +107,29 @@ describe("PreviewMaterial", () => {
     expect(lifecycleInstances.every(({ pause }) => pause.mock.calls.length === 1)).toBe(true);
     expect(lifecycleInstances.every(({ seek }) => seek.mock.calls.at(-1)?.[0] === 4)).toBe(true);
     expect(lifecycleInstances.every(({ sourceTime }) => sourceTime(4) === 3.059)).toBe(true);
+
+    view.container.querySelector("video")?.dispatchEvent(new Event("waiting"));
+    view.container.querySelector("audio")?.dispatchEvent(new Event("stalled"));
+    expect(callbacks.onWaiting).not.toHaveBeenCalled();
+
+    view.rerender(<PreviewMaterial
+      storyId="story-1"
+      session={session}
+      material={trimmed}
+      localTimeSeconds={2}
+      sceneDurationSeconds={5}
+      status="playing"
+      active
+      muted={false}
+      audioEnabled
+      loopVideo={false}
+      preload="auto"
+      retryKey={0}
+      {...callbacks}
+    />);
+    view.container.querySelector("video")?.dispatchEvent(new Event("waiting"));
+    view.container.querySelector("audio")?.dispatchEvent(new Event("stalled"));
+    expect(callbacks.onWaiting).toHaveBeenCalledTimes(2);
     view.unmount();
   });
 });

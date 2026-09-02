@@ -137,8 +137,12 @@ function PreviewVideo(props: PreviewMaterialProps & { readonly material: VideoMa
         void videoLifecycle.current?.prepare(props.localTimeSeconds).catch(props.onFailed);
       }}
       onCanPlay={() => markReady("video")}
-      onWaiting={() => { if (props.active) props.onWaiting(); }}
-      onStalled={() => { if (props.active) props.onWaiting(); }}
+      onWaiting={(event) => {
+        if (shouldReportWaiting(props, playbackEnded, event.currentTarget.currentTime)) props.onWaiting();
+      }}
+      onStalled={(event) => {
+        if (shouldReportWaiting(props, playbackEnded, event.currentTarget.currentTime)) props.onWaiting();
+      }}
       onError={props.onFailed}
       onPause={() => {
         if (programmaticPause.current || videoDisposing.current) programmaticPause.current = false;
@@ -156,8 +160,12 @@ function PreviewVideo(props: PreviewMaterialProps & { readonly material: VideoMa
       preload={props.preload}
       onLoadedMetadata={() => { void audioLifecycle.current?.prepare(props.localTimeSeconds).catch(props.onFailed); }}
       onCanPlay={() => markReady("audio")}
-      onWaiting={() => { if (props.active && !props.muted) props.onWaiting(); }}
-      onStalled={() => { if (props.active && !props.muted) props.onWaiting(); }}
+      onWaiting={(event) => {
+        if (!props.muted && shouldReportWaiting(props, playbackEnded, event.currentTarget.currentTime)) props.onWaiting();
+      }}
+      onStalled={(event) => {
+        if (!props.muted && shouldReportWaiting(props, playbackEnded, event.currentTarget.currentTime)) props.onWaiting();
+      }}
       onError={props.onFailed}
       onPause={() => {
         if (!audioDisposing.current && props.active && props.status === "playing" && props.audioEnabled && !props.muted
@@ -186,4 +194,12 @@ function isAtSourceEnd(material: VideoMaterial, currentTime: number | undefined)
   if (currentTime === undefined) return false;
   const end = material.edit?.trim?.endSeconds ?? material.sourceDurationSeconds;
   return currentTime >= end - 0.08;
+}
+
+function shouldReportWaiting(
+  props: { readonly active: boolean; readonly material: VideoMaterial },
+  playbackEnded: boolean,
+  currentTime: number,
+): boolean {
+  return props.active && !playbackEnded && !isAtSourceEnd(props.material, currentTime);
 }
