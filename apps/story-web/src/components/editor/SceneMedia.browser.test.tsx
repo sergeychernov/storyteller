@@ -57,6 +57,7 @@ const material: VideoMaterial = {
 describe("SceneMedia", () => {
   it("uses the shared lifecycle, silences inactive media, and disposes both tracks", () => {
     lifecycleInstances.length = 0;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
     const events: SceneResourceEvent[] = [];
     const props = createProps(slot(material));
     const view = render(<SceneMedia {...props} onResourceState={(event) => events.push(event)} />);
@@ -64,9 +65,14 @@ describe("SceneMedia", () => {
     expect(lifecycleInstances.map(({ tagName }) => tagName)).toEqual(["VIDEO", "AUDIO"]);
     expect(lifecycleInstances.every(({ play }) => play.mock.calls.length === 1)).toBe(true);
 
+    now.mockReturnValue(1_200);
     view.rerender(<SceneMedia {...props} localTimeSeconds={1.2} onResourceState={(event) => events.push(event)} />);
     expect(lifecycleInstances.every(({ play }) => play.mock.calls.length === 1)).toBe(true);
-    expect(lifecycleInstances.every(({ seek }) => seek.mock.calls.at(-1)?.[0] === 1.2)).toBe(true);
+    expect(lifecycleInstances.every(({ seek }) => seek.mock.calls.length === 1)).toBe(true);
+
+    now.mockReturnValue(1_250);
+    view.rerender(<SceneMedia {...props} localTimeSeconds={3} onResourceState={(event) => events.push(event)} />);
+    expect(lifecycleInstances.every(({ seek }) => seek.mock.calls.at(-1)?.[0] === 3)).toBe(true);
 
     view.rerender(<SceneMedia {...props} active={false} localTimeSeconds={0} onResourceState={(event) => events.push(event)} />);
     expect(lifecycleInstances.every(({ pause }) => pause.mock.calls.length === 1)).toBe(true);
@@ -76,6 +82,7 @@ describe("SceneMedia", () => {
 
     view.unmount();
     expect(lifecycleInstances.every(({ dispose }) => dispose.mock.calls.length === 1)).toBe(true);
+    now.mockRestore();
   });
 
   it("holds a trimmed video, ignores advisory stalls, and reports real waiting by resource id", () => {
@@ -117,6 +124,7 @@ describe("SceneMedia", () => {
 
     ref.current?.playAudibleFromGesture(2.5);
 
+    expect(lifecycleInstances.find(({ tagName }) => tagName === "VIDEO")?.play).toHaveBeenLastCalledWith(2.5);
     expect(lifecycleInstances.find(({ tagName }) => tagName === "AUDIO")?.play).toHaveBeenLastCalledWith(2.5);
   });
 

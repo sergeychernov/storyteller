@@ -21,6 +21,13 @@ interface SceneMediaTrackOptions {
   readonly onUnexpectedPause: () => void;
 }
 
+interface ClockSample {
+  readonly localTimeSeconds: number;
+  readonly nowMilliseconds: number;
+  readonly playing: boolean;
+  readonly sourceKey: string | undefined;
+}
+
 export interface SceneMediaTrack<T extends HTMLMediaElement> {
   readonly mediaRef: RefObject<T | null>;
   readonly playFromGesture: (localTimeSeconds: number) => void;
@@ -35,7 +42,7 @@ export interface SceneMediaTrack<T extends HTMLMediaElement> {
   };
 }
 
-/** Owns one native media track; playback edges and frame-by-frame drift correction stay separate. */
+/** Owns one native media track; native playback stays smooth between controlled playhead jumps. */
 export function useSceneMediaTrack<T extends HTMLMediaElement>(options: SceneMediaTrackOptions): SceneMediaTrack<T> {
   const mediaRef = useRef<T>(null);
   const lifecycle = useRef<SceneMediaLifecycle>(null);
@@ -45,6 +52,7 @@ export function useSceneMediaTrack<T extends HTMLMediaElement>(options: SceneMed
   const programmaticPause = useRef(false);
   const observedPlaying = useRef(false);
   const disposing = useRef(false);
+  const clockSample = useRef<ClockSample | undefined>(undefined);
   localTime.current = options.localTimeSeconds;
   report.current = options.onResourceState;
   unexpectedPause.current = options.onUnexpectedPause;
@@ -56,6 +64,7 @@ export function useSceneMediaTrack<T extends HTMLMediaElement>(options: SceneMed
     if (!options.enabled || !element) return;
     disposing.current = false;
     observedPlaying.current = false;
+    clockSample.current = undefined;
     const controller = createSceneMediaLifecycle(
       element,
       (seconds) => sceneMediaSourceTime(options.material, seconds, options.loop),
@@ -65,6 +74,7 @@ export function useSceneMediaTrack<T extends HTMLMediaElement>(options: SceneMed
       disposing.current = true;
       programmaticPause.current = true;
       observedPlaying.current = false;
+      clockSample.current = undefined;
       controller.dispose();
       if (lifecycle.current === controller) lifecycle.current = null;
     };
@@ -83,8 +93,16 @@ export function useSceneMediaTrack<T extends HTMLMediaElement>(options: SceneMed
   }, [options.enabled, options.shouldPlay, options.sourceKey]);
 
   useEffect(() => {
-    lifecycle.current?.seek(options.localTimeSeconds);
-  }, [options.localTimeSeconds]);
+    const nowMilliseconds = performance.now();
+    const previous = clockSample.current;
+    clockSample.current = {
+      localTimeSeconds: options.localTimeSeconds,
+      nowMilliseconds,
+      playing: options.shouldPlay,
+      sourceKey: options.sourceKey,
+    };
+    if (!followsNativeClock(previous, clockSample.current)) lifecycle.current?.seek(options.localTimeSeconds);
+  }, [options.localTimeSeconds, options.shouldPlay, options.sourceKey]);
 
   const ready = () => report.current({ resourceId: options.resourceId, state: "ready" });
   const fail = () => report.current({ resourceId: options.resourceId, state: "failed" });
@@ -121,4 +139,12 @@ export function useSceneMediaTrack<T extends HTMLMediaElement>(options: SceneMed
       },
     },
   };
+}
+
+/** Normal rAF progress follows the native clock; scrubbing, wraparound and state changes seek explicitly. */
+function followsNativeClock(previous: ClockSample | undefined, current: ClockSample): boolean {
+  if (!previous?.playing || !current.playing || previous.sourceKey !== current.sourceKey) return false;
+  const playheadElapsed = current.localTimeSeconds - previous.localTimeSeconds;
+  const wallElapsed = Math.max(0, (current.nowMilliseconds - previous.nowMilliseconds) / 1_000);
+  return playheadElapsed >= 0 && Math.abs(playheadElapsed - wallElapsed) <= 0.12;
 }

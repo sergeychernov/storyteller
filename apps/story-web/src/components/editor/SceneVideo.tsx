@@ -67,9 +67,13 @@ export const SceneVideo = forwardRef<SceneMediaHandle, SceneMediaProps & {
 
   const playFromGesture = (localTimeSeconds: number) => {
     if (!props.active || !props.slot.audioEnabled || playbackEnded) return;
-    if (hasProcessedAudio && audio.mediaRef.current) {
-      audio.mediaRef.current.muted = false;
-      audio.playFromGesture(localTimeSeconds);
+    if (hasProcessedAudio) {
+      // Schedule both tracks in the same user gesture; neither should get a head start on mobile.
+      visual.playFromGesture(localTimeSeconds);
+      if (audio.mediaRef.current) {
+        audio.mediaRef.current.muted = false;
+        audio.playFromGesture(localTimeSeconds);
+      }
     } else if (visual.mediaRef.current) {
       visual.mediaRef.current.muted = false;
       visual.playFromGesture(localTimeSeconds);
@@ -105,8 +109,8 @@ export const SceneVideo = forwardRef<SceneMediaHandle, SceneMediaProps & {
       muted={muted}
       hasAudio={props.material.hasAudio && props.slot.audioEnabled}
       onPlay={() => {
-        visual.playFromGesture(props.localTimeSeconds);
-        if (!muted) playFromGesture(props.localTimeSeconds);
+        if (!muted && props.slot.audioEnabled) playFromGesture(props.localTimeSeconds);
+        else visual.playFromGesture(props.localTimeSeconds);
       }}
       onTogglePlayback={() => props.onTogglePlayback?.()}
       onToggleMuted={() => {
