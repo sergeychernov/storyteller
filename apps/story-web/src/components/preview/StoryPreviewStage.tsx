@@ -1,5 +1,7 @@
+import { forwardRef, useImperativeHandle, useRef } from "react";
 import type { AuthSession, Story, StoryTimeline } from "../../api.js";
 import type { EditorCopy } from "../editor/editor-copy.js";
+import type { ScenePlayerHandle } from "../editor/ScenePlayer.js";
 import { nextPlayableTimelineIndex } from "./story-preview-model.js";
 import { StoryPreviewScene } from "./StoryPreviewScene.js";
 import type { StoryPreviewSnapshot } from "./use-story-preview-controller.js";
@@ -19,8 +21,18 @@ interface StoryPreviewStageProps {
   readonly onUnexpectedPause: (timelineIndex: number) => void;
 }
 
-export function StoryPreviewStage(props: StoryPreviewStageProps) {
+export interface StoryPreviewStageHandle {
+  readonly playAudibleFromGesture: () => void;
+}
+
+export const StoryPreviewStage = forwardRef<StoryPreviewStageHandle, StoryPreviewStageProps>(function StoryPreviewStage(props, ref) {
+  const players = useRef(new Map<number, ScenePlayerHandle>());
   const currentIndex = props.snapshot.currentTimelineIndex;
+  useImperativeHandle(ref, () => ({
+    playAudibleFromGesture() {
+      if (currentIndex !== undefined) players.current.get(currentIndex)?.playAudibleFromGesture();
+    },
+  }), [currentIndex]);
   if (currentIndex === undefined) return <div className={styles.emptyCanvas} />;
   const nextIndex = nextPlayableTimelineIndex(props.timeline, currentIndex);
   const indexes = nextIndex === undefined ? [currentIndex] : [currentIndex, nextIndex];
@@ -34,6 +46,10 @@ export function StoryPreviewStage(props: StoryPreviewStageProps) {
       return <div className={active ? styles.currentShell : styles.nextShell} data-preview-shell={active ? "current" : "next"}
         key={`${props.snapshot.retryKey}:${timelineIndex}`}>
         <StoryPreviewScene
+          ref={(handle) => {
+            if (handle) players.current.set(timelineIndex, handle);
+            else players.current.delete(timelineIndex);
+          }}
           storyId={props.story.id}
           session={props.session}
           scene={scene}
@@ -56,4 +72,4 @@ export function StoryPreviewStage(props: StoryPreviewStageProps) {
       </div>;
     })}
   </div>;
-}
+});

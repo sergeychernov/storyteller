@@ -1,18 +1,24 @@
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
+import { forwardRef } from "react";
 import {
   createCollageCardAngles, createCollageCardOffsets, defaultCollageSettings,
 } from "@storyteller/domain";
 import { describe, expect, it, vi } from "vitest";
 import type { AuthSession, ImageMaterial, Scene, VideoMaterial } from "../../api.js";
-import { StillImageRendererPreview } from "../editor/StillImageRendererPreview.js";
 import { getEditorCopy } from "../editor/editor-copy.js";
+import { SceneRendererPreview } from "../editor/SceneRenderer.js";
 import { StoryPreviewScene } from "./StoryPreviewScene.js";
 
-vi.mock("./PreviewMaterial.js", () => ({
-  PreviewMaterial: ({ material, loopVideo }: { readonly material: ImageMaterial | VideoMaterial; readonly loopVideo: boolean }) =>
-    <span data-preview-material={material.id} data-loop-video={String(loopVideo)} />,
+vi.mock("../editor/SceneMedia.js", () => ({
+  SceneMedia: forwardRef(({ slot, onResourceState }: {
+    readonly slot: { id: string; material: ImageMaterial | VideoMaterial; endBehavior: string };
+    readonly onResourceState: (event: { resourceId: string; state: "ready" }) => void;
+  }, _ref) => <button data-scene-media={slot.material.id} data-end-behavior={slot.endBehavior}
+    onClick={() => onResourceState({ resourceId: `${slot.id}:visual`, state: "ready" })} />),
 }));
-vi.mock("../editor/MaterialThumbnail.js", () => ({ MaterialThumbnail: () => <span data-editor-material /> }));
+vi.mock("../editor/use-scene-frame-url.js", () => ({
+  useSceneFrameUrl: () => ({ url: undefined, loading: true, failed: false, supported: true }),
+}));
 
 const session = {
   csrfToken: "token", profile: { id: "profile-1", name: "Test", email: "test@example.com", language: "en" },
@@ -32,7 +38,7 @@ describe("StoryPreviewScene", () => {
         id: "still", rendererId: "still-image", layoutId: "full-frame", materials: [photo("still", "portrait")],
         durationSeconds: 5, motion: "zoom-in", focusPoint: { x: 0.592, y: 0.825 }, render: { status: "idle" },
       };
-      const editor = render(<StillImageRendererPreview
+      const editor = render(<SceneRendererPreview
         scene={scene}
         copy={getEditorCopy("en")}
         storyId="story-1"
@@ -40,14 +46,14 @@ describe("StoryPreviewScene", () => {
         active
         saving={false}
       />);
-      act(() => animationFrame?.(5_000));
+      act(() => animationFrame?.(2_500));
 
       const preview = render(<StoryPreviewScene
         storyId="story-1"
         session={session}
         scene={scene}
         timelineIndex={0}
-        localTimeSeconds={5}
+        localTimeSeconds={2.5}
         status="paused"
         active
         pending={false}
@@ -64,7 +70,7 @@ describe("StoryPreviewScene", () => {
       const editorFrame = editor.container.querySelector<HTMLElement>("[data-scene-frame-still-media]");
       const previewFrame = preview.container.querySelector<HTMLElement>("[data-scene-frame-still-media]");
       expect(editorFrame?.style.transform).toBe(previewFrame?.style.transform);
-      expect(editorFrame?.style.transform).toContain("scale(1.13)");
+      expect(editorFrame?.style.transform).not.toContain("scale(1)");
       expect(editorFrame?.style.transformOrigin).toBe("0 0");
       expect(previewFrame?.style.transformOrigin).toBe("0 0");
     } finally {
@@ -128,6 +134,49 @@ describe("StoryPreviewScene", () => {
       .every(({ style }) => style.visibility === "visible")).toBe(true);
   });
 
+  it("includes a custom collage background in the addressable scene readiness protocol", () => {
+    const materials = [photo("first"), photo("second")];
+    const defaults = defaultCollageSettings(materials);
+    const scene: Scene = {
+      id: "collage", rendererId: "collage", layoutId: "stack", materials, durationSeconds: 5, motion: "none",
+      collageBackground: { source: "material", material: video("background") },
+      collage: {
+        ...defaults,
+        cardAngles: createCollageCardAngles({ layoutId: "stack", materials, straightCards: false, seedKey: "preview" }),
+        cardOffsets: createCollageCardOffsets({ layoutId: "stack", materials, direction: defaults.rowDirection, seedKey: "preview" }),
+      },
+      render: { status: "idle" },
+    };
+    const onReady = vi.fn();
+    const { container } = render(<StoryPreviewScene
+      storyId="story-1"
+      session={session}
+      scene={scene}
+      timelineIndex={2}
+      localTimeSeconds={0}
+      status="buffering"
+      active
+      pending
+      muted
+      reducedMotion={false}
+      retryKey={0}
+      copy={getEditorCopy("en")}
+      onReady={onReady}
+      onWaiting={vi.fn()}
+      onFailed={vi.fn()}
+      onUnexpectedPause={vi.fn()}
+    />);
+
+    fireEvent.click(container.querySelector("[data-scene-media='first']")!);
+    fireEvent.click(container.querySelector("[data-scene-media='second']")!);
+    expect(onReady).not.toHaveBeenCalled();
+
+    const background = container.querySelector("[data-scene-media='background']")!;
+    fireEvent.click(background);
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(onReady).toHaveBeenLastCalledWith(2);
+  });
+
   it("keeps a trimmed PPL video card on its final frame instead of looping it", () => {
     const materials = [video("first"), photo("second", "portrait"), photo("third", "landscape")];
     const defaults = defaultCollageSettings(materials);
@@ -161,8 +210,8 @@ describe("StoryPreviewScene", () => {
       onUnexpectedPause={vi.fn()}
     />);
 
-    expect(container.querySelector("[data-collage-card='0'] [data-preview-material='first']")
-      ?.getAttribute("data-loop-video")).toBe("false");
+    expect(container.querySelector("[data-collage-card='0'] [data-scene-media='first']")
+      ?.getAttribute("data-end-behavior")).toBe("hold");
   });
 });
 

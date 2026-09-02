@@ -129,11 +129,11 @@ export async function getMaterialContent(token: string, storyId: string, materia
 export function getMaterialContentAccess(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<{ url: string | null; expiresAt?: string }> {
   return request(`/stories/${storyId}/materials/${materialId}/content-access`, signal ? { signal } : {}, token);
 }
-export async function getMaterialSourceContent(token: string, storyId: string, materialId: string): Promise<Blob> {
-  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/source-content`, {}, token);
+export async function getMaterialSourceContent(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<Blob> {
+  return apiClient.blob(`/stories/${storyId}/materials/${materialId}/source-content`, signal ? { signal } : {}, token);
 }
-export function getMaterialSourceContentAccess(token: string, storyId: string, materialId: string): Promise<{ url: string | null; expiresAt?: string }> {
-  return request(`/stories/${storyId}/materials/${materialId}/source-content-access`, {}, token);
+export function getMaterialSourceContentAccess(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<{ url: string | null; expiresAt?: string }> {
+  return request(`/stories/${storyId}/materials/${materialId}/source-content-access`, signal ? { signal } : {}, token);
 }
 export function getMaterialWaveform(token: string, storyId: string, materialId: string, signal?: AbortSignal): Promise<{ peaks: number[] }> {
   return request(`/stories/${storyId}/materials/${materialId}/waveform`, signal ? { signal } : {}, token);

@@ -1,17 +1,23 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthSession, SceneMaterial } from "../../api.js";
-import { usePreviewResourceUrl } from "./use-preview-resource-url.js";
+import { useMaterialContentUrl } from "./use-material-content-url.js";
 
 const transport = vi.hoisted(() => ({
   access: vi.fn(), content: vi.fn(), audioAccess: vi.fn(), audioContent: vi.fn(),
 }));
 
 vi.mock("../../api.js", () => ({
+  getMaterialPresentation: (value: SceneMaterial) => value,
+  getMaterialSource: (value: SceneMaterial) => value,
   getMaterialContentAccess: transport.access,
   getMaterialContent: transport.content,
   getMaterialAudioContentAccess: transport.audioAccess,
   getMaterialAudioContent: transport.audioContent,
+  getMaterialSourceContentAccess: vi.fn(),
+  getMaterialSourceContent: vi.fn(),
 }));
 
 const session = {
@@ -19,12 +25,11 @@ const session = {
 } as AuthSession;
 const createObjectUrl = vi.fn((blob: Blob) => `blob:preview-${blob.size}-${createObjectUrl.mock.calls.length}`);
 const revokeObjectUrl = vi.fn();
+let queryClient: QueryClient;
 
 beforeEach(() => {
-  transport.access.mockReset();
-  transport.content.mockReset();
-  transport.audioAccess.mockReset();
-  transport.audioContent.mockReset();
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  for (const mock of Object.values(transport)) mock.mockReset();
   createObjectUrl.mockClear();
   revokeObjectUrl.mockClear();
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrl });
@@ -33,7 +38,45 @@ beforeEach(() => {
   transport.content.mockImplementation(async () => new Blob(["preview"]));
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  queryClient.clear();
+  vi.restoreAllMocks();
+});
+
+const wrapper = ({ children }: { readonly children: ReactNode }) =>
+  <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+
+describe("owned material content", () => {
+  it("keeps Blob resources constant across 30 scene transitions and releases the final resource", async () => {
+    const { result, rerender, unmount } = renderHook(({ current }) => useMaterialContentUrl({
+      storyId: "story-1", material: current, session, lifecycle: "owned", retryKey: 0,
+    }), { initialProps: { current: material(0) }, wrapper });
+
+    for (let index = 0; index < 30; index += 1) {
+      if (index > 0) rerender({ current: material(index) });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(createObjectUrl.mock.calls.length - revokeObjectUrl.mock.calls.length).toBe(1);
+    }
+    unmount();
+    expect(createObjectUrl).toHaveBeenCalledTimes(30);
+    expect(revokeObjectUrl).toHaveBeenCalledTimes(30);
+  });
+
+  it("aborts an in-flight Blob fallback without creating a URL", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    transport.content.mockImplementation(async (_token: string, _storyId: string, _materialId: string, signal: AbortSignal) => {
+      capturedSignal = signal;
+      return await new Promise<Blob>(() => undefined);
+    });
+    const { unmount } = renderHook(() => useMaterialContentUrl({
+      storyId: "story-1", material: material(0), session, lifecycle: "owned", retryKey: 0,
+    }), { wrapper });
+    await waitFor(() => expect(capturedSignal).toBeDefined());
+    unmount();
+    await waitFor(() => expect(capturedSignal?.aborted).toBe(true));
+    expect(createObjectUrl).not.toHaveBeenCalled();
+  });
+});
 
 function material(index: number): SceneMaterial {
   if (index % 3 === 0) return {
@@ -45,43 +88,3 @@ function material(index: number): SceneMaterial {
     mimeType: "image/jpeg", sizeBytes: 7, width: 1080, height: 1920,
   };
 }
-
-describe("preview-specific resource loader", () => {
-  it("keeps Blob resources constant across 30 scene transitions and releases the final resource", async () => {
-    const abortSignals: AbortSignal[] = [];
-    transport.access.mockImplementation(async (_token: string, _storyId: string, _materialId: string, signal: AbortSignal) => {
-      abortSignals.push(signal);
-      return { url: null };
-    });
-    const { result, rerender, unmount } = renderHook(({ current }) => usePreviewResourceUrl({
-      storyId: "story-1", material: current, session, retryKey: 0,
-    }), { initialProps: { current: material(0) } });
-
-    for (let index = 0; index < 30; index += 1) {
-      if (index > 0) rerender({ current: material(index) });
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      expect(createObjectUrl.mock.calls.length - revokeObjectUrl.mock.calls.length).toBe(1);
-    }
-    unmount();
-
-    expect(createObjectUrl).toHaveBeenCalledTimes(30);
-    expect(revokeObjectUrl).toHaveBeenCalledTimes(30);
-    expect(abortSignals).toHaveLength(30);
-    expect(abortSignals.every(({ aborted }) => aborted)).toBe(true);
-  });
-
-  it("aborts an in-flight Blob fallback without creating a URL", async () => {
-    let capturedSignal: AbortSignal | undefined;
-    transport.content.mockImplementation(async (_token: string, _storyId: string, _materialId: string, signal: AbortSignal) => {
-      capturedSignal = signal;
-      return await new Promise<Blob>(() => undefined);
-    });
-    const { unmount } = renderHook(() => usePreviewResourceUrl({
-      storyId: "story-1", material: material(0), session, retryKey: 0,
-    }));
-    await waitFor(() => expect(capturedSignal).toBeDefined());
-    unmount();
-    expect(capturedSignal?.aborted).toBe(true);
-    expect(createObjectUrl).not.toHaveBeenCalled();
-  });
-});

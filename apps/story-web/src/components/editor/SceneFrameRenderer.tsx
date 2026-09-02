@@ -4,39 +4,30 @@ import {
   resolveCollageSettings, verticalStoryFrame,
 } from "@storyteller/domain";
 import { useEffect, useMemo, type CSSProperties, type ReactNode } from "react";
-import { getMaterialPresentation, type Scene, type SceneMaterial } from "../../api.js";
+import { getMaterialPresentation } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import { CollageCard } from "./CollageCard.js";
 import { formatCollageLayoutUnavailable } from "./collage-layout-message.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { resolveEditorRenderer } from "./scene-renderer-model.js";
+import type { ScenePlaybackPlan, ScenePlaybackSlot } from "./scene-playback-plan.js";
 import styles from "./SceneFrameRenderer.module.css";
 
-export type SceneFrameMaterialRole = "still-image" | "layout" | "collage-card";
-
-export interface SceneFrameMaterialContext {
-  readonly material: SceneMaterial;
-  readonly index: number;
-  readonly role: SceneFrameMaterialRole;
-  readonly audioEnabled: boolean;
-  readonly loopVideo: boolean;
-}
-
 interface SceneFrameRendererProps {
-  readonly scene: Scene;
+  readonly plan: ScenePlaybackPlan;
   readonly copy: EditorCopy;
   readonly localTimeSeconds: number;
   readonly reducedMotion: boolean;
-  readonly renderMaterial: (context: SceneFrameMaterialContext) => ReactNode;
+  readonly renderMaterial: (slot: ScenePlaybackSlot) => ReactNode;
   readonly collageBackground?: ReactNode | undefined;
   readonly onUnavailable?: (() => void) | undefined;
 }
 
 /** Pure visual scene renderer. Callers own clocks, media resources and playback lifecycle. */
 export function SceneFrameRenderer(props: SceneFrameRendererProps) {
-  const renderer = resolveEditorRenderer(props.scene);
+  const renderer = resolveEditorRenderer(props.plan.scene);
   if (renderer === "still-image") return <StillImageFrame {...props} />;
-  if (props.scene.rendererId === "collage") return <CollageFrame {...props} />;
+  if (props.plan.scene.rendererId === "collage") return <CollageFrame {...props} />;
   return <LayoutFrame {...props} />;
 }
 
@@ -51,18 +42,20 @@ export function SceneFrameCollageBackground({ children, treated = false, mode }:
 }
 
 function StillImageFrame(props: SceneFrameRendererProps) {
-  const material = props.scene.materials[0];
-  if (material?.kind !== "image") return null;
+  const scene = props.plan.scene;
+  const playbackSlot = props.plan.slots[0];
+  const material = playbackSlot?.material;
+  if (!playbackSlot || material?.kind !== "image") return null;
   const presentation = getMaterialPresentation(material);
   const plan = useMemo(() => createStillImageMotionPlan({
     sourceSize: { width: presentation.width, height: presentation.height },
     frameSize: verticalStoryFrame,
     orientation: presentation.orientation,
-    motion: props.scene.motion,
-    focusPoint: props.scene.focusPoint ?? centeredFocusPoint,
-  }), [presentation.height, presentation.orientation, presentation.width, props.scene.focusPoint, props.scene.motion]);
-  const progress = props.reducedMotion || props.scene.motion === "none" || props.scene.durationSeconds <= 0
-    ? 0 : Math.min(1, Math.max(0, props.localTimeSeconds / props.scene.durationSeconds));
+    motion: scene.motion,
+    focusPoint: scene.focusPoint ?? centeredFocusPoint,
+  }), [presentation.height, presentation.orientation, presentation.width, scene.focusPoint, scene.motion]);
+  const progress = props.reducedMotion || scene.motion === "none" || scene.durationSeconds <= 0
+    ? 0 : Math.min(1, Math.max(0, props.localTimeSeconds / scene.durationSeconds));
   const frame = evaluateStillImageMotion(plan, progress);
   return <div className={classNames(styles.material, styles[presentation.orientation], styles.fullFrameMaterial)}>
     <div className={styles.stillMedia} data-scene-frame-still-media style={{
@@ -70,15 +63,17 @@ function StillImageFrame(props: SceneFrameRendererProps) {
       transformOrigin: "0 0",
       transform: `translate(${frame.offsetX / plan.geometry.width * 100}%, ${frame.offsetY / plan.geometry.height * 100}%) scale(${frame.scale})`,
     }}>
-      {props.renderMaterial({ material, index: 0, role: "still-image", audioEnabled: false, loopVideo: false })}
+      {props.renderMaterial(playbackSlot)}
     </div>
   </div>;
 }
 
 function LayoutFrame(props: SceneFrameRendererProps) {
-  const fullFrame = props.scene.layoutId === "full-frame" || props.scene.materials.length === 1;
-  const overlap = props.scene.layoutId === "overlap-stack";
-  return <>{props.scene.materials.map((material, index) => {
+  const scene = props.plan.scene;
+  const fullFrame = scene.layoutId === "full-frame" || props.plan.slots.length === 1;
+  const overlap = scene.layoutId === "overlap-stack";
+  return <>{props.plan.slots.map((playbackSlot) => {
+    const { material, index } = playbackSlot;
     const presentation = getMaterialPresentation(material);
     return <div className={classNames(
       styles.material,
@@ -86,17 +81,16 @@ function LayoutFrame(props: SceneFrameRendererProps) {
       fullFrame && styles.fullFrameMaterial,
       overlap && styles.overlapMaterial,
     )} key={material.id} style={{ "--material-index": index } as CSSProperties}>
-      {props.renderMaterial({
-        material, index, role: "layout", audioEnabled: index === 0, loopVideo: props.scene.materials.length > 1,
-      })}
+      {props.renderMaterial(playbackSlot)}
     </div>;
   })}</>;
 }
 
 function CollageFrame(props: SceneFrameRendererProps) {
-  const settings = resolveCollageSettings(props.scene.materials, props.scene.collage, props.scene.durationSeconds);
-  const cards = collageCardMaterials(props.scene.materials, settings);
-  const layout = getSelectedCollageLayout(cards, props.scene.layoutId);
+  const scene = props.plan.scene;
+  const settings = resolveCollageSettings(scene.materials, scene.collage, scene.durationSeconds);
+  const cards = props.plan.slots.map(({ material }) => material);
+  const layout = getSelectedCollageLayout(cards, scene.layoutId);
   useEffect(() => {
     if (!layout) props.onUnavailable?.();
   }, [layout, props.onUnavailable]);
@@ -109,7 +103,8 @@ function CollageFrame(props: SceneFrameRendererProps) {
   });
   return <>
     {props.collageBackground}
-    {cards.map((material, index) => {
+    {props.plan.slots.map((playbackSlot, index) => {
+      const { material } = playbackSlot;
       const entrance = schedule[index]!;
       const transform = evaluateCollageEntrance(entrance, props.localTimeSeconds, props.reducedMotion);
       return <CollageCard
@@ -123,7 +118,7 @@ function CollageFrame(props: SceneFrameRendererProps) {
           left: `${entrance.x / 10.8}%`, top: `${entrance.y / 19.2}%`, zIndex: entrance.stackOrder + 1,
           transform: transform.transform, visibility: transform.visible ? "visible" : "hidden",
         }}
-      >{props.renderMaterial({ material, index, role: "collage-card", audioEnabled: false, loopVideo: false })}</CollageCard>;
+      >{props.renderMaterial(playbackSlot)}</CollageCard>;
     })}
   </>;
 }

@@ -8,7 +8,7 @@ import { useMediaQuery } from "../editor/use-media-query.js";
 import { getPreviewCopy, interpolatePreviewCopy } from "./preview-copy.js";
 import { PreviewScrubber } from "./PreviewScrubber.js";
 import { formatPreviewClock, positionAtPlayhead } from "./story-preview-model.js";
-import { StoryPreviewStage } from "./StoryPreviewStage.js";
+import { StoryPreviewStage, type StoryPreviewStageHandle } from "./StoryPreviewStage.js";
 import { useStoryPreviewController } from "./use-story-preview-controller.js";
 import { useLocalization } from "@storyteller/web-ui";
 import styles from "./StoryPreview.module.css";
@@ -27,7 +27,7 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
   const desktop = useMediaQuery("(min-width: 768px)");
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const [muted, setMuted] = useState(true);
-  const previewRoot = useRef<HTMLElement>(null);
+  const stage = useRef<StoryPreviewStageHandle>(null);
   const trackCompleted = useCallback(() => {
     analytics.track("story preview completed", { web_layout: desktop ? "desktop" : "mobile_web" });
   }, [desktop]);
@@ -39,36 +39,18 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
   const containsAudio = story.scenes.some((scene) => scene.materials.some((material) => material.kind === "video" && material.hasAudio));
   const playing = controller.snapshot.status === "playing" || controller.snapshot.status === "buffering";
 
-  const resumeAudibleMedia = () => {
-    if (muted) return;
-    const media = previewRoot.current?.querySelectorAll<HTMLMediaElement>(
-      '[data-preview-shell="current"] audio[data-preview-processed-audio="true"][data-preview-audio-enabled="true"], '
-      + '[data-preview-shell="current"] video[data-preview-native-audio="true"][data-preview-audio-enabled="true"]',
-    );
-    for (const element of media ?? []) {
-      element.muted = false;
-      if (element.paused) void element.play().catch(() => undefined);
-    }
-  };
   const play = () => {
-    resumeAudibleMedia();
+    if (!muted) stage.current?.playAudibleFromGesture();
     controller.play();
   };
   const toggleSound = () => {
     const enabling = muted;
     setMuted(!muted);
     if (!enabling || controller.snapshot.status !== "playing") return;
-    const media = previewRoot.current?.querySelectorAll<HTMLMediaElement>(
-      '[data-preview-shell="current"] audio[data-preview-processed-audio="true"][data-preview-audio-enabled="true"], '
-      + '[data-preview-shell="current"] video[data-preview-native-audio="true"][data-preview-audio-enabled="true"]',
-    );
-    for (const element of media ?? []) {
-      element.muted = false;
-      if (element.paused) void element.play().catch(() => undefined);
-    }
+    stage.current?.playAudibleFromGesture();
   };
 
-  return <section className={styles.page} ref={previewRoot}>
+  return <section className={styles.page}>
     <header className={styles.header}>
       <Link className={styles.back} to={returnTo}>← {previewCopy.back}</Link>
       <div className={styles.storyTitle}>{story.title || editorCopy.untitledStory}</div>
@@ -81,6 +63,7 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
       <div className={styles.canvasArea}>
         <span className={styles.canvasBadge}>{previewCopy.canvas} · 9:16</span>
         <StoryPreviewStage
+          ref={stage}
           story={story}
           timeline={timeline}
           session={session}

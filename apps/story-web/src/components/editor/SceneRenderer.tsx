@@ -1,16 +1,16 @@
-import {
-  forwardRef, useCallback, useEffect, useImperativeHandle, useRef,
-  type ComponentType, type ForwardRefExoticComponent, type RefAttributes,
-} from "react";
+import { forwardRef, useEffect, useState, type ComponentType } from "react";
 import type { AuthSession, Scene } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
-import { LayoutRendererPreview } from "./LayoutRendererPreview.js";
+import { FocusPointEditor } from "./FocusPointEditor.js";
 import { LayoutRendererSettings } from "./LayoutRendererSettings.js";
 import { resolveEditorRenderer, type EditorRendererKind } from "./scene-renderer-model.js";
+import { ScenePlayer } from "./ScenePlayer.js";
 import type { SceneChange } from "./story-editor-view.js";
-import { StillImageRendererPreview } from "./StillImageRendererPreview.js";
 import { StillImageRendererSettings } from "./StillImageRendererSettings.js";
-import type { ScenePreviewLifecycle } from "./scene-preview-lifecycle.js";
+import { useScenePreviewInitialization, type ScenePreviewLifecycle } from "./scene-preview-lifecycle.js";
+import { useLoopingSceneTime } from "./use-looping-scene-time.js";
+import { useMediaQuery } from "./use-media-query.js";
+import styles from "./SceneCanvas.module.css";
 
 export interface SceneRendererPreviewProps {
   readonly scene: Scene;
@@ -32,32 +32,47 @@ export interface SceneRendererSettingsProps {
   readonly onChange: (change: SceneChange) => void;
 }
 
-interface SceneRendererDefinition {
-  readonly Preview: ForwardRefExoticComponent<SceneRendererPreviewProps & RefAttributes<ScenePreviewLifecycle>>;
-  readonly Settings: ComponentType<SceneRendererSettingsProps>;
-}
-
-const sceneRenderers: Readonly<Record<EditorRendererKind, SceneRendererDefinition>> = {
-  "still-image": { Preview: StillImageRendererPreview, Settings: StillImageRendererSettings },
-  layout: { Preview: LayoutRendererPreview, Settings: LayoutRendererSettings },
+const settingsByRenderer: Readonly<Record<EditorRendererKind, ComponentType<SceneRendererSettingsProps>>> = {
+  "still-image": StillImageRendererSettings,
+  layout: LayoutRendererSettings,
 };
 
-export const SceneRendererPreview = forwardRef<ScenePreviewLifecycle, SceneRendererPreviewProps>(function SceneRendererPreview(props, ref) {
-  const Preview = sceneRenderers[resolveEditorRenderer(props.scene)].Preview;
-  const preview = useRef<ScenePreviewLifecycle>(null);
-  const initializeScene = useCallback(() => preview.current?.initializeScene(), []);
-  useImperativeHandle(ref, () => ({ initializeScene }), [initializeScene]);
-
-  useEffect(() => {
-    if (!props.active || props.scene.durationSeconds <= 0) return;
-    const interval = window.setInterval(initializeScene, props.scene.durationSeconds * 1_000);
-    return () => window.clearInterval(interval);
-  }, [initializeScene, props.active, props.scene.durationSeconds, props.scene.id]);
-
-  return <Preview key={`${props.scene.id}:${resolveEditorRenderer(props.scene)}`} ref={preview} {...props} />;
+/** Editor policy around the same ScenePlayer used by continuous story preview. */
+export const SceneRendererPreview = forwardRef<ScenePreviewLifecycle, SceneRendererPreviewProps>(function SceneRendererPreview(
+  props,
+  ref,
+) {
+  const generation = useScenePreviewInitialization(ref);
+  const [playing, setPlaying] = useState(true);
+  useEffect(() => setPlaying(true), [generation, props.scene.id]);
+  const localTimeSeconds = useLoopingSceneTime(props.active && playing, props.scene.durationSeconds, generation);
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  if (!props.scene.materials.length) return <div className={styles.empty}><span>＋</span>{props.copy.emptyScene}</div>;
+  return <ScenePlayer
+    key={generation}
+    scene={props.scene}
+    previousScene={props.previousScene}
+    copy={props.copy}
+    storyId={props.storyId}
+    session={props.session}
+    localTimeSeconds={localTimeSeconds}
+    playing={props.active && playing}
+    active={props.active}
+    muted
+    reducedMotion={reducedMotion}
+    preload={props.active ? "auto" : "metadata"}
+    retryKey={generation}
+    editorMediaControls={{ onTogglePlayback: () => setPlaying((current) => !current) }}
+    renderSlotOverlay={(slot) => slot.role === "still-image" && props.onChange ? <FocusPointEditor
+      focusPoint={props.scene.focusPoint ?? { x: 0.5, y: 0.5 }}
+      label={props.copy.moveFocusPoint}
+      disabled={props.saving}
+      onCommit={(focusPoint) => props.onChange?.({ focusPoint })}
+    /> : undefined}
+  />;
 });
 
 export function SceneRendererSettings(props: SceneRendererSettingsProps) {
-  const Settings = sceneRenderers[resolveEditorRenderer(props.scene)].Settings;
+  const Settings = settingsByRenderer[resolveEditorRenderer(props.scene)];
   return <Settings {...props} />;
 }

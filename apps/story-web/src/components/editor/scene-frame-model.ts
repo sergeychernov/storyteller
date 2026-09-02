@@ -10,6 +10,11 @@ export function supportsSceneFrame(scene: Scene): boolean {
 
 /** UI cache identity mirrors base visual inputs and deliberately excludes labels and render status. */
 export function sceneFrameCacheKey(scene: Scene): string {
+  return sceneVisualIdentity(scene);
+}
+
+/** Stable identity for every field that can change the rendered scene. */
+export function sceneVisualIdentity(scene: Scene): string {
   return JSON.stringify({
     id: scene.id,
     rendererId: scene.rendererId,

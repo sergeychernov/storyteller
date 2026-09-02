@@ -6,19 +6,17 @@ import {
 import { describe, expect, test, vi } from "vitest";
 import { createRef } from "react";
 import type { AuthSession, ImageMaterial, Scene, VideoMaterial } from "../../api.js";
-import { CollageRendererPreview } from "./CollageRendererPreview.js";
 import { getEditorCopy } from "./editor-copy.js";
 import { SceneRendererPreview } from "./SceneRenderer.js";
 import type { ScenePreviewLifecycle } from "./scene-preview-lifecycle.js";
-import { StillImageRendererPreview } from "./StillImageRendererPreview.js";
 
 vi.mock("./MaterialThumbnail.js", () => ({ MaterialThumbnail: () => <span /> }));
-vi.mock("./CollageVideo.js", () => ({
-  CollageVideo: ({ loop = false, material }: { loop?: boolean; material: VideoMaterial }) =>
-    <video data-collage-video={material.id} data-loop={String(loop)} />,
+vi.mock("./SceneMedia.js", () => ({
+  SceneMedia: ({ slot }: { slot: { material: VideoMaterial; endBehavior: string } }) =>
+    <video data-scene-media={slot.material.id} data-end-behavior={slot.endBehavior} />,
 }));
 
-describe("CollageRendererPreview", () => {
+describe("shared editor ScenePlayer", () => {
   test("renders the entrance from the shared controlled scene frame", () => {
     const materials = [photo("first"), photo("second")];
     const defaults = defaultCollageSettings(materials);
@@ -38,7 +36,7 @@ describe("CollageRendererPreview", () => {
       },
       render: { status: "idle" },
     };
-    const { container } = render(<CollageRendererPreview
+    const { container } = render(<SceneRendererPreview
       scene={scene}
       copy={getEditorCopy("en")}
       storyId="story"
@@ -103,7 +101,7 @@ describe("CollageRendererPreview", () => {
       render: { status: "idle" },
     };
 
-    const { container } = render(<CollageRendererPreview scene={scene} copy={getEditorCopy("en")}
+    const { container } = render(<SceneRendererPreview scene={scene} copy={getEditorCopy("en")}
       storyId="story" session={session} active saving={false} />);
     const schedule = createCollageSchedule(scene);
 
@@ -116,7 +114,7 @@ describe("CollageRendererPreview", () => {
     const materials = [photo("first"), photo("second")];
     const scene = collageScene(materials, 5);
     const lifecycle = createRef<ScenePreviewLifecycle>();
-    const { container } = render(<CollageRendererPreview ref={lifecycle} scene={scene} copy={getEditorCopy("en")}
+    const { container } = render(<SceneRendererPreview ref={lifecycle} scene={scene} copy={getEditorCopy("en")}
       storyId="story" session={session} active saving={false} />);
     const firstCard = container.querySelector("[data-collage-card='0']");
 
@@ -125,36 +123,19 @@ describe("CollageRendererPreview", () => {
     expect(container.querySelector("[data-collage-card='0']")).not.toBe(firstCard);
   });
 
-  test("common scene preview initializes the renderer at every scene boundary", () => {
-    vi.useFakeTimers();
-    try {
-      const materials = [photo("first"), photo("second")];
-      const scene = collageScene(materials, 5);
-      const { container } = render(<SceneRendererPreview scene={scene} copy={getEditorCopy("en")}
-        storyId="story" session={session} active saving={false} />);
-      const firstCard = container.querySelector("[data-collage-card='0']");
-
-      act(() => vi.advanceTimersByTime(5_000));
-
-      expect(container.querySelector("[data-collage-card='0']")).not.toBe(firstCard);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   test("still-image preview implements the same initialization lifecycle", () => {
     const lifecycle = createRef<ScenePreviewLifecycle>();
     const scene: Scene = {
       id: "still-lifecycle", rendererId: "still-image", materials: [photo("single")],
       durationSeconds: 5, motion: "none", render: { status: "idle" },
     };
-    const { container } = render(<StillImageRendererPreview ref={lifecycle} scene={scene} copy={getEditorCopy("en")}
+    const { container } = render(<SceneRendererPreview ref={lifecycle} scene={scene} copy={getEditorCopy("en")}
       storyId="story" session={session} active saving={false} />);
-    const firstMaterial = container.querySelector("span");
+    const firstMaterial = container.querySelector("[data-scene-media='single']");
 
     act(() => lifecycle.current?.initializeScene());
 
-    expect(container.querySelector("span")).not.toBe(firstMaterial);
+    expect(container.querySelector("[data-scene-media='single']")).not.toBe(firstMaterial);
   });
 
   test("paints cards by appearance order when a layout enters from bottom to top", () => {
@@ -174,7 +155,7 @@ describe("CollageRendererPreview", () => {
       },
       render: { status: "idle" },
     };
-    const { container } = render(<CollageRendererPreview
+    const { container } = render(<SceneRendererPreview
       scene={scene}
       copy={getEditorCopy("en")}
       storyId="story"
@@ -203,7 +184,7 @@ describe("CollageRendererPreview", () => {
       render: { status: "idle" },
     };
     const props = { copy: getEditorCopy("en"), storyId: "story", session, active: true, saving: false };
-    const { container, rerender } = render(<CollageRendererPreview scene={scene} {...props} />);
+    const { container, rerender } = render(<SceneRendererPreview scene={scene} {...props} />);
     const cardTop = (index: number) => Number.parseFloat(
       container.querySelector<HTMLElement>(`[data-collage-card='${index}']`)!.style.top,
     ) * 19.2;
@@ -211,7 +192,7 @@ describe("CollageRendererPreview", () => {
     expect(rise).toBeGreaterThanOrEqual(20);
     expect(rise).toBeLessThanOrEqual(40);
 
-    rerender(<CollageRendererPreview scene={{
+    rerender(<SceneRendererPreview scene={{
       ...scene, collage: {
         ...scene.collage!, rowDirection: "descending",
         cardOffsets: createCollageCardOffsets({
@@ -240,12 +221,12 @@ describe("CollageRendererPreview", () => {
       },
       render: { status: "idle" },
     };
-    const { container } = render(<CollageRendererPreview scene={scene} copy={getEditorCopy("en")}
+    const { container } = render(<SceneRendererPreview scene={scene} copy={getEditorCopy("en")}
       storyId="story" session={session} active saving={false} />);
 
-    const videoElement = container.querySelector("[data-collage-video='first']");
+    const videoElement = container.querySelector("[data-collage-card='0'] [data-scene-media='first']");
     expect(videoElement).not.toBeNull();
-    expect(videoElement?.getAttribute("data-loop")).toBe("false");
+    expect(videoElement?.getAttribute("data-end-behavior")).toBe("hold");
     expect(videoElement?.closest("[data-collage-card='0']")).not.toBeNull();
     expect(container.querySelectorAll("[data-collage-card]")).toHaveLength(2);
   });
@@ -269,12 +250,12 @@ describe("CollageRendererPreview", () => {
       },
       render: { status: "idle" },
     };
-    const { container } = render(<CollageRendererPreview scene={scene} copy={getEditorCopy("en")}
+    const { container } = render(<SceneRendererPreview scene={scene} copy={getEditorCopy("en")}
       storyId="story" session={session} active saving={false} />);
 
-    expect(container.querySelector("[data-collage-video='background']")?.closest("[data-collage-background-mode='custom-material']"))
+    expect(container.querySelector("[data-scene-media='background']")?.closest("[data-collage-background-mode='custom-material']"))
       .not.toBeNull();
-    expect(container.querySelector("[data-collage-video='background']")?.closest("[data-collage-card]")).toBeNull();
+    expect(container.querySelector("[data-scene-media='background']")?.closest("[data-collage-card]")).toBeNull();
     expect(container.querySelectorAll("[data-collage-card]")).toHaveLength(2);
   });
 });

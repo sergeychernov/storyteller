@@ -1,4 +1,4 @@
-export interface PreviewRendererLifecycle {
+export interface SceneMediaLifecycle {
   readonly prepare: (localTimeSeconds: number) => Promise<void>;
   readonly play: (localTimeSeconds: number) => Promise<void>;
   readonly pause: () => void;
@@ -7,11 +7,13 @@ export interface PreviewRendererLifecycle {
 }
 
 /** One clock owner for native media; all correction uses the same 80 ms drift budget. */
-export function createMediaRendererLifecycle(
+export function createSceneMediaLifecycle(
   media: HTMLMediaElement,
   sourceTime: (localTimeSeconds: number) => number,
-): PreviewRendererLifecycle {
+): SceneMediaLifecycle {
   let disposed = false;
+  let wantsPlayback = false;
+  let pendingPlay: Promise<void> | undefined;
   const pendingCleanups = new Set<() => void>();
   const seek = (localTimeSeconds: number) => {
     if (disposed) return;
@@ -36,20 +38,42 @@ export function createMediaRendererLifecycle(
       });
     },
     async play(localTimeSeconds) {
+      wantsPlayback = true;
       seek(localTimeSeconds);
-      if (media.paused) await media.play();
+      if (!media.paused) return;
+      pendingPlay ??= media.play()
+        .then(() => {
+          if (!wantsPlayback || disposed) media.pause();
+        })
+        .catch((error: unknown) => {
+          // pause(), load() and source replacement reject an outstanding play()
+          // with AbortError. That is lifecycle cancellation, not media failure.
+          if (!wantsPlayback || disposed || isPlayInterruption(error)) return;
+          throw error;
+        })
+        .finally(() => {
+          pendingPlay = undefined;
+        });
+      await pendingPlay;
     },
     pause() {
+      wantsPlayback = false;
       if (!disposed && !media.paused) media.pause();
     },
     seek,
     dispose() {
       if (disposed) return;
       disposed = true;
+      wantsPlayback = false;
       for (const cleanup of pendingCleanups) cleanup();
       media.pause();
       media.removeAttribute("src");
       media.load();
     },
   };
+}
+
+function isPlayInterruption(error: unknown): boolean {
+  return typeof error === "object" && error !== null
+    && "name" in error && (error as { readonly name?: unknown }).name === "AbortError";
 }
