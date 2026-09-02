@@ -33,11 +33,11 @@ const initialScenes: readonly Scene[] = [{
 const timeline: StoryTimeline = {
   storyId: "storybook", revision: 7, sceneOrder: initialScenes.map(({ id }) => id),
   scenes: [
-    { sceneId: "empty", index: 0, materialIds: [], startSeconds: 0, endSeconds: 0, durationSeconds: 0, durationSource: "empty" },
-    { sceneId: "photo", index: 1, materialIds: ["portrait-1"], startSeconds: 0, endSeconds: 5, durationSeconds: 5, durationSource: "scene" },
-    { sceneId: "video", index: 2, materialIds: ["video"], startSeconds: 5, endSeconds: 195, durationSeconds: 190, durationSource: "video" },
+    { sceneId: "empty", index: 0, materialIds: [], startSeconds: 0, endSeconds: 0, durationSeconds: 0, startFrame: 0, endFrame: 0, durationFrames: 0, durationSource: "empty" },
+    { sceneId: "photo", index: 1, materialIds: ["portrait-1"], startSeconds: 0, endSeconds: 5, durationSeconds: 5, startFrame: 0, endFrame: 150, durationFrames: 150, durationSource: "scene" },
+    { sceneId: "video", index: 2, materialIds: ["video"], startSeconds: 5, endSeconds: 195, durationSeconds: 190, startFrame: 150, endFrame: 5850, durationFrames: 5700, durationSource: "video" },
   ],
-  totalDurationSeconds: 195, transitionOverlapSeconds: 0,
+  frameRate: { numerator: 30, denominator: 1 }, totalFrames: 5850, totalDurationSeconds: 195, transitionOverlapSeconds: 0,
   warnings: [{ code: "empty_scene", sceneId: "empty" }],
   formatLimits: [
     { formatId: "youtube-shorts", maxDurationSeconds: 180, requiresVerifiedAccount: false, status: "exceeded", excessSeconds: 15 },

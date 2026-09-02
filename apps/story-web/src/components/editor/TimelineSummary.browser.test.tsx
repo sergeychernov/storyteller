@@ -38,8 +38,9 @@ test("marks an empty scene with visible text in the shared rail", () => {
     onAdd={() => undefined}
     variant="mobileTimeline"
     timeline={{ ...timeline, sceneOrder: ["empty"], scenes: [{
-      sceneId: "empty", index: 0, materialIds: [], startSeconds: 0, endSeconds: 0, durationSeconds: 0, durationSource: "empty",
-    }], totalDurationSeconds: 0, formatLimits: [] }}
+      sceneId: "empty", index: 0, materialIds: [], startSeconds: 0, endSeconds: 0, durationSeconds: 0,
+      startFrame: 0, endFrame: 0, durationFrames: 0, durationSource: "empty",
+    }], totalFrames: 0, totalDurationSeconds: 0, formatLimits: [] }}
   />);
 
   expect(screen.getByText("Empty · 0 sec")).toBeTruthy();
@@ -51,7 +52,7 @@ const timeline: StoryTimeline = {
   revision: 3,
   sceneOrder: ["empty"],
   scenes: [],
-  totalDurationSeconds: 3_613.456,
+  frameRate: { numerator: 30, denominator: 1 }, totalFrames: 108404, totalDurationSeconds: 3_613.456,
   transitionOverlapSeconds: 0,
   warnings: [{ code: "empty_scene", sceneId: "empty" }],
   formatLimits: [

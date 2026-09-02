@@ -46,7 +46,8 @@ const session = {
 
 function timeline(revision: number, totalDurationSeconds: number): StoryTimeline {
   return {
-    storyId: "story", revision, sceneOrder: [], scenes: [], totalDurationSeconds,
+    storyId: "story", revision, sceneOrder: [], scenes: [], frameRate: { numerator: 30, denominator: 1 },
+    totalFrames: Math.round(totalDurationSeconds * 30), totalDurationSeconds,
     transitionOverlapSeconds: 0, warnings: [], formatLimits: [],
   };
 }

@@ -31,6 +31,9 @@ export const storySummarySchema = z.object({
   sceneCount: z.number().int().nonnegative(), revision: z.number().int().positive(),
 });
 export const materialOrientationSchema = z.enum(["portrait", "landscape"]);
+export const rationalFrameRateSchema = z.object({
+  numerator: z.number().int().positive(), denominator: z.number().int().positive(),
+});
 export const videoAudioTagSchema = z.enum(["voice", "music", "ambient"]);
 export const sceneMotionSchema = z.enum(["none", "zoom-in", "zoom-out", "pan-left", "pan-right"]);
 export const focusPointSchema = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
@@ -141,6 +144,7 @@ export const sceneMaterialSchema = z.discriminatedUnion("kind", [
   z.object({
     ...materialFileShape, kind: z.literal("video"), hasAudio: z.boolean(),
     sourceDurationSeconds: z.number().positive(), audioTags: z.array(videoAudioTagSchema),
+    sourceFrameRate: rationalFrameRateSchema.optional(),
     videoTrack: videoTrackSchema.optional(), audioTrack: audioTrackSchema.optional(),
   }),
 ]);
@@ -166,6 +170,12 @@ export const storySchema = z.object({
   status: z.enum(["draft", "rendering", "ready", "publishing", "published"]), scenes: z.array(sceneSchema),
   narrations: z.array(z.object({ id: z.string(), assetId: z.string(), fromSceneId: z.string() })),
   music: z.object({ generationStatus: z.enum(["idle", "queued", "running", "ready", "failed"]), assetId: z.string().optional(), applied: z.boolean() }),
+  outputFrameRate: rationalFrameRateSchema.optional(),
+  approvedMix: z.object({
+    storageKey: z.string(), contentHash: z.string().regex(/^[a-f0-9]{64}$/), mimeType: z.literal("audio/mp4"),
+    sizeBytes: z.number().int().nonnegative(), sampleRate: z.literal(48000), channels: z.literal(2),
+    timelineHash: z.string().regex(/^[a-f0-9]{64}$/), durationFrames: z.number().int().positive(),
+  }).optional(),
   revision: z.number().int().positive(),
 });
 export const reorderSceneMaterialsSchema = z.object({ materialIds: z.array(z.string().uuid()) });
@@ -178,10 +188,12 @@ export const moveSceneMaterialsSchema = z.object({
 }).strict();
 export const storyTimelineSchema = z.object({
   storyId: z.string().uuid(), revision: z.number().int().positive(), sceneOrder: z.array(z.string().uuid()),
+  frameRate: rationalFrameRateSchema, totalFrames: z.number().int().nonnegative(),
   scenes: z.array(z.object({
     sceneId: z.string().uuid(), index: z.number().int().nonnegative(), materialIds: z.array(z.string().uuid()),
     startSeconds: z.number().nonnegative(), endSeconds: z.number().nonnegative(),
     durationSeconds: z.number().nonnegative(), durationSource: z.enum(["empty", "scene", "video", "trim"]),
+    startFrame: z.number().int().nonnegative(), endFrame: z.number().int().nonnegative(), durationFrames: z.number().int().nonnegative(),
   })),
   totalDurationSeconds: z.number().nonnegative(),
   transitionOverlapSeconds: z.literal(0),
@@ -215,6 +227,19 @@ export const sceneRenderSchema = z.object({
 });
 export const sceneFrameSchema = sceneRenderSchema.omit({ artifact: true, mode: true }).extend({
   artifact: z.literal("scene-frame"),
+});
+export const storyExportRequestSchema = z.object({
+  expectedRevision: z.number().int().positive(), outputProfileId: z.literal("vertical-social-v1"),
+}).strict();
+export const storyExportSchema = z.object({
+  id: z.string().uuid(), status: z.enum(["queued", "rendering", "assembling", "ready", "failed", "canceled"]),
+  currentRevision: z.number().int().positive(), storyRevision: z.number().int().positive(),
+  outputProfileId: z.literal("vertical-social-v1"), frameRate: rationalFrameRateSchema,
+  totalFrames: z.number().int().positive(), progressPercent: z.number().int().min(0).max(100),
+  progressPhase: z.enum(["queued", "rendering_segments", "assembling", "uploading", "ready"]),
+  readySegments: z.number().int().nonnegative(), totalSegments: z.number().int().positive(),
+  sizeBytes: z.number().int().nonnegative().optional(),
+  errorCode: z.enum(["story_revision_changed", "segment_failed", "segment_profile_mismatch", "approved_mix_mismatch", "assembly_failed"]).optional(),
 });
 
 export const platformProviderSchema = z.enum(["telegram", "tiktok", "instagram"]);

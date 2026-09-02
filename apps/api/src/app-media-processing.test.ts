@@ -303,10 +303,14 @@ test("detects displayed orientation, rotation and an audio stream from probe dat
     width: 1080, height: 1920, orientation: "portrait", hasAudio: false,
   });
   assert.deepEqual(detectMediaMetadata({ streams: [
-    { codec_type: "video", width: 1920, height: 1080, side_data_list: [{ rotation: -90 }] }, { codec_type: "audio" },
+    { codec_type: "video", width: 1920, height: 1080, avg_frame_rate: "30000/1001", r_frame_rate: "60/1", side_data_list: [{ rotation: -90 }] }, { codec_type: "audio" },
   ], format: { duration: "7.25" } }, "video"), {
     width: 1080, height: 1920, orientation: "portrait", hasAudio: true, sourceDurationSeconds: 7.25,
+    sourceFrameRate: { numerator: 30000, denominator: 1001 },
   });
+  assert.deepEqual(detectMediaMetadata({ streams: [
+    { codec_type: "video", width: 1080, height: 1920, avg_frame_rate: "0/0", r_frame_rate: "24000/1001" },
+  ], format: { duration: "3" } }, "video").sourceFrameRate, { numerator: 24000, denominator: 1001 });
 });
 
 test("creates a short-lived S3 download URL without exposing the secret key", async () => {

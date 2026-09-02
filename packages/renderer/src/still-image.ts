@@ -1,8 +1,9 @@
-import { createStillImageMotionPlan } from "@storyteller/domain";
+import { createStillImageMotionPlan, defaultStoryFrameRate, frameRateExpression, framesToSeconds, type RationalFrameRate } from "@storyteller/domain";
 import type {
   FocusPoint, MaterialOrientation, SceneMotion, StillImageEasing, StillImagePanPlan, StillImageSize, StillImageZoomPlan,
 } from "@storyteller/domain";
 import { probeMedia, type MediaProcessRunner, SpawnMediaProcessRunner } from "./ffmpeg.js";
+import { h264SegmentArguments } from "./h264.js";
 
 export const stillImageRendererVersion = 1;
 
@@ -17,16 +18,20 @@ export interface StillImageRenderSpec {
   readonly width?: number;
   readonly height?: number;
   readonly fps?: number;
+  readonly frameRate?: RationalFrameRate;
+  readonly durationFrames?: number;
   readonly lossless?: boolean;
   readonly overwrite?: boolean;
   readonly onProgress?: (progress: number) => void;
 }
 
-type NormalizedStillImageRenderSpec = Required<Omit<StillImageRenderSpec, "onProgress">> & Pick<StillImageRenderSpec, "onProgress">;
+type NormalizedStillImageRenderSpec = Required<Omit<StillImageRenderSpec, "onProgress">>
+  & Pick<StillImageRenderSpec, "onProgress"> & { readonly exactFrameCount: boolean };
 
 export function buildStillImageFilter(spec: StillImageRenderSpec): string {
   const normalized = normalizeSpec(spec);
-  const { width, height, fps, durationSeconds, focusPoint, motion } = normalized;
+  const { width, height, durationSeconds, focusPoint, motion } = normalized;
+  const fps = frameRateExpression(normalized.frameRate);
   const motionPlan = createStillImageMotionPlan({
     sourceSize: normalized.sourceSize,
     frameSize: { width, height },
@@ -55,12 +60,10 @@ export async function renderStillImage(
   const normalized = normalizeSpec(spec);
   const result = await runner.run("ffmpeg", [
     normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "2", "-filter_complex_threads", "2",
-    "-loop", "1", "-t", normalized.durationSeconds.toFixed(3),
+    "-loop", "1", "-t", normalized.durationSeconds.toFixed(9),
     "-i", normalized.sourcePath, "-filter_complex", buildStillImageFilter(normalized), "-map", "[v0]", "-an",
-    "-c:v", "libx264", "-threads", "2",
-    ...(normalized.lossless ? ["-preset", "ultrafast", "-qp", "0"] : ["-preset", "veryfast", "-crf", "20"]),
-    "-pix_fmt", "yuv420p", "-r", String(normalized.fps),
-    "-movflags", "+faststart", normalized.outputPath,
+    ...h264SegmentArguments(normalized.frameRate, normalized.lossless, normalized.exactFrameCount ? 1 : 2),
+    ...(normalized.exactFrameCount ? ["-frames:v", String(normalized.durationFrames)] : []), normalized.outputPath,
   ], undefined, normalized.onProgress ? {
     durationSeconds: normalized.durationSeconds,
     onProgress: normalized.onProgress,
@@ -75,7 +78,10 @@ export async function renderStillImage(
 function normalizeSpec(spec: StillImageRenderSpec): NormalizedStillImageRenderSpec {
   const width = spec.width ?? 1080;
   const height = spec.height ?? 1920;
-  const fps = spec.fps ?? 30;
+  const frameRate = spec.frameRate ?? (spec.fps ? { numerator: spec.fps, denominator: 1 } : defaultStoryFrameRate);
+  const fps = spec.fps ?? frameRate.numerator / frameRate.denominator;
+  const durationFrames = spec.durationFrames ?? Math.max(1, Math.round(spec.durationSeconds * fps));
+  const durationSeconds = spec.durationFrames !== undefined ? framesToSeconds(durationFrames, frameRate) : spec.durationSeconds;
   const overwrite = spec.overwrite ?? false;
   const lossless = spec.lossless ?? false;
   const focusPoint = spec.focusPoint ?? { x: 0.5, y: 0.5 };
@@ -86,7 +92,8 @@ function normalizeSpec(spec: StillImageRenderSpec): NormalizedStillImageRenderSp
   if (![focusPoint.x, focusPoint.y].every((value) => Number.isFinite(value) && value >= 0 && value <= 1)) {
     throw new Error("focus point coordinates must be between 0 and 1");
   }
-  return { ...spec, width, height, fps, focusPoint, lossless, overwrite };
+  return { ...spec, width, height, fps, frameRate, durationFrames, durationSeconds,
+    exactFrameCount: spec.durationFrames !== undefined, focusPoint, lossless, overwrite };
 }
 
 function panCropX(plan: StillImagePanPlan, durationSeconds: number): string {

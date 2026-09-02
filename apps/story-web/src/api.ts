@@ -1,4 +1,4 @@
-import { createBrowserApiClient } from "@storyteller/api-client";
+import { ApiError, createBrowserApiClient } from "@storyteller/api-client";
 import type { EffectiveAccess, StorySummary } from "@storyteller/application";
 import type {
   AppliedMaterialEdit,
@@ -23,7 +23,7 @@ import type {
   VideoTrim,
   VideoExportMode,
 } from "@storyteller/domain";
-export { ApiError } from "@storyteller/api-client";
+export { ApiError };
 export { getMaterialPresentation, getMaterialSource } from "@storyteller/domain";
 export type { EffectiveAccess, StorySummary } from "@storyteller/application";
 export type {
@@ -75,6 +75,21 @@ export interface SceneRenderResult extends SceneRender {
   parameters: Record<string, unknown>;
   dependencies: { role: string; storageKey: string; contentHash: string; parents: string[]; parameters: Record<string, unknown> }[];
 }
+export interface StoryExport {
+  id: string;
+  status: "queued" | "rendering" | "assembling" | "ready" | "failed" | "canceled";
+  currentRevision: number;
+  storyRevision: number;
+  outputProfileId: "vertical-social-v1";
+  frameRate: { numerator: number; denominator: number };
+  totalFrames: number;
+  progressPercent: number;
+  progressPhase: "queued" | "rendering_segments" | "assembling" | "uploading" | "ready";
+  readySegments: number;
+  totalSegments: number;
+  sizeBytes?: number;
+  errorCode?: "story_revision_changed" | "segment_failed" | "segment_profile_mismatch" | "approved_mix_mismatch" | "assembly_failed";
+}
 export async function checkHealth(): Promise<boolean> { try { return (await fetch(`${apiUrl}/health`)).ok; } catch { return false; } }
 export function getEffectiveAccess(token: string): Promise<EffectiveAccess> {
   return request("/access/effective", { cache: "no-store" }, token);
@@ -90,6 +105,22 @@ export function getStory(token: string, storyId: string, signal?: AbortSignal): 
 }
 export function getStoryTimeline(token: string, storyId: string, signal?: AbortSignal): Promise<StoryTimeline> {
   return request(`/stories/${storyId}/timeline`, { cache: "no-store", ...(signal ? { signal } : {}) }, token);
+}
+export function requestStoryExport(token: string, storyId: string, expectedRevision: number): Promise<StoryExport> {
+  return request(`/stories/${storyId}/exports`, {
+    method: "POST", body: JSON.stringify({ expectedRevision, outputProfileId: "vertical-social-v1" }),
+  }, token);
+}
+export async function getCurrentStoryExport(token: string, storyId: string, signal?: AbortSignal): Promise<StoryExport | null> {
+  try {
+    return await request(`/stories/${storyId}/exports/current`, { cache: "no-store", ...(signal ? { signal } : {}) }, token);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+export function storyExportContentUrl(storyId: string, exportId: string): string {
+  return `${apiUrl}/stories/${storyId}/exports/${exportId}/content`;
 }
 export function createScene(token: string, storyId: string): Promise<Story> {
   return request(`/stories/${storyId}/scenes`, { method: "POST" }, token);

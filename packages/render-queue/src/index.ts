@@ -1,7 +1,8 @@
-import type { CollageSettings, FocusPoint, MaterialEdit, MaterialOrientation, SceneMotion, VideoExportMode } from "@storyteller/domain";
+import type { CollageSettings, FocusPoint, MaterialEdit, MaterialOrientation, RationalFrameRate, SceneMotion, VideoExportMode } from "@storyteller/domain";
 import type { Pool } from "pg";
 import type { RenderDependency } from "./render-version.js";
 export { hashSceneRenderInput, sceneRenderParameters, type RenderDependency } from "./render-version.js";
+export * from "./story-export.js";
 
 export const sceneRenderStatuses = ["queued", "running", "ready", "failed", "canceled"] as const;
 export type SceneRenderStatus = (typeof sceneRenderStatuses)[number];
@@ -10,7 +11,7 @@ export type SceneRenderProgressPhase = (typeof sceneRenderProgressPhases)[number
 
 export interface StillImageRenderInput {
   /** A frame is a separate derived artifact of the base visual composition. */
-  readonly artifact?: "scene-frame";
+  readonly artifact?: "scene-frame" | "story-export-segment";
   readonly frame?: {
     readonly rendererVersion: number;
     readonly format: "png";
@@ -38,6 +39,9 @@ export interface StillImageRenderInput {
     readonly height: number;
     readonly fps: number;
     readonly codec: "h264";
+    readonly profileId?: "vertical-social-v1";
+    readonly frameRate?: RationalFrameRate;
+    readonly durationFrames?: number;
   };
 }
 
@@ -128,7 +132,7 @@ export interface SceneRenderQueue {
   enqueue(job: Omit<SceneRenderJob, "status" | "storageKey" | "sizeBytes" | "error">, expectedRevision?: number): Promise<SceneRenderJob | undefined>;
   listAuthorized(profileId: string, storyId: string, sceneId: string): Promise<readonly SceneRenderJob[]>;
   findAuthorized(profileId: string, storyId: string, sceneId: string, renderId: string): Promise<SceneRenderJob | undefined>;
-  claim(workerId: string, leaseMilliseconds: number): Promise<SceneRenderJob | undefined>;
+  claim(workerId: string, leaseMilliseconds: number, kind?: "interactive" | "story-export-segment"): Promise<SceneRenderJob | undefined>;
   reportProgress(renderId: string, workerId: string, progressPercent: number, progressPhase: SceneRenderProgressPhase): Promise<boolean>;
   complete(renderId: string, workerId: string, storageKey: string, sizeBytes: number, contentHash: string): Promise<boolean>;
   fail(renderId: string, workerId: string, error: string): Promise<void>;
@@ -180,6 +184,7 @@ export class PostgresSceneRenderQueue implements SceneRenderQueue {
          INSERT INTO product_activity_events (profile_id, code, dedupe_key)
          SELECT profile_id, 'scene.render_requested', 'scene.render_requested:' || id::text
          FROM retained WHERE input->>'artifact' IS DISTINCT FROM 'scene-frame'
+           AND input->>'artifact' IS DISTINCT FROM 'story-export-segment'
          ON CONFLICT (dedupe_key) DO NOTHING
          RETURNING id
        )
@@ -210,11 +215,14 @@ export class PostgresSceneRenderQueue implements SceneRenderQueue {
     return result.rows[0] && mapRenderRow(result.rows[0]);
   }
 
-  async claim(workerId: string, leaseMilliseconds: number): Promise<SceneRenderJob | undefined> {
+  async claim(workerId: string, leaseMilliseconds: number, kind?: "interactive" | "story-export-segment"): Promise<SceneRenderJob | undefined> {
     const result = await this.pool.query<RenderRow>(
       `WITH candidate AS (
          SELECT id FROM scene_renders
          WHERE (status = 'queued' OR (status = 'running' AND locked_until < now())) AND attempts < 3
+           AND ($3::text IS NULL
+             OR ($3 = 'story-export-segment' AND input->>'artifact' = 'story-export-segment')
+             OR ($3 = 'interactive' AND input->>'artifact' IS DISTINCT FROM 'story-export-segment'))
          ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1
        )
        UPDATE scene_renders r SET status = 'running', worker_id = $1, progress_percent = 1, progress_phase = 'downloading',
@@ -222,7 +230,7 @@ export class PostgresSceneRenderQueue implements SceneRenderQueue {
        FROM candidate WHERE r.id = candidate.id
        RETURNING r.id, r.profile_id, r.story_id, r.scene_id, r.input_hash, r.input, r.status,
          r.progress_percent, r.progress_phase, r.storage_key, r.size_bytes, r.content_hash, r.created_at, r.error`,
-      [workerId, leaseMilliseconds],
+      [workerId, leaseMilliseconds, kind ?? null],
     );
     return result.rows[0] && mapRenderRow(result.rows[0]);
   }
@@ -254,6 +262,7 @@ export class PostgresSceneRenderQueue implements SceneRenderQueue {
          INSERT INTO product_activity_events (profile_id, code, dedupe_key)
          SELECT profile_id, 'scene.render_ready', 'scene.render_ready:' || id::text
          FROM completed WHERE input->>'artifact' IS DISTINCT FROM 'scene-frame'
+           AND input->>'artifact' IS DISTINCT FROM 'story-export-segment'
          ON CONFLICT (dedupe_key) DO NOTHING
          RETURNING id
        )
@@ -335,6 +344,7 @@ export function isSceneFrameInput(input: SceneRenderInput): boolean {
 /** One retained result per independently downloadable output or intermediate artifact. */
 export function sceneRenderSlot(input: SceneRenderInput): string {
   if (isSceneFrameInput(input)) return "scene-frame";
+  if (input.artifact === "story-export-segment") return `story-export-segment:${input.output.profileId ?? "unknown"}`;
   return `scene-render:${input.rendererId === "video" ? input.mode : "video"}`;
 }
 

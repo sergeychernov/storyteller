@@ -8,7 +8,17 @@ import test from "node:test";
 import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue, StillImageRenderInput } from "@storyteller/render-queue";
 import { sceneRenderStorageKey } from "@storyteller/render-queue";
 import { LocalObjectStorage } from "@storyteller/storage";
+import { storyExportSegmentConcurrency } from "./environment.js";
 import { SceneRenderWorker } from "./scene-render-worker.js";
+
+test("story export segment concurrency defaults to available CPU capped at four and validates overrides", () => {
+  assert.equal(storyExportSegmentConcurrency(undefined, 1), 1);
+  assert.equal(storyExportSegmentConcurrency(undefined, 16), 4);
+  assert.equal(storyExportSegmentConcurrency("6", 2), 6);
+  assert.equal(storyExportSegmentConcurrency("100", 2), 32);
+  assert.equal(storyExportSegmentConcurrency("0", 3), 3);
+  assert.equal(storyExportSegmentConcurrency("invalid", 3), 3);
+});
 
 test("worker renders a claimed scene and stores the reusable artifact", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "storyteller-worker-test-"));

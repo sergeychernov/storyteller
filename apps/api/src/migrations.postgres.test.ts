@@ -20,7 +20,7 @@ test("PostgreSQL: release migration works on a fresh database, concurrently and 
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 0);
 });
 
-test("PostgreSQL: migrations 4–11 preserve legacy rows, baseline access, and old API/worker writes", options, async (context) => {
+test("PostgreSQL: migrations 4–12 preserve legacy rows, baseline access, and old API/worker writes", options, async (context) => {
   const { pool } = await createPostgresTestPool(context);
   await applyVersion3(pool);
   const profileId = randomUUID(), storyId = randomUUID(), sceneId = randomUUID(), renderId = randomUUID();

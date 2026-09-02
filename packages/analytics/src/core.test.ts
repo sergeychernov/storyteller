@@ -38,6 +38,7 @@ test("adds the surface and never needs content identifiers", () => {
   analytics.track("collage row direction configured", { collage_row_direction: "random" });
   analytics.track("timeline edited", { timeline_edit_kind: "material_moved_between_scenes" });
   analytics.track("story preview completed", { web_layout: "mobile_web" });
+  analytics.track("story exported", { output_profile: "vertical_social" });
   analytics.track("profile language changed", { language: "es" });
   analytics.track("scene render succeeded", {
     export_mode: "combined", renderer_kind: "collage", collage_card_orientation: "angled", collage_media_mix: "includes_video",
@@ -57,6 +58,7 @@ test("adds the surface and never needs content identifiers", () => {
       surface: "story-web", timeline_edit_kind: "material_moved_between_scenes",
     }] },
     { name: "track", arguments: ["story preview completed", { surface: "story-web", web_layout: "mobile_web" }] },
+    { name: "track", arguments: ["story exported", { surface: "story-web", output_profile: "vertical_social" }] },
     { name: "track", arguments: ["profile language changed", { surface: "story-web", language: "es" }] },
     { name: "track", arguments: ["scene render succeeded", {
       surface: "story-web", export_mode: "combined", renderer_kind: "collage", collage_card_orientation: "angled",

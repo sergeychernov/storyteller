@@ -20,7 +20,7 @@
     "test:roadmap": "node --test scripts/public-roadmap.test.mjs",
     "test:site": "node ./node_modules/typescript/bin/tsc -b apps/site --force && node --test apps/site/dist/components/roadmap/public-roadmap-client.test.js scripts/public-site.test.mjs scripts/frontend-host.test.mjs",
     "test:story-web": "yarn workspace @storyteller/story-web test",
-    "test:api:postgres": "yarn build:backend && node --test apps/api/dist/access-control.postgres.test.js apps/api/dist/admin-access.postgres.test.js apps/api/dist/admin.postgres.test.js apps/api/dist/migrations.postgres.test.js apps/api/dist/scene-deletion.postgres.test.js",
+    "test:api:postgres": "yarn build:backend && node --test apps/api/dist/access-control.postgres.test.js apps/api/dist/admin-access.postgres.test.js apps/api/dist/admin.postgres.test.js apps/api/dist/app-story-export.postgres.test.js apps/api/dist/migrations.postgres.test.js apps/api/dist/scene-deletion.postgres.test.js",
     "test:admin": "yarn workspace @storyteller/admin test",
     "test": "yarn build --force && node --test packages/api-client/dist/index.test.js packages/analytics/dist/core.test.js packages/application/dist/access-control.test.js packages/auth-client/dist/index.test.js packages/domain/dist/domain.test.js packages/localization/dist/localization.test.js packages/render-queue/dist/render-queue.test.js packages/renderer/dist/ffmpeg.test.js apps/api/dist/amplitude-relay.test.js apps/api/dist/app-*.test.js apps/site/dist/components/roadmap/public-roadmap-client.test.js apps/worker/dist/operational-retention.test.js apps/worker/dist/scene-render-worker.test.js apps/story-web/dist/access-control.test.js apps/story-web/dist/components/editor/focus-point-model.test.js apps/story-web/dist/components/editor/material-editor-model.test.js apps/story-web/dist/components/editor/material-scene-move-model.test.js apps/story-web/dist/components/editor/native-drag-safe-video.test.js apps/story-web/dist/components/editor/scene-carousel-model.test.js apps/story-web/dist/components/editor/scene-deletion-model.test.js apps/story-web/dist/components/editor/scene-duration-model.test.js apps/story-web/dist/components/editor/scene-frame-model.test.js apps/story-web/dist/components/editor/scene-order-model.test.js apps/story-web/dist/components/editor/scene-render-polling.test.js apps/story-web/dist/components/editor/scene-renderer-model.test.js apps/story-web/dist/components/editor/single-image-motion.test.js apps/story-web/dist/components/editor/video-timeline-model.test.js && yarn test:story-web",
     "dev": "yarn build && yarn build:web && yarn workspaces foreach --all --parallel --interlaced --include @storyteller/api --include @storyteller/worker --include @storyteller/site run dev",
@@ -37,7 +37,8 @@
     "dev:mobile": "yarn workspace @storyteller/mobile dev",
     "format": "node scripts/format-manifests.mjs",
     "format:check": "node scripts/format-manifests.mjs --check",
-    "storybook": "yarn workspace @storyteller/story-web storybook"
+    "storybook": "yarn workspace @storyteller/story-web storybook",
+    "story-export:prepare-smoke": "yarn build:backend && node apps/api/dist/prepare-story-export-smoke.js"
   },
   "engines": {
     "node": ">=22"

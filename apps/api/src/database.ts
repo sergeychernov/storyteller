@@ -1,7 +1,7 @@
 import { createCipheriv, randomBytes } from "node:crypto";
 import {
-  collageCardMaterials, createCollageCardAngles, createCollageCardOffsets, getAutomaticCollageLayout, getSelectedCollageLayout,
-  hasCompleteCollageCardAngles, hasCompleteCollageCardOffsets, resolveCollageSettings, type PlatformCredential, type PlatformProvider,
+  collageCardMaterials, createCollageCardAngles, createCollageCardOffsets, defaultStoryFrameRate, getAutomaticCollageLayout, getSelectedCollageLayout,
+  hasCompleteCollageCardAngles, hasCompleteCollageCardOffsets, normalizeFrameRate, resolveCollageSettings, type PlatformCredential, type PlatformProvider,
   type Profile, type ProfileUpdate, type Story,
 } from "@storyteller/domain";
 import {
@@ -256,8 +256,12 @@ export function normalizeStoredStory(payload: unknown): Story {
 }
 
 function withStoredCollageComposition(story: Story): Story {
+  const firstVideo = story.scenes.flatMap(({ materials }) => materials).find((material) => material.kind === "video");
   return {
     ...story,
+    ...(story.outputFrameRate || !firstVideo
+      ? {}
+      : { outputFrameRate: firstVideo.sourceFrameRate ? normalizeFrameRate(firstVideo.sourceFrameRate) : defaultStoryFrameRate }),
     scenes: story.scenes.map((scene) => {
       if (!scene.collage) return scene;
       const settings = resolveCollageSettings(scene.materials, scene.collage, scene.durationSeconds);

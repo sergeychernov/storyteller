@@ -1,9 +1,12 @@
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { LocalizationProvider } from "@storyteller/web-ui";
 import { describe, expect, it } from "vitest";
 import type { AuthSession, Story, StoryTimeline } from "../../api.js";
 import { StoryPreview } from "./StoryPreview.js";
+import { AccessProvider } from "../../access-control.js";
+import type { EffectiveAccess } from "../../api.js";
 
 const story: Story = {
   id: "story-1", profileId: "profile-1", title: "Travel diary", status: "draft", revision: 1,
@@ -16,10 +19,10 @@ const story: Story = {
 const timeline: StoryTimeline = {
   storyId: story.id, revision: story.revision, sceneOrder: ["scene-1", "scene-2"],
   scenes: [
-    { sceneId: "scene-1", index: 0, materialIds: [], startSeconds: 0, endSeconds: 0, durationSeconds: 0, durationSource: "empty" },
-    { sceneId: "scene-2", index: 1, materialIds: [], startSeconds: 0, endSeconds: 0, durationSeconds: 0, durationSource: "empty" },
+    { sceneId: "scene-1", index: 0, materialIds: [], startSeconds: 0, endSeconds: 0, durationSeconds: 0, startFrame: 0, endFrame: 0, durationFrames: 0, durationSource: "empty" },
+    { sceneId: "scene-2", index: 1, materialIds: [], startSeconds: 0, endSeconds: 0, durationSeconds: 0, startFrame: 0, endFrame: 0, durationFrames: 0, durationSource: "empty" },
   ],
-  totalDurationSeconds: 0, transitionOverlapSeconds: 0,
+  frameRate: { numerator: 30, denominator: 1 }, totalFrames: 0, totalDurationSeconds: 0, transitionOverlapSeconds: 0,
   warnings: [{ code: "empty_scene", sceneId: "scene-1" }, { code: "empty_scene", sceneId: "scene-2" }], formatLimits: [],
 };
 const session = {
@@ -27,10 +30,18 @@ const session = {
 } as AuthSession;
 
 function renderPreview(entry: string | { pathname: string; state: { returnTo: string } }) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return render(<MemoryRouter initialEntries={[entry]}>
-    <LocalizationProvider><StoryPreview story={story} timeline={timeline} session={session} /></LocalizationProvider>
+    <QueryClientProvider client={queryClient}><LocalizationProvider><AccessProvider access={access}>
+      <StoryPreview story={story} timeline={timeline} session={session} />
+    </AccessProvider></LocalizationProvider></QueryClientProvider>
   </MemoryRouter>);
 }
+
+const access: EffectiveAccess = {
+  planVersionCode: null, roles: [], capabilities: [{ code: "story.export", allowed: false, sources: [] }],
+  limits: [], evaluatedAt: "2026-09-02T00:00:00.000Z",
+};
 
 describe("StoryPreview", () => {
   it("returns a direct preview entry to the first available scene", () => {

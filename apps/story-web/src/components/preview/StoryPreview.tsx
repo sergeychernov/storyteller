@@ -10,6 +10,7 @@ import { PreviewScrubber } from "./PreviewScrubber.js";
 import { formatPreviewClock, positionAtPlayhead } from "./story-preview-model.js";
 import { StoryPreviewStage, type StoryPreviewStageHandle } from "./StoryPreviewStage.js";
 import { useStoryPreviewController } from "./use-story-preview-controller.js";
+import { StoryExportPanel } from "./StoryExportPanel.js";
 import { useLocalization } from "@storyteller/web-ui";
 import styles from "./StoryPreview.module.css";
 
@@ -113,6 +114,7 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
       </section>
 
       <TimelineFacts timeline={timeline} previewCopy={previewCopy} editorCopy={editorCopy} />
+      <StoryExportPanel story={story} session={session} />
     </main>
   </section>;
 }

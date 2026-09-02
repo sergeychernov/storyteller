@@ -6,7 +6,7 @@ import { basename, extname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { Readable } from "node:stream";
 import { probeMedia, SpawnMediaProcessRunner, type MediaProcessRunner } from "@storyteller/renderer";
-import { materialStorageKeys, type ImageMaterial, type MaterialEdit, type MaterialEditResult, type MaterialOrientation, type NewSceneMaterial, type SceneMaterial, type VideoMaterial } from "@storyteller/domain";
+import { materialStorageKeys, parseFrameRate, type ImageMaterial, type MaterialEdit, type MaterialEditResult, type MaterialOrientation, type NewSceneMaterial, type RationalFrameRate, type SceneMaterial, type VideoMaterial } from "@storyteller/domain";
 import sharp from "sharp";
 import { createConfiguredObjectStorage, ObjectStorageError, type DirectDownload, type ObjectStorage } from "./object-storage.js";
 import { readMaterialWaveform } from "./material-waveform.js";
@@ -71,6 +71,7 @@ export class MediaStorage {
         ? {
           ...common, kind, hasAudio: detected.hasAudio, audioTags: [],
           sourceDurationSeconds: detected.sourceDurationSeconds!,
+          ...("sourceFrameRate" in detected && detected.sourceFrameRate ? { sourceFrameRate: detected.sourceFrameRate } : {}),
           ...await storeVideoTracks({
             sourcePath: temporaryPath, directory: temporaryDirectory,
             keyPrefix: `${scope.profileId}/${scope.storyId}/${scope.sceneId}/${id}`, extension, mimeType,
@@ -247,6 +248,7 @@ async function inspectMedia(path: string, kind: "image" | "video", runner: Media
 
 export function detectMediaMetadata(probe: unknown, kind: "image" | "video"): {
   width: number; height: number; orientation: MaterialOrientation; hasAudio: boolean; sourceDurationSeconds?: number;
+  sourceFrameRate?: RationalFrameRate;
 } {
   const streams = isRecord(probe) && Array.isArray(probe.streams) ? probe.streams.filter(isRecord) : [];
   const format = isRecord(probe) && isRecord(probe.format) ? probe.format : undefined;
@@ -260,10 +262,14 @@ export function detectMediaMetadata(probe: unknown, kind: "image" | "video"): {
   const height = rotated ? encodedWidth : encodedHeight;
   const rawDuration = kind === "video" ? numberValue(visual?.duration) ?? numberValue(format?.duration) : undefined;
   const duration = rawDuration !== undefined && rawDuration > 0 ? rawDuration : undefined;
+  const sourceFrameRate = kind === "video"
+    ? parseFrameRate(visual?.avg_frame_rate) ?? parseFrameRate(visual?.r_frame_rate)
+    : undefined;
   return {
     width, height, orientation: width < height ? "portrait" : "landscape",
     hasAudio: kind === "video" && streams.some((stream) => stream.codec_type === "audio"),
     ...(duration === undefined ? {} : { sourceDurationSeconds: Math.round(duration * 1_000) / 1_000 }),
+    ...(sourceFrameRate ? { sourceFrameRate } : {}),
   };
 }
 

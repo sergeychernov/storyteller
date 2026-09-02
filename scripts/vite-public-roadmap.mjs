@@ -18,7 +18,7 @@ export function publicRoadmapPlugin(getProductRoadmap = loadPublicRoadmap) {
           const body = JSON.stringify(await getProductRoadmap());
           response.writeHead(200, {
             "Content-Type": "application/json; charset=utf-8",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
           });
           response.end(request.method === "HEAD" ? undefined : body);

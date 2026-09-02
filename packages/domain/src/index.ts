@@ -1,4 +1,5 @@
 export * from "./errors.js";
+export * from "./frame-rate.js";
 export * from "./collage.js";
 export * from "./collage-layout.js";
 export * from "./layout.js";

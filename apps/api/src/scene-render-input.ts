@@ -1,14 +1,16 @@
 import { ApplicationError } from "@storyteller/application";
 import {
   centeredFocusPoint, collageCardMaterials, collageRendererId, getMaterialPresentation, getSelectedCollageLayout,
-  getMaterialSource, resolveCollageSettings, type Scene, type VideoExportMode,
+  framesToSeconds, frameRateValue, getMaterialSource, resolveCollageSettings,
+  type RationalFrameRate, type Scene, type TimelineScene, type VideoExportMode,
 } from "@storyteller/domain";
 import {
   sceneFrameDependency,
   type CollageRenderInput, type RenderDependency, type SceneRenderInput, type SceneRenderJob,
 } from "@storyteller/render-queue";
 import {
-  collageRendererVersion, lastFrameRendererVersion, sceneFramePngCompressionLevel, stillImageRendererVersion, videoRendererVersion,
+  collageRendererVersion, lastFrameRendererVersion, sceneFramePngCompressionLevel, stillImageRendererVersion,
+  verticalSocialOutputProfile, videoRendererVersion,
 } from "@storyteller/renderer";
 import type { MediaStorage } from "./media-storage.js";
 
@@ -180,6 +182,35 @@ export async function buildSceneFrameInput(
       intermediateCodec: "h264-lossless",
       // Titles, captions and future overlays deliberately stay outside this recipe.
       layerPolicy: "base-visual",
+    },
+  };
+}
+
+export async function buildStoryExportSegmentInput(
+  scene: Scene,
+  timelineScene: TimelineScene,
+  frameRate: RationalFrameRate,
+  media: Pick<MediaStorage, "contentHash">,
+  backgroundFrame?: CollageBackgroundFrame,
+): Promise<SceneRenderInput> {
+  const input = await buildSceneRenderInput(
+    scene,
+    media,
+    scene.materials[0]?.kind === "video" ? "video" : undefined,
+    backgroundFrame,
+  );
+  return {
+    ...input,
+    artifact: "story-export-segment",
+    durationSeconds: framesToSeconds(timelineScene.durationFrames, frameRate),
+    output: {
+      width: verticalSocialOutputProfile.width,
+      height: verticalSocialOutputProfile.height,
+      fps: frameRateValue(frameRate),
+      codec: verticalSocialOutputProfile.videoCodec,
+      profileId: verticalSocialOutputProfile.id,
+      frameRate,
+      durationFrames: timelineScene.durationFrames,
     },
   };
 }

@@ -75,6 +75,7 @@ Event names follow the `object verb` form and are compile-time checked by
 | `collage row direction configured` | `surface`, `collage_row_direction` | The scene configuration API confirms the ascending, level, descending, or irregular card alignment |
 | `timeline edited` | `surface`, `timeline_edit_kind` | The scene-order or cross-scene material-move API confirms the edit |
 | `story preview completed` | `surface`, `web_layout` | Continuous Web preview reaches the authoritative timeline end during playback; once per completed pass, never after seek, Stop, error or navigation |
+| `story exported` | `surface`, `output_profile` | The browser starts downloading a ready full-story master for the current story revision |
 | `scene render requested` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The API accepts the render request |
 | `scene render succeeded` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | Polling reads the ready render |
 | `scene exported` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The browser receives the artifact and starts saving it |
@@ -90,10 +91,10 @@ shown or submitted.
 `language` property is restricted to the supported locale identifiers and never
 contains profile text, email or another user-supplied value.
 
-The current Web activation event is `scene render succeeded`. It is deliberately
-not named `story exported`: full-story master assembly belongs to F04 and is not
-implemented yet. Publication events should be added only with the corresponding
-real adapters and verified results.
+`story exported` is reserved for a ready full-story master whose current-revision
+download has begun. `scene render succeeded` and `scene exported` continue to
+describe reusable individual-scene artifacts. Publication events should be added
+only with the corresponding real adapters and verified results.
 
 `renderer_kind` is a privacy-safe category (`still_image`, `video`, or `collage`)
 that makes the confirmed F03.1 collage outcome measurable without sending scene,

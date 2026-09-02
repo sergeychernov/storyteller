@@ -18,6 +18,7 @@ const allowedCollageBackgroundModes = new Set(["previous_scene_darkened", "custo
 const allowedCollageRowDirections = new Set(["ascending", "level", "descending", "random"]);
 const allowedTimelineEditKinds = new Set(["scene_reordered", "material_moved_between_scenes"]);
 const allowedWebLayouts = new Set(["desktop", "mobile_web"]);
+const allowedStoryOutputProfiles = new Set(["vertical_social"]);
 const allowedFailureStages = new Set(["request", "processing", "download"]);
 const allowedFailureReasons = new Set(["version_changed", "queue_timeout", "render_timeout", "api_error", "unknown"]);
 const safePage = /^[a-z0-9:/_-]+$/;
@@ -181,7 +182,7 @@ function sanitizeEventProperties(eventType: AnalyticsEventName, value: unknown):
   if (eventType === "story preview completed" && !allowedWebLayouts.has(value.web_layout as string)) {
     return { ok: false, message: "analytics web layout is invalid" };
   }
-  if (eventType.includes("render") || eventType.includes("export")) {
+  if (eventType.includes("scene render") || eventType.includes("scene export")) {
     if (!allowedExportModes.has(value.export_mode as string)) return { ok: false, message: "analytics export mode is invalid" };
     if (!allowedRendererKinds.has(value.renderer_kind as string)) return { ok: false, message: "analytics renderer kind is invalid" };
     if (!allowedCollageCardOrientations.has(value.collage_card_orientation as string)) {
@@ -190,6 +191,9 @@ function sanitizeEventProperties(eventType: AnalyticsEventName, value: unknown):
     if (!allowedCollageMediaMixes.has(value.collage_media_mix as string)) {
       return { ok: false, message: "analytics collage media mix is invalid" };
     }
+  }
+  if (eventType === "story exported" && !allowedStoryOutputProfiles.has(value.output_profile as string)) {
+    return { ok: false, message: "analytics story output profile is invalid" };
   }
   if (eventType === "scene export failed") {
     if (!allowedFailureStages.has(value.failure_stage as string)) return { ok: false, message: "analytics failure stage is invalid" };

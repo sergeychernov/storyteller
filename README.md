@@ -52,6 +52,14 @@ Run `yarn storybook` to develop Story Studio components locally at `http://local
 
 Scene downloads require the worker and FFmpeg (`ffmpeg` and `ffprobe` on `PATH`). If API and web were started separately, also run `yarn dev:worker`; otherwise render jobs remain queued. When using local storage, API and worker must share the same `MEDIA_ROOT` (the default resolves to the repository's `.storyteller-media` directory).
 
+Until the approved-mix UI is available, a local full-story export can be smoke-tested with
+`yarn story-export:prepare-smoke <story-uuid>`. The command accepts only a local PostgreSQL
+URL and local object storage, generates frame-aligned AAC-LC/48 kHz stereo silence, records
+it as the current story's smoke-only approved mix without changing the story revision, and
+refuses to replace a non-smoke mix. Reload Story Preview and choose **Build master**; run the
+API and worker against the same `DATABASE_URL` and `MEDIA_ROOT`. The command is disabled in
+production and the resulting master intentionally contains silence.
+
 ### Video tracks and downloads
 
 Video uploads also require FFmpeg in the API runtime. The uploaded original stays unchanged at `material.storageKey`. The API stores a video-only working copy at `videoTrack` (stream copy, without re-encoding) and, when sound exists, a separate `audioTrack` in AAC/M4A, stereo, 48 kHz. Audio is denoised with `afftdn=nr=12:nf=-35:tn=1` and normalized with two-pass `loudnorm=I=-16:LRA=11:TP=-1.5`, following the [spoken-video reference](https://github.com/sergeychernov/hermes-story-skills/blob/main/skills/media/photo-story-archive/references/spoken-video-audio-integrity.md). No silence removal or noise gate is used. Silent tracks bypass undefined loudness gain. The exact filter and measured encoded loudness/true peak are saved with the audio track.

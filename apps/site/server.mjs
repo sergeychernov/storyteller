@@ -116,7 +116,9 @@ async function sendProductRoadmap(request, response, getProductRoadmap) {
     const body = JSON.stringify(roadmap);
     response.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+      // The process-level loader already limits GitHub requests. Keeping this
+      // response in browser caches can strand an open roadmap on old counts.
+      "Cache-Control": "no-store",
       "Content-Length": Buffer.byteLength(body),
       "Referrer-Policy": "strict-origin-when-cross-origin",
       "X-Content-Type-Options": "nosniff",

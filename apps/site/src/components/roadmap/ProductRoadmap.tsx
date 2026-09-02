@@ -7,13 +7,17 @@ import styles from "./ProductRoadmap.module.css";
 
 interface ProductRoadmapProps { readonly locale: Locale }
 
+const roadmapRefreshIntervalMs = 5 * 60 * 1000;
+
 export function ProductRoadmap({ locale }: ProductRoadmapProps) {
   const copy = getPublicSiteCopy(locale);
   const query = useQuery({
     queryKey: ["public-product-roadmap"],
     queryFn: () => loadPublicRoadmap(),
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: roadmapRefreshIntervalMs,
+    refetchInterval: roadmapRefreshIntervalMs,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: "always",
   });
   const publicRoadmap = query.data;
 

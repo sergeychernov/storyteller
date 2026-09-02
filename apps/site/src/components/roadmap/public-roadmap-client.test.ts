@@ -38,3 +38,19 @@ test("roadmap loader rejects a malformed successful server response", async () =
     /Invalid product roadmap response/,
   );
 });
+
+test("roadmap loader bypasses a browser's persisted HTTP cache", async () => {
+  let request: { input: RequestInfo | URL; init: RequestInit | undefined } | undefined;
+  const result = await loadPublicRoadmap(async (input, init) => {
+    request = { input, init };
+    return new Response(JSON.stringify(validRoadmap), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  assert.deepEqual(result, validRoadmap);
+  assert.equal(request?.input, "/product-roadmap.json");
+  assert.equal(request?.init?.cache, "no-store");
+  assert.deepEqual(request?.init?.headers, { Accept: "application/json" });
+});

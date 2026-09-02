@@ -1,7 +1,8 @@
-import { videoPixelCrop, type MaterialEdit, type VideoExportMode } from "@storyteller/domain";
+import { defaultStoryFrameRate, frameRateExpression, framesToSeconds, videoPixelCrop, type MaterialEdit, type RationalFrameRate, type VideoExportMode } from "@storyteller/domain";
 import { join, dirname } from "node:path";
 import { probeMedia, SpawnMediaProcessRunner, type MediaProcessRunner } from "./ffmpeg.js";
 import { prepareVideoAudio } from "./video-audio.js";
+import { h264SegmentArguments } from "./h264.js";
 
 export const videoRendererVersion = 1;
 
@@ -14,6 +15,10 @@ export interface VideoRenderSpec {
   readonly hasAudio: boolean;
   readonly mode: VideoExportMode;
   readonly edit: MaterialEdit;
+  readonly width?: number;
+  readonly height?: number;
+  readonly frameRate?: RationalFrameRate;
+  readonly durationFrames?: number;
   readonly lossless?: boolean;
   readonly onProgress?: (progress: number) => void;
 }
@@ -36,7 +41,9 @@ export async function renderVideo(spec: VideoRenderSpec, runner: MediaProcessRun
   if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > sourceDuration + 0.001) {
     throw new Error("video trim must be within the source duration");
   }
-  const duration = (end - start).toFixed(6);
+  const frameRate = spec.frameRate ?? defaultStoryFrameRate;
+  const frameDuration = spec.durationFrames ? framesToSeconds(spec.durationFrames, frameRate) : end - start;
+  const duration = frameDuration.toFixed(9);
   const args = ["-y", "-v", "error"];
   if (includeVideo) args.push("-ss", start.toFixed(6), "-i", spec.sourcePath!);
   if (includeAudio) args.push("-ss", start.toFixed(6), "-i", audioPath!);
@@ -44,17 +51,22 @@ export async function renderVideo(spec: VideoRenderSpec, runner: MediaProcessRun
     const crop = videoPixelCrop(spec.sourceSize.width, spec.sourceSize.height, spec.edit);
     const rotation = spec.edit.rotation === 90 ? ["transpose=clock"]
       : spec.edit.rotation === 180 ? ["hflip", "vflip"] : spec.edit.rotation === 270 ? ["transpose=cclock"] : [];
+    const geometry = spec.width && spec.height
+      ? [`scale=${spec.width}:${spec.height}:force_original_aspect_ratio=increase`, `crop=${spec.width}:${spec.height}`]
+      : [];
     args.push("-map", "0:v:0", "-vf", [
-      ...rotation, `crop=${crop.width}:${crop.height}:${crop.left}:${crop.top}`, "setsar=1", "setpts=PTS-STARTPTS",
-    ].join(","), "-c:v", "libx264", ...(spec.lossless
-      ? ["-preset", "ultrafast", "-qp", "0"] : ["-preset", "veryfast", "-crf", "20"]), "-pix_fmt", "yuv420p");
+      ...rotation, `crop=${crop.width}:${crop.height}:${crop.left}:${crop.top}`, ...geometry, "setsar=1",
+      ...(spec.durationFrames ? [`tpad=stop_mode=clone:stop_duration=${duration}`] : []),
+      `fps=${frameRateExpression(frameRate)}`, ...(spec.durationFrames ? [`trim=end_frame=${spec.durationFrames}`] : []), "setpts=PTS-STARTPTS",
+    ].join(","), ...h264SegmentArguments(frameRate, spec.lossless ?? false, spec.durationFrames ? 1 : 2),
+    ...(spec.durationFrames ? ["-frames:v", String(spec.durationFrames)] : []));
   } else args.push("-vn");
   if (includeAudio) {
     args.push("-map", `${includeVideo ? 1 : 0}:a:0`, "-af",
       `asetpts=PTS-STARTPTS,apad=whole_dur=${duration},atrim=duration=${duration}`,
       "-c:a", "aac", "-b:a", "192k", "-ac", "2", "-ar", "48000");
   } else args.push("-an");
-  args.push("-t", duration, "-map_metadata", "-1", "-movflags", "+faststart", spec.outputPath);
+  args.push("-t", duration, "-map_metadata", "-1", spec.outputPath);
   const result = await runner.run("ffmpeg", args, undefined, spec.onProgress ? {
     durationSeconds: Number(duration),
     onProgress: spec.onProgress,

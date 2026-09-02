@@ -35,7 +35,7 @@ export class SceneRenderWorker {
     private readonly renderPhotoCollage: CollageRender = renderCollage,
   ) {}
 
-  async runOnce(): Promise<boolean> {
+  async runOnce(kind?: "interactive" | "story-export-segment"): Promise<boolean> {
     const deletion = await this.queue.claimDeletion(this.workerId, this.leaseMilliseconds);
     if (deletion) {
       try {
@@ -49,7 +49,7 @@ export class SceneRenderWorker {
       return true;
     }
 
-    const job = await this.queue.claim(this.workerId, this.leaseMilliseconds);
+    const job = await this.queue.claim(this.workerId, this.leaseMilliseconds, kind);
     if (!job) return false;
     await this.renderJob(job);
     return true;
@@ -148,6 +148,8 @@ export class SceneRenderWorker {
           width: input.output.width,
           height: input.output.height,
           fps: input.output.fps,
+          ...(input.output.frameRate ? { frameRate: input.output.frameRate } : {}),
+          ...(input.output.durationFrames ? { durationFrames: input.output.durationFrames } : {}),
           lossless: input.artifact === "scene-frame",
           overwrite: true,
           onProgress: onRenderProgress,
@@ -158,6 +160,9 @@ export class SceneRenderWorker {
         sourceSize: { width: input.material.width, height: input.material.height },
         ...(input.sourceDurationSeconds === undefined ? {} : { sourceDurationSeconds: input.sourceDurationSeconds }),
         hasAudio: input.hasAudio, mode: input.mode, edit: input.edit, lossless: input.artifact === "scene-frame",
+        width: input.output.width, height: input.output.height,
+        ...(input.output.frameRate ? { frameRate: input.output.frameRate } : {}),
+        ...(input.output.durationFrames ? { durationFrames: input.output.durationFrames } : {}),
         onProgress: onRenderProgress,
       });
       else if (sourcePath) await this.render({
@@ -171,6 +176,8 @@ export class SceneRenderWorker {
         width: input.output.width,
         height: input.output.height,
         fps: input.output.fps,
+        ...(input.output.frameRate ? { frameRate: input.output.frameRate } : {}),
+        ...(input.output.durationFrames ? { durationFrames: input.output.durationFrames } : {}),
         lossless: input.artifact === "scene-frame",
         overwrite: true,
         onProgress: onRenderProgress,

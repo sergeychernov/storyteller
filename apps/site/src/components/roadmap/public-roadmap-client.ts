@@ -7,7 +7,10 @@ const milestoneStates = new Set<PublicMilestone["state"]>(["complete", "current"
 type FetchRoadmap = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 export async function loadPublicRoadmap(fetchImpl: FetchRoadmap = fetch): Promise<PublicRoadmap> {
-  const response = await fetchImpl("/product-roadmap.json", { headers: { Accept: "application/json" } });
+  const response = await fetchImpl("/product-roadmap.json", {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
   if (!response.ok) throw new Error(`Product roadmap request failed with ${response.status}`);
   return parsePublicRoadmapResponse(await response.json());
 }

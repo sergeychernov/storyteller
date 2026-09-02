@@ -11,6 +11,7 @@ import type {
 } from "./model.js";
 import { defaultSingleImageMotion, getSceneMotionOptions } from "./scene-motion.js";
 import { centeredFocusPoint } from "./still-image-motion.js";
+import { defaultStoryFrameRate, normalizeFrameRate } from "./frame-rate.js";
 
 export function createStory(input: { id: string; profileId: string; title?: string }): Story {
   return {
@@ -41,12 +42,15 @@ export function removeScene(story: Story, sceneId: string): Story {
 }
 
 export function addMaterial(story: Story, sceneId: string, material: SceneMaterial): Story {
-  return updateScene(story, sceneId, (scene) => {
+  const updated = updateScene(story, sceneId, (scene) => {
     if (scene.materials.some(({ id }) => id === material.id)) throw new DomainError(`material already exists: ${material.id}`);
     return resetMaterialPresentation(
       { ...scene, materials: [...scene.materials, material] }, collageAngleSeed(story, scene, "add-material"),
     );
   });
+  return story.outputFrameRate || material.kind !== "video"
+    ? updated
+    : { ...updated, outputFrameRate: material.sourceFrameRate ? normalizeFrameRate(material.sourceFrameRate) : defaultStoryFrameRate };
 }
 
 export function removeMaterial(story: Story, sceneId: string, materialId: string): Story {

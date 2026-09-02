@@ -266,10 +266,11 @@ test("timeline API recalculates trimmed video timing and warnings from the store
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.headers["cache-control"], "private, no-store");
   const timeline = response.json<StoryTimelineResponse>();
-  assert.equal(timeline.totalDurationSeconds, 193.75);
+  assert.equal(timeline.totalDurationSeconds, 193.766667);
+  assert.equal(timeline.totalFrames, 5_813);
   assert.equal(timeline.revision, story.revision);
   assert.deepEqual(timeline.warnings, [{ code: "empty_scene", sceneId: empty!.id }]);
-  assert.equal(timeline.formatLimits.find(({ formatId }) => formatId === "youtube-shorts")!.excessSeconds, 13.75);
+  assert.equal(timeline.formatLimits.find(({ formatId }) => formatId === "youtube-shorts")!.excessSeconds, 13.766667);
   assert.equal(timeline.formatLimits.find(({ formatId }) => formatId === "youtube-video")!.status, "within_limit");
   assert.equal(timeline.formatLimits.find(({ formatId }) => formatId === "youtube-video-verified")!.requiresVerifiedAccount, true);
   const sceneIds = [video!.id, empty!.id, photo!.id];
@@ -280,8 +281,9 @@ test("timeline API recalculates trimmed video timing and warnings from the store
   assert.deepEqual((await api.inject({ method: "GET", url: `/stories/${story.id}`, headers })).json<Story>(), story);
   const changed = (await api.inject({ method: "GET", url, headers })).json<StoryTimelineResponse>();
   assert.deepEqual(changed.sceneOrder, sceneIds);
-  assert.deepEqual(changed.scenes.map(({ startSeconds }) => startSeconds), [0, 188.75, 188.75]);
+  assert.deepEqual(changed.scenes.map(({ startSeconds }) => startSeconds), [0, 188.766667, 188.766667]);
+  assert.deepEqual(changed.scenes.map(({ startFrame }) => startFrame), [0, 5_663, 5_663]);
   assert.equal(changed.totalDurationSeconds, timeline.totalDurationSeconds);
   await application.configureScene(story.profileId, story.id, photo!.id, { durationSeconds: 10 });
-  assert.equal((await api.inject({ method: "GET", url, headers })).json<StoryTimelineResponse>().totalDurationSeconds, 198.75);
+  assert.equal((await api.inject({ method: "GET", url, headers })).json<StoryTimelineResponse>().totalDurationSeconds, 198.766667);
 });

@@ -56,7 +56,7 @@
 
 .main {
   display: grid;
-  grid-template-rows: minmax(360px, 1fr) auto auto;
+  grid-template-rows: minmax(360px, 1fr) auto auto auto;
   gap: 18px;
   width: min(1180px, 100%);
   min-height: calc(100dvh - 58px);

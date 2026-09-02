@@ -54,7 +54,7 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
   assert.equal(roadmapResponse.status, 200);
   assert.deepEqual(JSON.parse(roadmapResponse.body), roadmap);
   assert.equal(roadmapResponse.headers["Content-Type"], "application/json; charset=utf-8");
-  assert.match(roadmapResponse.headers["Cache-Control"], /max-age=60/);
+  assert.equal(roadmapResponse.headers["Cache-Control"], "no-store");
   const roadmapHead = await inject(server, "/product-roadmap.json", "HEAD");
   assert.equal(roadmapHead.status, 200);
   assert.equal(roadmapHead.body, "");

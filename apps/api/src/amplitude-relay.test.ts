@@ -10,7 +10,7 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
   const upstreamRequests: { readonly url: string; readonly body: unknown }[] = [];
   const fetchUpstream = (async (input: string | URL | Request, init?: RequestInit) => {
     upstreamRequests.push({ url: String(input), body: JSON.parse(String(init?.body)) as unknown });
-    return new Response(JSON.stringify({ code: 200, events_ingested: 7 }), {
+    return new Response(JSON.stringify({ code: 200, events_ingested: 8 }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   }) as typeof fetch;
@@ -50,6 +50,10 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
         event_properties: { surface: "story-web", web_layout: "desktop" },
         device_id: "device-1", user_id: "profile-1",
       }, {
+        event_type: "story exported",
+        event_properties: { surface: "story-web", output_profile: "vertical_social" },
+        device_id: "device-1", user_id: "profile-1",
+      }, {
         event_type: "scene render succeeded",
         event_properties: {
           surface: "story-web", export_mode: "video", renderer_kind: "collage", collage_card_orientation: "angled",
@@ -61,7 +65,7 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
   });
 
   assert.equal(response.statusCode, 200, response.body);
-  assert.deepEqual(response.json(), { code: 200, events_ingested: 7 });
+  assert.deepEqual(response.json(), { code: 200, events_ingested: 8 });
   assert.deepEqual(upstreamRequests, [{
     url: "https://api2.amplitude.com/2/httpapi",
     body: {
@@ -90,6 +94,10 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
       }, {
         event_type: "story preview completed",
         event_properties: { surface: "story-web", web_layout: "desktop" },
+        device_id: "device-1", user_id: "profile-1",
+      }, {
+        event_type: "story exported",
+        event_properties: { surface: "story-web", output_profile: "vertical_social" },
         device_id: "device-1", user_id: "profile-1",
       }, {
         event_type: "scene render succeeded",

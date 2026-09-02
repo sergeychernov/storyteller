@@ -656,6 +656,64 @@ export const migrations = [{
     CREATE TRIGGER admin_audit_log_immutable BEFORE UPDATE OR DELETE ON admin_audit_log
       FOR EACH ROW EXECUTE FUNCTION protect_audit_history();
   `,
+}, {
+  version: 12,
+  sql: `
+    DROP INDEX scene_renders_slot_idx;
+    ALTER TABLE scene_renders DROP COLUMN render_slot;
+    ALTER TABLE scene_renders ADD COLUMN render_slot text GENERATED ALWAYS AS (
+      CASE
+        WHEN input->>'artifact' = 'scene-frame' THEN 'scene-frame'
+        WHEN input->>'artifact' = 'story-export-segment'
+          THEN 'story-export-segment:' || COALESCE(input->'output'->>'profileId', 'unknown')
+        WHEN input->>'rendererId' = 'video' THEN 'scene-render:' || COALESCE(input->>'mode', 'video')
+        ELSE 'scene-render:video'
+      END
+    ) STORED;
+    CREATE INDEX scene_renders_slot_idx ON scene_renders(story_id, scene_id, render_slot);
+
+    CREATE TABLE story_exports (
+      id uuid PRIMARY KEY,
+      profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      story_id uuid NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      manifest_hash char(64) NOT NULL CHECK (manifest_hash ~ '^[a-f0-9]{64}$'),
+      manifest jsonb NOT NULL,
+      story_revision integer NOT NULL CHECK (story_revision > 0),
+      timeline_hash char(64) NOT NULL CHECK (timeline_hash ~ '^[a-f0-9]{64}$'),
+      output_profile_id text NOT NULL CHECK (output_profile_id = 'vertical-social-v1'),
+      status varchar(20) NOT NULL CHECK (status IN ('queued', 'assembling', 'ready', 'failed', 'canceled')),
+      progress_percent smallint NOT NULL DEFAULT 0 CHECK (progress_percent BETWEEN 0 AND 100),
+      progress_phase varchar(24) NOT NULL DEFAULT 'queued'
+        CHECK (progress_phase IN ('queued', 'rendering_segments', 'assembling', 'uploading', 'ready')),
+      storage_key text,
+      size_bytes bigint,
+      content_hash char(64) CHECK (content_hash ~ '^[a-f0-9]{64}$'),
+      error_code text CHECK (error_code IN (
+        'story_revision_changed', 'segment_failed', 'segment_profile_mismatch',
+        'approved_mix_mismatch', 'assembly_failed'
+      )),
+      error text,
+      attempts integer NOT NULL DEFAULT 0,
+      worker_id text,
+      locked_until timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (story_id, manifest_hash)
+    );
+    CREATE INDEX story_exports_queue_idx ON story_exports(status, locked_until, created_at);
+    CREATE INDEX story_exports_current_idx ON story_exports(profile_id, story_id, created_at DESC);
+
+    CREATE TABLE story_export_segments (
+      export_id uuid NOT NULL REFERENCES story_exports(id) ON DELETE CASCADE,
+      position integer NOT NULL CHECK (position >= 0),
+      scene_id uuid NOT NULL,
+      duration_frames integer NOT NULL CHECK (duration_frames > 0),
+      scene_render_id uuid NOT NULL REFERENCES scene_renders(id) ON DELETE CASCADE,
+      PRIMARY KEY (export_id, position),
+      UNIQUE (export_id, scene_render_id)
+    );
+    CREATE INDEX story_export_segments_render_idx ON story_export_segments(scene_render_id);
+  `,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

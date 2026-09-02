@@ -6,11 +6,11 @@ import { useStoryPreviewController } from "./use-story-preview-controller.js";
 const timeline: StoryTimeline = {
   storyId: "story-1", revision: 1, sceneOrder: ["one", "empty", "two"],
   scenes: [
-    { sceneId: "one", index: 0, materialIds: ["a"], startSeconds: 0, endSeconds: 1, durationSeconds: 1, durationSource: "scene" },
-    { sceneId: "empty", index: 1, materialIds: [], startSeconds: 1, endSeconds: 1, durationSeconds: 0, durationSource: "empty" },
-    { sceneId: "two", index: 2, materialIds: ["b"], startSeconds: 1, endSeconds: 3, durationSeconds: 2, durationSource: "scene" },
+    { sceneId: "one", index: 0, materialIds: ["a"], startSeconds: 0, endSeconds: 1, durationSeconds: 1, startFrame: 0, endFrame: 30, durationFrames: 30, durationSource: "scene" },
+    { sceneId: "empty", index: 1, materialIds: [], startSeconds: 1, endSeconds: 1, durationSeconds: 0, startFrame: 30, endFrame: 30, durationFrames: 0, durationSource: "empty" },
+    { sceneId: "two", index: 2, materialIds: ["b"], startSeconds: 1, endSeconds: 3, durationSeconds: 2, startFrame: 30, endFrame: 90, durationFrames: 60, durationSource: "scene" },
   ],
-  totalDurationSeconds: 3, transitionOverlapSeconds: 0,
+  frameRate: { numerator: 30, denominator: 1 }, totalFrames: 90, totalDurationSeconds: 3, transitionOverlapSeconds: 0,
   warnings: [{ code: "empty_scene", sceneId: "empty" }], formatLimits: [],
 };
 

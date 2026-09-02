@@ -6,12 +6,12 @@ import { PreviewScrubber } from "./PreviewScrubber.js";
 const timeline: StoryTimeline = {
   storyId: "story", revision: 1, sceneOrder: ["one", "empty", "two", "three"],
   scenes: [
-    { sceneId: "one", index: 0, materialIds: ["a"], startSeconds: 0, endSeconds: 2, durationSeconds: 2, durationSource: "scene" },
-    { sceneId: "empty", index: 1, materialIds: [], startSeconds: 2, endSeconds: 2, durationSeconds: 0, durationSource: "empty" },
-    { sceneId: "two", index: 2, materialIds: ["b"], startSeconds: 2, endSeconds: 5, durationSeconds: 3, durationSource: "scene" },
-    { sceneId: "three", index: 3, materialIds: ["c"], startSeconds: 5, endSeconds: 10, durationSeconds: 5, durationSource: "scene" },
+    { sceneId: "one", index: 0, materialIds: ["a"], startSeconds: 0, endSeconds: 2, durationSeconds: 2, startFrame: 0, endFrame: 60, durationFrames: 60, durationSource: "scene" },
+    { sceneId: "empty", index: 1, materialIds: [], startSeconds: 2, endSeconds: 2, durationSeconds: 0, startFrame: 60, endFrame: 60, durationFrames: 0, durationSource: "empty" },
+    { sceneId: "two", index: 2, materialIds: ["b"], startSeconds: 2, endSeconds: 5, durationSeconds: 3, startFrame: 60, endFrame: 150, durationFrames: 90, durationSource: "scene" },
+    { sceneId: "three", index: 3, materialIds: ["c"], startSeconds: 5, endSeconds: 10, durationSeconds: 5, startFrame: 150, endFrame: 300, durationFrames: 150, durationSource: "scene" },
   ],
-  totalDurationSeconds: 10, transitionOverlapSeconds: 0, warnings: [], formatLimits: [],
+  frameRate: { numerator: 30, denominator: 1 }, totalFrames: 300, totalDurationSeconds: 10, transitionOverlapSeconds: 0, warnings: [], formatLimits: [],
 };
 
 describe("PreviewScrubber", () => {

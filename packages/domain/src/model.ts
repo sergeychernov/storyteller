@@ -1,3 +1,5 @@
+import type { RationalFrameRate } from "./frame-rate.js";
+
 export const storyStatuses = ["draft", "rendering", "ready", "publishing", "published"] as const;
 
 export type StoryStatus = (typeof storyStatuses)[number];
@@ -113,6 +115,8 @@ export interface VideoMaterial extends MaterialFile {
   readonly kind: "video";
   readonly hasAudio: boolean;
   readonly sourceDurationSeconds: number;
+  /** Exact decoded average frame rate when it is a supported 23–60 FPS value. */
+  readonly sourceFrameRate?: RationalFrameRate;
   /** Empty tags with hasAudio=true mean the source track still needs classification. */
   readonly audioTags: readonly VideoAudioTag[];
   /** Immutable working tracks; storageKey remains the untouched uploaded original. */
@@ -240,6 +244,19 @@ export interface Story {
   readonly scenes: readonly Scene[];
   readonly narrations: readonly Narration[];
   readonly music: Music;
+  /** Locked when the first supported video is added; deleting or reordering media never changes it. */
+  readonly outputFrameRate?: RationalFrameRate;
+  /** Produced by the approved-mix milestone and bound to this exact visual timeline. */
+  readonly approvedMix?: {
+    readonly storageKey: string;
+    readonly contentHash: string;
+    readonly mimeType: "audio/mp4";
+    readonly sizeBytes: number;
+    readonly sampleRate: 48000;
+    readonly channels: 2;
+    readonly timelineHash: string;
+    readonly durationFrames: number;
+  };
   readonly revision: number;
 }
 

@@ -8,7 +8,7 @@ import {
 } from "@storyteller/domain";
 import {
   buildCollageBackgroundFilter, buildCollageCardFilter, buildCollageFilter, buildStillImageFilter, PcmWaveform, prepareVideoAudio, probeMedia, renderCollage,
-  renderLastFrame, renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner,
+  assembleStoryMaster, assertApprovedStoryMix, assertSegmentProfile, probeVideoProfile, renderLastFrame, renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner,
 } from "./index.js";
 
 test("probeMedia uses an argument array and parses JSON", async () => {
@@ -602,6 +602,82 @@ test("scene-frame intermediates use lossless H.264 instead of CRF compression", 
     assert.deepEqual(args.slice(args.indexOf("-preset"), args.indexOf("-preset") + 4), ["-preset", "ultrafast", "-qp", "0"]);
     assert.equal(args.includes("-crf"), false);
   }
+});
+
+test("master video segments normalize geometry, rational CFR and exact frame count in one encode", async () => {
+  let args: readonly string[] = [];
+  await renderVideo({
+    sourcePath: "landscape.mp4", outputPath: "segment.mp4", sourceSize: { width: 1920, height: 1080 },
+    sourceDurationSeconds: 10, hasAudio: true, mode: "video", width: 1080, height: 1920,
+    frameRate: { numerator: 24_000, denominator: 1_001 }, durationFrames: 72,
+    edit: { rotation: 90, crop: { x: 0.1, y: 0.2, width: 0.8, height: 0.6 }, trim: { startSeconds: 1, endSeconds: 5 } },
+  }, { run: async (executable, received) => {
+    assert.equal(executable, "ffmpeg"); args = received; return { exitCode: 0, stdout: "", stderr: "" };
+  } });
+  const filter = args[args.indexOf("-vf") + 1]!;
+  assert.match(filter, /transpose=clock,crop=/);
+  assert.match(filter, /scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920/);
+  assert.match(filter, /fps=24000\/1001,trim=end_frame=72,setpts=PTS-STARTPTS/);
+  assert.deepEqual(args.slice(args.indexOf("-frames:v"), args.indexOf("-frames:v") + 2), ["-frames:v", "72"]);
+  assert.deepEqual(args.slice(args.indexOf("-threads"), args.indexOf("-threads") + 2), ["-threads", "1"]);
+  assert.equal(args.includes("-an"), true);
+});
+
+test("story assembly copies normalized video and approved audio without re-encoding", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-assembly-args-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const calls: string[][] = [];
+  await assembleStoryMaster({
+    segmentPaths: [join(root, "one.mp4"), join(root, "two.mp4")], approvedMixPath: join(root, "mix.m4a"),
+    outputPath: join(root, "master.mp4"), frameRate: { numerator: 30, denominator: 1 }, totalFrames: 300,
+  }, { run: async (_executable, args) => {
+    calls.push([...args]); return { exitCode: 0, stdout: "", stderr: "" };
+  } });
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0]?.slice(calls[0].indexOf("-c:v"), calls[0].indexOf("-c:v") + 2), ["-c:v", "copy"]);
+  assert.deepEqual(calls[1]?.slice(calls[1].indexOf("-c:v"), calls[1].indexOf("-c:v") + 4), ["-c:v", "copy", "-c:a", "copy"]);
+  assert.doesNotThrow(() => assertSegmentProfile({
+    width: 1080, height: 1920, frameRate: "30/1", frameCount: 150,
+    videoCodec: "h264", videoProfile: "High", videoLevel: 42, pixelFormat: "yuv420p",
+    sampleAspectRatio: "1:1", fieldOrder: "progressive", timeBase: "1/30000",
+    colorRange: "tv", colorSpace: "bt709", colorTransfer: "bt709", colorPrimaries: "bt709",
+  }, { numerator: 30, denominator: 1 }, 150));
+});
+
+test("a copied master fully decodes with the exact segment frame sum and approved audio profile", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-assembly-integration-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const runner = new SpawnMediaProcessRunner();
+  const source = join(root, "source.png");
+  const sourceResult = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=16x16", "-frames:v", "1", source,
+  ]);
+  assert.equal(sourceResult.exitCode, 0, sourceResult.stderr);
+  const frameRate = { numerator: 30, denominator: 1 } as const;
+  const segments = [join(root, "one.mp4"), join(root, "two.mp4")];
+  for (const outputPath of segments) {
+    await renderStillImage({
+      sourcePath: source, outputPath, sourceSize: { width: 16, height: 16 }, orientation: "landscape",
+      durationSeconds: 0.1, durationFrames: 3, frameRate, motion: "none", overwrite: true,
+    }, runner);
+    assertSegmentProfile(await probeVideoProfile(outputPath, runner), frameRate, 3);
+  }
+  const mix = join(root, "mix.m4a");
+  const mixResult = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", "0.2",
+    "-c:a", "aac", "-profile:a", "aac_low", "-b:a", "192k", "-ar", "48000", "-ac", "2", mix,
+  ]);
+  assert.equal(mixResult.exitCode, 0, mixResult.stderr);
+  await assertApprovedStoryMix(mix, 6, frameRate, runner);
+  const master = join(root, "master.mp4");
+  await assembleStoryMaster({ segmentPaths: segments, approvedMixPath: mix, outputPath: master, frameRate, totalFrames: 6 }, runner);
+  const profile = await probeVideoProfile(master, runner);
+  assert.equal(profile.frameCount, 6);
+  assert.equal(profile.audioCodec, "aac");
+  assert.equal(profile.audioSampleRate, 48_000);
+  assert.equal(profile.audioChannels, 2);
+  const decoded = await runner.run("ffmpeg", ["-v", "error", "-i", master, "-f", "null", "-"]);
+  assert.equal(decoded.exitCode, 0, decoded.stderr);
 });
 
 test("lossless scene frame contains the actual last frame rather than the first", async (context) => {

@@ -13,6 +13,7 @@ import {
   materialOrientationSequence,
   moveSceneMaterials, reorderScenes, resolveCollageSettings, tornPaperEdgeParameters, tornPaperInnerEdgeParameters,
   transitionStory, verticalStoryFrame,
+  normalizeFrameRate, parseFrameRate,
   type CollageSettings, type Story, type VideoMaterial,
 } from "./index.js";
 
@@ -770,39 +771,96 @@ test("timeline uses configured photo/layout timing, original video duration and 
   story = addMaterial(story, "photo", imageMaterial("another", "portrait"));
   const timeline = buildStoryTimeline(story);
   assert.deepEqual(timeline.scenes.map(({ startSeconds, endSeconds, durationSource }) => [startSeconds, endSeconds, durationSource]), [
-    [0, 5, "scene"], [5, 185.25, "video"], [185.25, 187.75, "trim"],
+    [0, 5, "scene"], [5, 185.266667, "video"], [185.266667, 187.766667, "trim"],
   ]);
-  assert.equal(timeline.totalDurationSeconds, 187.75);
+  assert.equal(timeline.totalDurationSeconds, 187.766667);
+  assert.equal(timeline.totalFrames, 5_633);
   assert.equal(timeline.transitionOverlapSeconds, 0);
   assert.deepEqual(timeline.warnings, []);
-  assert.equal(buildStoryTimeline(reorderScenes(story, ["trim", "photo", "video"])).totalDurationSeconds, 187.75);
+  assert.equal(buildStoryTimeline(reorderScenes(story, ["trim", "photo", "video"])).totalDurationSeconds, 187.766667);
   assert.equal(story.scenes[1]!.durationSeconds, 5);
 });
 
 test("empty scenes add no footage and keep downstream timestamps exact", () => {
   const story = addScene(timelineStory(), "empty");
   const timeline = buildStoryTimeline(story, [{ formatId: "test", maxDurationSeconds: 6, requiresVerifiedAccount: false }]);
-  assert.equal(timeline.totalDurationSeconds, 187.75);
+  assert.equal(timeline.totalDurationSeconds, 187.766667);
   assert.equal(timeline.scenes[1]!.startSeconds, 5);
-  assert.equal(timeline.scenes[1]!.endSeconds, 185.25);
-  assert.equal(timeline.scenes[2]!.startSeconds, 185.25);
-  assert.equal(timeline.scenes[3]!.startSeconds, 187.75);
-  assert.equal(timeline.scenes[3]!.endSeconds, 187.75);
+  assert.equal(timeline.scenes[1]!.endSeconds, 185.266667);
+  assert.equal(timeline.scenes[2]!.startSeconds, 185.266667);
+  assert.equal(timeline.scenes[3]!.startSeconds, 187.766667);
+  assert.equal(timeline.scenes[3]!.endSeconds, 187.766667);
   assert.equal(timeline.scenes[3]!.durationSeconds, 0);
   assert.deepEqual(timeline.warnings, [{ code: "empty_scene", sceneId: "empty" }]);
   assert.equal(timeline.formatLimits[0]!.status, "exceeded");
-  assert.equal(timeline.formatLimits[0]!.excessSeconds, 181.75);
+  assert.equal(timeline.formatLimits[0]!.excessSeconds, 181.766667);
 });
 
 test("duration warnings are advisory, include exact excess and accept a duration exactly at the limit", () => {
   const story = timelineStory();
   const before = structuredClone(story);
-  const limits = [180, 187.75, 900].map((maxDurationSeconds) => ({ formatId: String(maxDurationSeconds), maxDurationSeconds, requiresVerifiedAccount: false }));
+  const limits = [180, 187.766667, 900].map((maxDurationSeconds) => ({ formatId: String(maxDurationSeconds), maxDurationSeconds, requiresVerifiedAccount: false }));
   assert.deepEqual(buildStoryTimeline(story, limits).formatLimits.map(({ status, excessSeconds }) => [status, excessSeconds]), [
-    ["exceeded", 7.75], ["within_limit", 0], ["within_limit", 0],
+    ["exceeded", 7.766667], ["within_limit", 0], ["within_limit", 0],
   ]);
   assert.deepEqual(story, before);
   assert.equal(buildStoryTimeline(createStory({ id: "empty", profileId: "profile" })).totalDurationSeconds, 0);
+});
+
+test("story frame rate is exact, bounded and locked by the first video forever", () => {
+  for (const [text, expected] of [
+    ["24000/1001", { numerator: 24_000, denominator: 1_001 }],
+    ["24/1", { numerator: 24, denominator: 1 }],
+    ["25/1", { numerator: 25, denominator: 1 }],
+    ["30000/1001", { numerator: 30_000, denominator: 1_001 }],
+    ["30/1", { numerator: 30, denominator: 1 }],
+    ["50/1", { numerator: 50, denominator: 1 }],
+    ["60000/1001", { numerator: 60_000, denominator: 1_001 }],
+    ["60/1", { numerator: 60, denominator: 1 }],
+  ] as const) assert.deepEqual(parseFrameRate(text), expected);
+  assert.equal(parseFrameRate("120/1"), undefined);
+  assert.deepEqual(normalizeFrameRate({ numerator: 22, denominator: 1 }), { numerator: 30, denominator: 1 });
+  assert.deepEqual(normalizeFrameRate({ numerator: 60_000, denominator: 2_002 }), { numerator: 30_000, denominator: 1_001 });
+
+  let story = addScene(createStory({ id: "fps", profileId: "profile" }), "first");
+  story = addMaterial(story, "first", {
+    ...timelineVideo("first-video", 1), sourceFrameRate: { numerator: 24_000, denominator: 1_001 },
+  });
+  assert.deepEqual(story.outputFrameRate, { numerator: 24_000, denominator: 1_001 });
+  story = removeMaterial(story, "first", "first-video");
+  story = addMaterial(story, "first", {
+    ...timelineVideo("replacement", 1), sourceFrameRate: { numerator: 60, denominator: 1 },
+  });
+  assert.deepEqual(story.outputFrameRate, { numerator: 24_000, denominator: 1_001 });
+
+  let fallback = addScene(createStory({ id: "fallback", profileId: "profile" }), "first");
+  fallback = addMaterial(fallback, "first", {
+    ...timelineVideo("out-of-range", 1), sourceFrameRate: { numerator: 120, denominator: 1 },
+  });
+  assert.deepEqual(fallback.outputFrameRate, { numerator: 30, denominator: 1 });
+
+  let photosFirst = addScene(createStory({ id: "photos-first", profileId: "profile" }), "photo");
+  photosFirst = addMaterial(photosFirst, "photo", imageMaterial("photo", "portrait"));
+  assert.equal(photosFirst.outputFrameRate, undefined);
+  photosFirst = addScene(photosFirst, "video");
+  photosFirst = addMaterial(photosFirst, "video", {
+    ...timelineVideo("later-video", 1), sourceFrameRate: { numerator: 25, denominator: 1 },
+  });
+  assert.deepEqual(photosFirst.outputFrameRate, { numerator: 25, denominator: 1 });
+
+  const manyScenes: Story = {
+    ...createStory({ id: "many", profileId: "profile" }),
+    outputFrameRate: { numerator: 30_000, denominator: 1_001 },
+    scenes: Array.from({ length: 30 }, (_, index) => ({
+      id: `scene-${index}`, materials: [imageMaterial(`image-${index}`, "portrait")],
+      durationSeconds: 3.37, motion: "none" as const, rendererId: "still-image", render: { status: "idle" as const },
+    })),
+  };
+  const frameTimeline = buildStoryTimeline(manyScenes);
+  const framesPerScene = Math.round(3.37 * 30_000 / 1_001);
+  assert.equal(frameTimeline.totalFrames, framesPerScene * 30);
+  assert.deepEqual(frameTimeline.scenes.map(({ startFrame }) => startFrame),
+    Array.from({ length: 30 }, (_, index) => index * framesPerScene));
 });
 
 function timelineVideo(id: string, sourceDurationSeconds: number): VideoMaterial {
