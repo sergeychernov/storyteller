@@ -146,6 +146,12 @@ Enable **Settings → Source → Wait for CI** for `api`, `worker`, `web`, and `
 
 Pre-release audit, 2026-08-28: production API/worker pre-deploy commands, worker backend build, API healthcheck, and the pre-B16 API/worker/web watch paths were saved and read back from Railway. B16 update, 2026-08-29: the Web service was changed to build with `yarn build:web`, start with `yarn workspace @storyteller/site start`, and use the frontend watch paths in this guide; all three fields and active `source.checkSuites: true` were read back from production configuration. The settings apply on the next deployment; this read-back does not claim that uncommitted B16 code is deployed.
 
+Production correction, 2026-09-02: the Web service received the repository-wide
+`/**` watch path while **Wait for CI** remained enabled. Applying the setting
+deployed commit `f99ac7d` as deployment
+`7294a16a-3106-4176-8a53-d50bd43b250c`; the production Preview then exposed the
+master-export panel and returned the expected approved-mix prerequisite error.
+
 ### B14 release order
 
 B14 is intentionally a staged release: apply additive migration 10 first; release
@@ -197,29 +203,14 @@ Railway's automatic monorepo import may initially watch only the application dir
 
 ### `web`
 
+Keep the production Web service on a repository-wide trigger while **Wait for
+CI** is enabled. Railway evaluates watch paths against each individual commit,
+not against the cumulative diff from the active deployment. With narrow paths,
+a Web commit rejected by CI can remain undeployed after a later backend-only
+commit passes CI, leaving the API and browser bundle on different revisions.
+
 ```text
-/apps/site/**
-/apps/story-web/**
-/apps/clip-web/**
-/packages/analytics/**
-/packages/api-client/**
-/packages/auth-client/**
-/packages/domain/**
-/packages/localization/**
-/packages/schemas/**
-/docs/product-roadmap.md
-/scripts/frontend-host.test.mjs
-/scripts/public-roadmap.mjs
-/scripts/public-site.mjs
-/scripts/prerender-public-site.mjs
-/scripts/vite-public-roadmap.mjs
-/scripts/vite-public-site.mjs
-/package.json
-/yarn.lock
-/.yarnrc.yml
-/tsconfig.base.json
-/tsconfig.json
-/railpack.json
+/**
 ```
 
 ### `admin`

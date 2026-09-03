@@ -600,8 +600,35 @@ test("scene-frame intermediates use lossless H.264 instead of CRF compression", 
   }, runner);
   for (const args of calls) {
     assert.deepEqual(args.slice(args.indexOf("-preset"), args.indexOf("-preset") + 4), ["-preset", "ultrafast", "-qp", "0"]);
+    assert.deepEqual(args.slice(args.indexOf("-profile:v"), args.indexOf("-profile:v") + 2), ["-profile:v", "high444"]);
     assert.equal(args.includes("-crf"), false);
   }
+});
+
+test("lossless scene-frame video encodes with an x264-compatible profile", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-lossless-video-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const runner = new SpawnMediaProcessRunner();
+  const source = join(root, "source.mp4");
+  const create = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-f", "lavfi", "-i", "color=red:s=16x16:r=30:d=0.2",
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", source,
+  ]);
+  assert.equal(create.exitCode, 0, create.stderr);
+  const output = join(root, "lossless.mp4");
+  await renderVideo({
+    sourcePath: source, outputPath: output, sourceSize: { width: 16, height: 16 },
+    sourceDurationSeconds: 0.2, hasAudio: false, mode: "video", width: 720, height: 1280,
+    frameRate: { numerator: 30, denominator: 1 }, durationFrames: 3, lossless: true,
+    edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } },
+  }, runner);
+  const profile = await probeVideoProfile(output, runner);
+  assert.match(profile.videoProfile, /4:4:4/);
+  assert.equal(profile.pixelFormat, "yuv420p");
+  assert.deepEqual({ width: profile.width, height: profile.height }, { width: 720, height: 1280 });
+  assert.equal(profile.frameCount, 3);
+  const decoded = await runner.run("ffmpeg", ["-v", "error", "-i", output, "-f", "null", "-"]);
+  assert.equal(decoded.exitCode, 0, decoded.stderr);
 });
 
 test("master video segments normalize geometry, rational CFR and exact frame count in one encode", async () => {
