@@ -17,6 +17,7 @@ const allowedCollageMediaMixes = new Set(["images_only", "includes_video", "not_
 const allowedCollageBackgroundModes = new Set(["previous_scene_darkened", "custom_material_original"]);
 const allowedCollageRowDirections = new Set(["ascending", "level", "descending", "random"]);
 const allowedTimelineEditKinds = new Set(["scene_reordered", "material_moved_between_scenes"]);
+const allowedSceneTitleChangeKinds = new Set(["added", "text", "position", "appearance", "timing", "removed"]);
 const allowedWebLayouts = new Set(["desktop", "mobile_web"]);
 const allowedStoryOutputProfiles = new Set(["vertical_social"]);
 const allowedFailureStages = new Set(["request", "processing", "download"]);
@@ -178,6 +179,9 @@ function sanitizeEventProperties(eventType: AnalyticsEventName, value: unknown):
   }
   if (eventType === "timeline edited" && !allowedTimelineEditKinds.has(value.timeline_edit_kind as string)) {
     return { ok: false, message: "analytics timeline edit kind is invalid" };
+  }
+  if (eventType === "scene title changed" && !allowedSceneTitleChangeKinds.has(value.title_change_kind as string)) {
+    return { ok: false, message: "analytics scene title change kind is invalid" };
   }
   if (eventType === "story preview completed" && !allowedWebLayouts.has(value.web_layout as string)) {
     return { ok: false, message: "analytics web layout is invalid" };

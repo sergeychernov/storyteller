@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
-  addMaterial, addScene, buildStoryTimeline, configureScene, createStory, DomainError, materialStorageKeys, moveSceneMaterials, removeMaterial, removeScene, reorderMaterials, reorderScenes, replaceMaterial, setCollageBackground,
-  type EditableCollageSettings, type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type ProfileLanguage, type ProfileUpdate, type Scene, type SceneMaterial, type SceneMotion, type Story,
+  addMaterial, addScene, buildStoryTimeline, configureScene, createStory, DomainError, materialStorageKeys, moveSceneMaterials, removeMaterial, removeScene, reorderMaterials, reorderScenes, replaceMaterial, setCollageBackground, setSceneTitle as changeSceneTitle,
+  type EditableCollageSettings, type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type ProfileLanguage, type ProfileUpdate, type Scene, type SceneMaterial, type SceneMotion, type SceneTitle, type Story,
 } from "@storyteller/domain";
 import { timelineDurationLimits } from "./timeline-formats.js";
 
@@ -222,6 +222,32 @@ export class StoryApplication {
     durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint; collage?: EditableCollageSettings;
   }): Promise<Story> {
     return this.changeStory(profileId, storyId, (story) => configureScene(story, sceneId, input));
+  }
+  async setSceneTitle(
+    profileId: string,
+    storyId: string,
+    sceneId: string,
+    title: SceneTitle | null,
+    expectedRevision: number,
+  ): Promise<Story> {
+    const story = await this.getStory(profileId, storyId);
+    if (story.revision !== expectedRevision) {
+      throw new ApplicationError("story has changed; reload it before editing the scene title", 409, "story_revision_conflict");
+    }
+    if (story.status !== "draft" && story.status !== "ready") {
+      throw new ApplicationError(`story cannot be edited while ${story.status}`, 409, "story_not_editable");
+    }
+    if (!story.scenes.some(({ id }) => id === sceneId)) {
+      throw new ApplicationError(`scene not found: ${sceneId}`, 404, "scene_not_found");
+    }
+    let changed: Story;
+    try { changed = changeSceneTitle(story, sceneId, title); }
+    catch (error) {
+      if (error instanceof DomainError) throw new ApplicationError(error.message, 422, "invalid_scene_title");
+      throw error;
+    }
+    await this.repository.updateStory(changed);
+    return changed;
   }
   async setSceneCollageBackground(
     profileId: string,

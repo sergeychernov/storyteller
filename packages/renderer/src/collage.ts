@@ -8,6 +8,7 @@ import {
 import { dirname, join } from "node:path";
 import { probeMedia, type MediaProcessRunner, SpawnMediaProcessRunner } from "./ffmpeg.js";
 import { h264SegmentArguments } from "./h264.js";
+import { buildTitleOverlayFilter, titleOverlayInputArguments, type TitleOverlaySpec } from "./title-overlay.js";
 
 export const collageRendererVersion = 24;
 
@@ -49,10 +50,11 @@ export interface CollageRenderSpec {
   readonly lossless?: boolean;
   readonly overwrite?: boolean;
   readonly onProgress?: (progress: number) => void;
+  readonly titleOverlay?: TitleOverlaySpec;
 }
 
-type NormalizedCollageRenderSpec = Required<Omit<CollageRenderSpec, "onProgress">>
-  & Pick<CollageRenderSpec, "onProgress"> & { readonly exactFrameCount: boolean };
+type NormalizedCollageRenderSpec = Required<Omit<CollageRenderSpec, "onProgress" | "titleOverlay">>
+  & Pick<CollageRenderSpec, "onProgress" | "titleOverlay"> & { readonly exactFrameCount: boolean };
 
 export function buildCollageBackgroundFilter(spec: CollageRenderSpec): string {
   const normalized = normalizeSpec(spec);
@@ -163,7 +165,14 @@ export function buildCollageFilter(spec: CollageRenderSpec): string {
         + `shortest=1:eof_action=pass:format=auto[base${layerIndex + 1}]`,
     );
   });
-  filters.push(`[base${materials.length}]trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuv420p[v0]`);
+  const finalBase = `base${materials.length}`;
+  if (normalized.titleOverlay) {
+    filters.push(
+      `[${finalBase}]trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=rgba[title-base]`,
+      buildTitleOverlayFilter("title-base", materials.length + 1, normalized.titleOverlay, "title-composited"),
+      "[title-composited]format=yuv420p[v0]",
+    );
+  } else filters.push(`[${finalBase}]trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuv420p[v0]`);
   return filters.join(";");
 }
 
@@ -244,7 +253,8 @@ export async function renderCollage(
   const inputArguments = [...backgroundArguments,
     ...cards.flatMap((card) => card.kind === "video"
     ? ["-i", card.path]
-    : ["-loop", "1", "-t", fixed(normalized.durationSeconds), "-i", card.path])];
+    : ["-loop", "1", "-t", fixed(normalized.durationSeconds), "-i", card.path]),
+    ...(normalized.titleOverlay ? titleOverlayInputArguments(normalized.titleOverlay, normalized.durationSeconds) : [])];
   const result = await runner.run("ffmpeg", [
     normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "2", "-filter_complex_threads", "2",
     ...inputArguments,

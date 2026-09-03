@@ -23,7 +23,7 @@ export function DesktopEditorHeader({ storyTitle, storyId, scenes, selected, cop
       <Link className={styles.back} to="/">‹ <span>{copy.allStories}</span></Link>
       <div className={styles.title}>
         <strong>{storyTitle || copy.untitledStory}</strong>
-        <small>{selected ? selected.title || `${copy.scene} ${selectedIndex + 1}` : copy.noScenes}{selected ? ` · ${selectedIndex + 1}/${scenes.length}` : ""}</small>
+        <small>{selected ? selected.title?.text || `${copy.scene} ${selectedIndex + 1}` : copy.noScenes}{selected ? ` · ${selectedIndex + 1}/${scenes.length}` : ""}</small>
       </div>
       <div className={styles.actions}>
         <span className={classNames(styles.saveState, saving && styles.saving)} role="status">

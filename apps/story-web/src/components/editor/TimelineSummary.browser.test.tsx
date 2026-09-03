@@ -63,5 +63,5 @@ const timeline: StoryTimeline = {
 };
 
 const emptyScene: Scene = {
-  id: "empty", title: "Gap", materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" },
+  id: "empty", materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" },
 };

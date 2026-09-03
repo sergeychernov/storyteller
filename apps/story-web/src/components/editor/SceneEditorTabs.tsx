@@ -1,12 +1,13 @@
-import { useState } from "react";
 import type { AuthSession, MaterialEdit, Scene } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneInspector } from "./SceneInspector.js";
+import { SceneTitlePanel } from "./SceneTitlePanel.js";
 import { isSingleVideoScene } from "./scene-renderer-model.js";
 import styles from "./SceneEditorTabs.module.css";
 import type { SceneChange } from "./story-editor-view.js";
+import type { SceneTitleEditorController } from "./use-scene-title-editor.js";
 
 interface SceneEditorTabsProps {
   readonly scene: Scene;
@@ -26,27 +27,29 @@ interface SceneEditorTabsProps {
   readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onChange: (change: SceneChange) => void;
+  readonly activeTab: EditorTab;
+  readonly onActiveTabChange: (tab: EditorTab) => void;
+  readonly titleEditor: SceneTitleEditorController;
 }
 
-type EditorTab = "materials" | "composition";
+export type EditorTab = "materials" | "composition" | "titles";
 
 export function SceneEditorTabs({
   scene, previousScene, copy, saving, uploading, backgroundUploading, uploadCount, storyId, session,
   onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onChange,
+  activeTab, onActiveTabChange, titleEditor,
 }: SceneEditorTabsProps) {
-  const [activeTab, setActiveTab] = useState<EditorTab>("materials");
   const singleVideo = isSingleVideoScene(scene);
-  const visibleTab = singleVideo ? "materials" : activeTab;
+  const visibleTab = singleVideo && activeTab === "composition" ? "materials" : activeTab;
   const tabs: readonly { id: EditorTab; label: string }[] = [
     { id: "materials", label: `${copy.materials} · ${scene.materials.length}` },
-    { id: "composition", label: copy.layout },
+    ...(!singleVideo ? [{ id: "composition" as const, label: copy.layout }] : []),
+    { id: "titles", label: `${copy.titles} · ${scene.title ? 1 : 0}` },
   ];
   return (
-    <section className={classNames(styles.shell, singleVideo && styles.materialsOnly)}>
+    <section className={styles.shell}>
       <div className={styles.grabber} />
-      {singleVideo ? <h2 className={styles.materialsHeading} id="scene-materials-heading">
-        {copy.materials} · {scene.materials.length}
-      </h2> : <div className={styles.tabs} role="tablist" aria-label={copy.sceneTools}>
+      <div className={styles.tabs} role="tablist" aria-label={copy.sceneTools} style={{ "--tab-count": tabs.length } as React.CSSProperties}>
         {tabs.map((tab) => <button
           type="button"
           role="tab"
@@ -54,14 +57,14 @@ export function SceneEditorTabs({
           aria-controls={`scene-panel-${tab.id}`}
           aria-selected={visibleTab === tab.id}
           key={tab.id}
-          onClick={() => setActiveTab(tab.id)}
+          onClick={() => onActiveTabChange(tab.id)}
         >{tab.label}</button>)}
-      </div>}
+      </div>
       <div
         className={styles.content}
-        role={singleVideo ? "region" : "tabpanel"}
+        role="tabpanel"
         id={`scene-panel-${visibleTab}`}
-        aria-labelledby={singleVideo ? "scene-materials-heading" : `scene-tab-${visibleTab}`}
+        aria-labelledby={`scene-tab-${visibleTab}`}
       >
         {visibleTab === "materials" && <MaterialTimeline
           scene={scene}
@@ -83,6 +86,7 @@ export function SceneEditorTabs({
           onReorder={onReorder}
         />}
         {visibleTab === "composition" && <SceneInspector scene={scene} copy={copy} saving={saving} storyId={storyId} session={session} onChange={onChange} />}
+        {visibleTab === "titles" && <SceneTitlePanel scene={scene} copy={copy} editor={titleEditor} variant="mobile" />}
       </div>
     </section>
   );

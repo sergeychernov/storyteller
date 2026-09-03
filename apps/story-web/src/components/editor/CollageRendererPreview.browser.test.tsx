@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import {
   collageCardMaterials, collageLayoutDefinitions, collageLayoutMaterials, createCollageCardAngles, createCollageCardOffsets,
   defaultCollageSettings,
@@ -136,6 +136,40 @@ describe("shared editor ScenePlayer", () => {
     act(() => lifecycle.current?.initializeScene());
 
     expect(container.querySelector("[data-scene-media='single']")).not.toBe(firstMaterial);
+  });
+
+  test("uses one direct-manipulation target for either a title or a still-image focus point", () => {
+    const copy = getEditorCopy("en");
+    const scene: Scene = {
+      id: "still-title", rendererId: "still-image", materials: [photo("single")],
+      durationSeconds: 5, motion: "none", render: { status: "idle" },
+      title: {
+        text: "A title", position: { x: 0.5, y: 0.78 }, style: "shadow", size: "medium", color: "#FFFFFF",
+        timing: { startSeconds: 0, endSeconds: 5 },
+      },
+    };
+    const onCommitTitlePosition = vi.fn();
+    const onChange = vi.fn();
+    const props = { scene, copy, storyId: "story", session, active: true, saving: false, onChange };
+    const { rerender } = render(<SceneRendererPreview {...props}
+      title={scene.title} titleEditing onCommitTitlePosition={onCommitTitlePosition} />);
+
+    const titleControl = screen.getByRole("button", { name: copy.moveTitle });
+    expect(screen.queryByRole("button", { name: copy.moveFocusPoint })).toBeNull();
+    const contextMenu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    const nativeDrag = new Event("dragstart", { bubbles: true, cancelable: true });
+    expect(titleControl.dispatchEvent(contextMenu)).toBe(false);
+    expect(contextMenu.defaultPrevented).toBe(true);
+    expect(titleControl.dispatchEvent(nativeDrag)).toBe(false);
+    expect(nativeDrag.defaultPrevented).toBe(true);
+    expect(titleControl.getAttribute("draggable")).toBe("false");
+    fireEvent.keyDown(titleControl, { key: "ArrowLeft" });
+    expect(onCommitTitlePosition).toHaveBeenLastCalledWith({ x: 0.49, y: 0.78 });
+
+    rerender(<SceneRendererPreview {...props} title={scene.title} titleEditing={false}
+      onCommitTitlePosition={onCommitTitlePosition} />);
+    expect(screen.queryByRole("button", { name: copy.moveTitle })).toBeNull();
+    expect(screen.getByRole("button", { name: copy.moveFocusPoint })).toBeTruthy();
   });
 
   test("paints cards by appearance order when a layout enters from bottom to top", () => {

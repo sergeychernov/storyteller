@@ -27,7 +27,7 @@ export function SceneDragGhost({
         <span className={styles.number}>{String(index + 1).padStart(2, "0")}</span>
       </span>
       <span className={styles.details}>
-        <strong>{scene.title || `${copy.scene} ${index + 1}`}</strong>
+        <strong>{scene.title?.text || `${copy.scene} ${index + 1}`}</strong>
         <small>{formatSceneDuration(scene)} {copy.seconds} · {scene.materials.length}</small>
       </span>
       <span className={styles.handle}>⠿</span>

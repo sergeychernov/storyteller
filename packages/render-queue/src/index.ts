@@ -1,4 +1,4 @@
-import type { CollageSettings, FocusPoint, MaterialEdit, MaterialOrientation, RationalFrameRate, SceneMotion, VideoExportMode } from "@storyteller/domain";
+import type { CollageSettings, FocusPoint, MaterialEdit, MaterialOrientation, RationalFrameRate, SceneMotion, SceneTitle, VideoExportMode } from "@storyteller/domain";
 import type { Pool } from "pg";
 import type { RenderDependency } from "./render-version.js";
 export { hashSceneRenderInput, sceneRenderParameters, type RenderDependency } from "./render-version.js";
@@ -22,6 +22,7 @@ export interface StillImageRenderInput {
   readonly dependencies?: readonly RenderDependency[];
   readonly rendererId: "still-image";
   readonly rendererVersion: number;
+  readonly title?: SceneTitle & { readonly rendererVersion: string };
   readonly material: {
     readonly contentHash?: string;
     readonly storageKey: string;

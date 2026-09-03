@@ -74,6 +74,7 @@ Event names follow the `object verb` form and are compile-time checked by
 | `collage background configured` | `surface`, `collage_background_mode` | The dedicated background API confirms a custom upload or restoration of the previous-scene frame |
 | `collage row direction configured` | `surface`, `collage_row_direction` | The scene configuration API confirms the ascending, level, descending, or irregular card alignment |
 | `timeline edited` | `surface`, `timeline_edit_kind` | The scene-order or cross-scene material-move API confirms the edit |
+| `scene title changed` | `surface`, `title_change_kind` | The dedicated title API confirms adding, text, position, appearance, timing, or removal |
 | `story preview completed` | `surface`, `web_layout` | Continuous Web preview reaches the authoritative timeline end during playback; once per completed pass, never after seek, Stop, error or navigation |
 | `story exported` | `surface`, `output_profile` | The browser starts downloading a ready full-story master for the current story revision |
 | `scene render requested` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The API accepts the render request |
@@ -112,6 +113,10 @@ operation succeeds and never exposes the material kind, ID, filename, or content
 `material_moved_between_scenes`. The event is emitted only after the API returns
 the updated story; optimistic movement, failed requests and revision conflicts do
 not emit it. Scene, material and story identifiers are never included.
+`title_change_kind` is restricted to `added`, `text`, `position`, `appearance`,
+`timing`, or `removed`. It is emitted only after the title API confirms the
+change and never includes title text, coordinates, timing values, colors, IDs,
+or other scene content.
 
 ### B13 access-control instrumentation decision
 

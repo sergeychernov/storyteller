@@ -1,12 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { analytics, type MaterialKind } from "@storyteller/analytics";
+import { analytics, type MaterialKind, type SceneTitleChangeKind } from "@storyteller/analytics";
 import {
   createScene,
   deleteSceneMaterial,
   editSceneMaterial,
+  setStorySceneTitle,
   uploadSceneMaterial,
   type AuthSession,
   type MaterialEdit,
+  type SceneTitle,
   type Story,
 } from "../../api.js";
 import { useLocalization } from "@storyteller/web-ui";
@@ -74,14 +76,29 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     onSuccess: update,
   });
   const configureMutation = useConfigureStoryScene(session.csrfToken, story.id);
+  const titleMutation = useMutation({
+    mutationKey: ["set-story-scene-title", story.id],
+    scope: { id: `story-write:${story.id}` },
+    mutationFn: ({ sceneId, title, changeKind }: {
+      readonly sceneId: string; readonly title: SceneTitle | null; readonly changeKind: SceneTitleChangeKind;
+    }) => {
+      const current = queryClient.getQueryData<Story>(["story", story.id]) ?? story;
+      return setStorySceneTitle(session.csrfToken, story.id, sceneId, title, current.revision)
+        .then((changed) => ({ changed, changeKind }));
+    },
+    onSuccess: ({ changed, changeKind }) => {
+      update(changed);
+      analytics.track("scene title changed", { title_change_kind: changeKind });
+    },
+  });
   const selected = story.scenes.find(({ id }) => id === selectedId) ?? story.scenes[0];
   const saving = addSceneMutation.isPending || uploadMaterialsMutation.isPending || deleteMaterialMutation.isPending
     || editMaterialMutation.isPending || reorderMutation.isPending || reorderScenesMutation.isPending
-    || moveMaterialMutation.isPending || configureMutation.isPending || backgroundMutation.isPending;
+    || moveMaterialMutation.isPending || configureMutation.isPending || backgroundMutation.isPending || titleMutation.isPending;
   const deletion = useDeleteScene({ story, session, selectedId, onSelect, copy, saving });
   const operationError = addSceneMutation.error ?? uploadMaterialsMutation.error ?? deleteMaterialMutation.error
     ?? editMaterialMutation.error ?? reorderMutation.error ?? reorderScenesMutation.error ?? moveMaterialMutation.error
-    ?? configureMutation.error ?? backgroundMutation.error;
+    ?? configureMutation.error ?? backgroundMutation.error ?? titleMutation.error;
 
   function addScene() {
     if (deletion.target || deletion.pending) return;
@@ -158,6 +175,11 @@ export function useStoryEditor({ story, session, selectedId, onSelect }: UseStor
     },
     onChange: (change) => {
       if (selected && !deletion.target && !deletion.pending) configureMutation.mutate({ sceneId: selected.id, change });
+    },
+    onSetTitle: async (title, changeKind) => {
+      if (!selected || deletion.target || deletion.pending) return;
+      titleMutation.reset();
+      await titleMutation.mutateAsync({ sceneId: selected.id, title, changeKind });
     },
   } };
 }

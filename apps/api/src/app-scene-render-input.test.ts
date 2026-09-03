@@ -18,7 +18,7 @@ import {
   type StoryRepository,
 } from "@storyteller/application";
 import { getMaterialPresentation, materialStorageKeys, type PlatformCredential, type PlatformProvider, type Profile, type ProfileUpdate, type SceneMaterial, type Story } from "@storyteller/domain";
-import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue } from "@storyteller/render-queue";
+import { hashSceneRenderInput, sceneRenderParameters, type ObjectDeletionJob, type SceneRenderJob, type SceneRenderQueue } from "@storyteller/render-queue";
 import { probeMedia, renderVideo, SpawnMediaProcessRunner } from "@storyteller/renderer";
 import { Readable } from "node:stream";
 import type { LightMyRequestResponse } from "fastify";
@@ -31,7 +31,51 @@ import { buildApi } from "./server.js";
 import { detectMediaMetadata, MediaStorage } from "./media-storage.js";
 import { LocalObjectStorage, S3ObjectStorage } from "./object-storage.js";
 import { accessPolicyForRoute } from "./access-control.js";
-import { buildSceneRenderInput } from "./scene-render-input.js";
+import { buildSceneFrameInput, buildSceneRenderInput } from "./scene-render-input.js";
+
+test("visual render inputs version and hash titles without exposing raw text, while scene frames omit them", async () => {
+  const scene = {
+    id: "scene", rendererId: "still-image", durationSeconds: 5, motion: "none" as const,
+    focusPoint: { x: 0.5, y: 0.5 },
+    title: {
+      text: "Секретный текст", position: { x: 0.4, y: 0.7 }, style: "plate" as const, size: "large" as const,
+      color: "#FFE082" as const, timing: { startSeconds: 0.5, endSeconds: 4.5 },
+    },
+    materials: [{
+      id: "image", kind: "image" as const, name: "image.jpg", storageKey: "image.jpg", mimeType: "image/jpeg",
+      sizeBytes: 100, width: 900, height: 1600, orientation: "portrait" as const,
+    }],
+    render: { status: "idle" as const },
+  };
+  const media = { async contentHash({ storageKey }: { storageKey: string }) { return createHash("sha256").update(storageKey).digest("hex"); } };
+  const visual = await buildSceneRenderInput(scene, media);
+  assert.equal(visual.title?.rendererVersion, "scene-title.v2");
+  assert.equal(JSON.stringify(sceneRenderParameters(visual)).includes(scene.title.text), false);
+  assert.equal(JSON.stringify(sceneRenderParameters(visual)).includes(createHash("sha256").update(scene.title.text).digest("hex")), true);
+  const changed = { ...visual, title: { ...visual.title!, style: "shadow" as const } };
+  assert.notEqual(hashSceneRenderInput(visual), hashSceneRenderInput(changed));
+
+  const frame = await buildSceneFrameInput(scene, media);
+  assert.equal(frame.title, undefined);
+  assert.equal(JSON.stringify(sceneRenderParameters(frame)).includes(scene.title.text), false);
+
+  const videoScene = {
+    ...scene,
+    rendererId: "video",
+    materials: [{
+      id: "video", kind: "video" as const, name: "video.mp4", storageKey: "video.mp4", mimeType: "video/mp4",
+      sizeBytes: 100, width: 900, height: 1600, orientation: "portrait" as const, hasAudio: true,
+      audioTags: [], sourceDurationSeconds: 5,
+    }],
+  };
+  const combined = await buildSceneRenderInput(videoScene, media, "combined");
+  const audio = await buildSceneRenderInput(videoScene, media, "audio");
+  const { title: _ignoredTitle, ...videoWithoutTitle } = videoScene;
+  const audioWithoutTitle = await buildSceneRenderInput(videoWithoutTitle, media, "audio");
+  assert.ok(combined.title);
+  assert.equal(audio.title, undefined);
+  assert.equal(hashSceneRenderInput(audio), hashSceneRenderInput(audioWithoutTitle));
+});
 
 test("builds a crop-aware mixed PPL render job with a silent video card", async () => {
   const scene = {

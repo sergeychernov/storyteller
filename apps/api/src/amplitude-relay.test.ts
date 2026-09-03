@@ -10,7 +10,7 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
   const upstreamRequests: { readonly url: string; readonly body: unknown }[] = [];
   const fetchUpstream = (async (input: string | URL | Request, init?: RequestInit) => {
     upstreamRequests.push({ url: String(input), body: JSON.parse(String(init?.body)) as unknown });
-    return new Response(JSON.stringify({ code: 200, events_ingested: 8 }), {
+    return new Response(JSON.stringify({ code: 200, events_ingested: 9 }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   }) as typeof fetch;
@@ -46,6 +46,10 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
         event_properties: { surface: "story-web", timeline_edit_kind: "scene_reordered" },
         device_id: "device-1", user_id: "profile-1",
       }, {
+        event_type: "scene title changed",
+        event_properties: { surface: "story-web", title_change_kind: "appearance" },
+        device_id: "device-1", user_id: "profile-1",
+      }, {
         event_type: "story preview completed",
         event_properties: { surface: "story-web", web_layout: "desktop" },
         device_id: "device-1", user_id: "profile-1",
@@ -65,7 +69,7 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
   });
 
   assert.equal(response.statusCode, 200, response.body);
-  assert.deepEqual(response.json(), { code: 200, events_ingested: 8 });
+  assert.deepEqual(response.json(), { code: 200, events_ingested: 9 });
   assert.deepEqual(upstreamRequests, [{
     url: "https://api2.amplitude.com/2/httpapi",
     body: {
@@ -90,6 +94,10 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
       }, {
         event_type: "timeline edited",
         event_properties: { surface: "story-web", timeline_edit_kind: "scene_reordered" },
+        device_id: "device-1", user_id: "profile-1",
+      }, {
+        event_type: "scene title changed",
+        event_properties: { surface: "story-web", title_change_kind: "appearance" },
         device_id: "device-1", user_id: "profile-1",
       }, {
         event_type: "story preview completed",
@@ -235,6 +243,16 @@ test("rejects events and properties outside the analytics taxonomy", async (cont
       }],
     },
   });
+  const invalidSceneTitleChangeKind = await api.inject({
+    method: "POST", url: "/analytics/amplitude",
+    payload: {
+      api_key: projectKey,
+      events: [{
+        event_type: "scene title changed", device_id: "device-1",
+        event_properties: { surface: "story-web", title_change_kind: "raw-title-text" },
+      }],
+    },
+  });
   const invalidWebLayout = await api.inject({
     method: "POST", url: "/analytics/amplitude",
     payload: {
@@ -255,6 +273,7 @@ test("rejects events and properties outside the analytics taxonomy", async (cont
   assert.equal(invalidBackgroundMode.statusCode, 400);
   assert.equal(invalidRowDirection.statusCode, 400);
   assert.equal(invalidTimelineEditKind.statusCode, 400);
+  assert.equal(invalidSceneTitleChangeKind.statusCode, 400);
   assert.equal(invalidWebLayout.statusCode, 400);
   assert.equal(upstreamCalls, 0);
 });

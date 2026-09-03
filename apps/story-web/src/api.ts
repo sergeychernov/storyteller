@@ -15,6 +15,7 @@ import type {
   Scene,
   SceneMaterial,
   SceneMotion,
+  SceneTitle,
   Story,
   StoryTimeline,
   VideoAudioTag,
@@ -41,6 +42,7 @@ export type {
   Scene,
   SceneMaterial,
   SceneMotion,
+  SceneTitle,
   Story,
   StoryTimeline,
   VideoAudioTag,
@@ -199,6 +201,17 @@ export function configureStoryScene(token: string, storyId: string, sceneId: str
   durationSeconds?: number; layoutId?: string | null; motion?: SceneMotion; focusPoint?: FocusPoint; collage?: EditableCollageSettings;
 }): Promise<Story> {
   return request(`/stories/${storyId}/scenes/${sceneId}`, { method: "PATCH", body: JSON.stringify(settings) }, token);
+}
+export function setStorySceneTitle(
+  token: string,
+  storyId: string,
+  sceneId: string,
+  title: SceneTitle | null,
+  expectedRevision: number,
+): Promise<Story> {
+  return request(`/stories/${storyId}/scenes/${sceneId}/title`, {
+    method: "PUT", body: JSON.stringify({ title, expectedRevision }),
+  }, token);
 }
 export function requestSceneRender(token: string, storyId: string, sceneId: string, mode: VideoExportMode, signal?: AbortSignal): Promise<SceneRender> {
   return request(`/stories/${storyId}/scenes/${sceneId}/renders`, { method: "POST", body: JSON.stringify({ mode }), ...(signal ? { signal } : {}) }, token);

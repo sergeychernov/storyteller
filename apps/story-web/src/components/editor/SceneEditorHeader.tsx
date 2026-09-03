@@ -23,7 +23,7 @@ export function SceneEditorHeader({
 }: SceneEditorHeaderProps) {
   const selectedIndex = scenes.findIndex(({ id }) => id === selectedId);
   const selected = selectedIndex >= 0 ? scenes[selectedIndex] : undefined;
-  const selectedTitle = selected ? selected.title || `${copy.scene} ${selectedIndex + 1}` : copy.noScenes;
+  const selectedTitle = selected ? selected.title?.text || `${copy.scene} ${selectedIndex + 1}` : copy.noScenes;
   const context = mode === "scene"
     ? `${selectedTitle}${scenes.length ? ` · ${selectedIndex + 1}/${scenes.length}` : ""}`
     : `${storyTitle || copy.untitledStory} · ${scenes.length} ${copy.scenes.toLocaleLowerCase()}`;

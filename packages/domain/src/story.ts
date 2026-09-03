@@ -7,11 +7,13 @@ import {
 import { createCollageCardAngles, createCollageCardOffsets } from "./collage-layout.js";
 import { getAutomaticCollageLayout, getCollageLayoutOptions, getLayoutOptions, getSelectedCollageLayout } from "./layout.js";
 import type {
-  CollageBackground, CollageSettings, EditableCollageSettings, FocusPoint, Narration, Scene, SceneMaterial, SceneMotion, Story,
+  CollageBackground, CollageSettings, EditableCollageSettings, FocusPoint, Narration, Scene, SceneMaterial, SceneMotion, SceneTitle, Story,
 } from "./model.js";
 import { defaultSingleImageMotion, getSceneMotionOptions } from "./scene-motion.js";
 import { centeredFocusPoint } from "./still-image-motion.js";
 import { defaultStoryFrameRate, normalizeFrameRate } from "./frame-rate.js";
+import { getSceneDurationSeconds } from "./story-timeline.js";
+import { clampSceneTitleToDuration, normalizeSceneTitle } from "./scene-title.js";
 
 export function createStory(input: { id: string; profileId: string; title?: string }): Story {
   return {
@@ -133,12 +135,12 @@ export function moveSceneMaterials(story: Story, sourceSceneId: string, input: M
     return material;
   });
   const scenes = story.scenes.map((scene) => {
-    if (scene.id === source.id) return resetMaterialPresentation({
+    if (scene.id === source.id) return normalizeStoredSceneTitle(resetMaterialPresentation({
       ...scene, materials: scene.materials.filter(({ id }) => !movingIds.has(id)),
-    }, collageAngleSeed(story, scene, "move-materials-source"));
-    if (scene.id === target.id) return resetMaterialPresentation({
+    }, collageAngleSeed(story, scene, "move-materials-source")));
+    if (scene.id === target.id) return normalizeStoredSceneTitle(resetMaterialPresentation({
       ...scene, materials: [...scene.materials.slice(0, input.targetIndex), ...moving, ...scene.materials.slice(input.targetIndex)],
-    }, collageAngleSeed(story, scene, "move-materials-target"));
+    }, collageAngleSeed(story, scene, "move-materials-target")));
     return scene;
   });
   return { ...changed(story, { scenes }), music: { ...story.music, applied: false } };
@@ -250,13 +252,15 @@ export function selectRenderer(story: Story, sceneId: string, rendererId: string
   return updateScene(story, sceneId, (scene) => ({ ...scene, rendererId, render: { status: "idle" } }));
 }
 
-export function setSceneTitle(story: Story, sceneId: string, title: string | null): Story {
-  return updateScene(story, sceneId, (scene) => {
+export function setSceneTitle(story: Story, sceneId: string, title: SceneTitle | null): Story {
+  const updated = updateScene(story, sceneId, (scene) => {
     const { title: _oldTitle, ...withoutTitle } = scene;
-    return title?.trim()
-      ? { ...withoutTitle, title: title.trim(), render: { status: "idle" } }
-      : { ...withoutTitle, render: { status: "idle" } };
+    if (!title) return { ...withoutTitle, render: { status: "idle" } };
+    if (!scene.materials.length) throw new DomainError("a scene title requires at least one material");
+    return { ...withoutTitle, title: normalizeSceneTitle(title, getSceneDurationSeconds(scene)), render: { status: "idle" } };
   });
+  const { approvedMix: _approvedMix, ...withoutApprovedMix } = updated;
+  return { ...withoutApprovedMix, music: { ...updated.music, applied: false } };
 }
 
 export function addNarration(story: Story, narration: Narration): Story {
@@ -274,7 +278,15 @@ export function removeNarration(story: Story, narrationId: string): Story {
 function updateScene(story: Story, sceneId: string, update: (scene: Scene) => Scene): Story {
   assertEditable(story);
   assertScene(story, sceneId);
-  return changed(story, { scenes: story.scenes.map((scene) => scene.id === sceneId ? update(scene) : scene) });
+  return changed(story, { scenes: story.scenes.map((scene) => scene.id === sceneId ? normalizeStoredSceneTitle(update(scene)) : scene) });
+}
+
+function normalizeStoredSceneTitle(scene: Scene): Scene {
+  if (!scene.title) return scene;
+  const title = clampSceneTitleToDuration(scene.title, getSceneDurationSeconds(scene));
+  if (title) return { ...scene, title };
+  const { title: _title, ...withoutTitle } = scene;
+  return withoutTitle;
 }
 
 function assertScene(story: Story, sceneId: string): void {

@@ -1,15 +1,102 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import sharp from "sharp";
 import {
   createCollageEntranceSchedule, createStillImageMotionPlan, getCollageCardShadowMetrics,
 } from "@storyteller/domain";
 import {
-  buildCollageBackgroundFilter, buildCollageCardFilter, buildCollageFilter, buildStillImageFilter, PcmWaveform, prepareVideoAudio, probeMedia, renderCollage,
-  assembleStoryMaster, assertApprovedStoryMix, assertSegmentProfile, probeVideoProfile, renderLastFrame, renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner,
+  buildCollageBackgroundFilter, buildCollageCardFilter, buildCollageFilter, buildStillImageFilter, buildTitleOverlayFilter,
+  PcmWaveform, prepareVideoAudio, probeMedia, renderCollage,
+  assembleStoryMaster, assertApprovedStoryMix, assertSegmentProfile, probeVideoProfile, renderLastFrame, renderSceneTitleLayer,
+  renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner,
 } from "./index.js";
+
+test("title renderer rasterizes Cyrillic wrapping for every style, size and color preset", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-title-layer-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const variants = [
+    { style: "plain" as const, size: "small" as const, color: "#FFFFFF" as const },
+    { style: "shadow" as const, size: "medium" as const, color: "#FFE082" as const },
+    { style: "plate" as const, size: "large" as const, color: "#20201E" as const },
+  ];
+  const hashes = new Set<string>();
+  for (const [index, variant] of variants.entries()) {
+    const outputPath = join(root, `title-${index}.png`);
+    await renderSceneTitleLayer({
+      title: {
+        text: "Первый снег укрыл старый город\nИ всё стало тише", position: { x: index === 0 ? 0.04 : 0.5, y: 0.78 },
+        ...variant, timing: { startSeconds: 0, endSeconds: 5 },
+      },
+      width: 270, height: 480, outputPath,
+    });
+    const image = sharp(outputPath);
+    const metadata = await image.metadata();
+    assert.deepEqual({ width: metadata.width, height: metadata.height }, { width: 270, height: 480 });
+    const { channels } = await image.stats();
+    assert.ok((channels[3]?.max ?? 0) > 0, `variant ${index} must contain non-transparent pixels`);
+    hashes.add(createHash("sha256").update(await readFile(outputPath)).digest("hex"));
+  }
+  assert.equal(hashes.size, variants.length);
+});
+
+test("dark title renders a white shadow", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-dark-title-shadow-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const outputPath = join(root, "title.png");
+  await renderSceneTitleLayer({
+    title: {
+      text: "Тёмный титр", position: { x: 0.5, y: 0.5 }, style: "shadow", size: "large", color: "#20201E",
+      timing: { startSeconds: 0, endSeconds: 5 },
+    },
+    width: 270, height: 480, outputPath,
+  });
+  const { data } = await sharp(outputPath).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let darkPixels = 0;
+  let whitePixels = 0;
+  for (let index = 0; index < data.length; index += 4) {
+    const [red = 0, green = 0, blue = 0, alpha = 0] = data.subarray(index, index + 4);
+    if (alpha > 0 && red < 80 && green < 80 && blue < 80) darkPixels += 1;
+    if (alpha > 0 && red > 220 && green > 220 && blue > 220) whitePixels += 1;
+  }
+  assert.ok(darkPixels > 0, "the dark glyph must be present");
+  assert.ok(whitePixels > 0, "the white shadow must be present");
+});
+
+test("title overlays use alpha fades inside the existing single H.264 filter graph", async () => {
+  const calls: string[][] = [];
+  const runner: MediaProcessRunner = {
+    async run(executable, args) {
+      if (executable === "ffmpeg") calls.push([...args]);
+      return executable === "ffprobe"
+        ? { exitCode: 0, stdout: '{"streams":[],"format":{"duration":"5"}}', stderr: "" }
+        : { exitCode: 0, stdout: "", stderr: "" };
+    },
+  };
+  const titleOverlay = { sourcePath: "title.png", timing: { startSeconds: 0.5, endSeconds: 4.5 } };
+  await renderStillImage({
+    sourcePath: "photo.png", outputPath: "still.mp4", sourceSize: { width: 100, height: 200 }, orientation: "portrait",
+    durationSeconds: 5, motion: "none", titleOverlay,
+  }, runner);
+  await renderVideo({
+    sourcePath: "clip.mp4", outputPath: "video.mp4", sourceSize: { width: 100, height: 200 }, sourceDurationSeconds: 5,
+    hasAudio: false, mode: "video", edit: { rotation: 0, crop: { x: 0, y: 0, width: 1, height: 1 } }, titleOverlay,
+  }, runner);
+  for (const args of calls) {
+    const graph = args[args.indexOf("-filter_complex") + 1] ?? "";
+    assert.match(graph, /fade=t=in:st=0\.500:d=0\.150:alpha=1/);
+    assert.match(graph, /fade=t=out:st=4\.350:d=0\.150:alpha=1/);
+    assert.match(graph, /overlay=x=0:y=0/);
+    assert.equal(args.filter((argument) => argument === "libx264").length, 1);
+  }
+  assert.match(
+    buildTitleOverlayFilter("base", 1, { sourcePath: "title.png", timing: { startSeconds: 1, endSeconds: 1.2 } }, "out"),
+    /fade=t=in:st=1\.000:d=0\.100:alpha=1,fade=t=out:st=1\.100:d=0\.100:alpha=1/,
+  );
+});
 
 test("probeMedia uses an argument array and parses JSON", async () => {
   let received: readonly string[] = [];
@@ -61,6 +148,9 @@ test("collage renderer preserves full photo aspects, paper frame, rotation and e
   const cardFilter = buildCollageCardFilter(spec, 0);
   const backgroundFilter = buildCollageBackgroundFilter(spec);
   const filter = buildCollageFilter(spec);
+  const titleFilter = buildCollageFilter({
+    ...spec, titleOverlay: { sourcePath: "title.png", timing: { startSeconds: 0.2, endSeconds: 4.8 } },
+  });
   assert.match(backgroundFilter, /force_original_aspect_ratio=increase/);
   assert.match(backgroundFilter, /crop=1080:1920:\(iw-ow\)\/2:\(ih-oh\)\/2/);
   assert.match(backgroundFilter, /eq=brightness=-0\.400:saturation=0\.720/);
@@ -78,6 +168,8 @@ test("collage renderer preserves full photo aspects, paper frame, rotation and e
   assert.doesNotMatch(cardFilter, /\/2\.7/);
   assert.doesNotMatch(filter, /geq=|force_original_aspect_ratio/,
     "the expensive static paper contour must not be recalculated for every video frame");
+  assert.match(titleFilter, /\[3:v\]format=rgba,fade=t=in:st=0\.200:d=0\.150:alpha=1/);
+  assert.match(titleFilter, /\[title-base\]\[title-overlay\]overlay/);
   assert.match(filter, /rotate=angle=/);
   assert.match(filter, /:c=0x00000000/);
   assert.match(filter, /\[card-rotated0\]split=2/);
@@ -343,11 +435,12 @@ test("a non-PPL collage keeps trimmed video moving inside a framed card", async 
   assert.deepEqual(backgroundMetadata.streams.map(({ codec_type }) => codec_type), ["video"]);
 });
 
-test("collage renderer produces a decodable silent H.264 file with the configured torn frame", async (context) => {
+test("collage renderer produces a decodable silent H.264 file with a torn frame and title", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "storyteller-collage-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const runner = new SpawnMediaProcessRunner();
   const red = join(root, "red.png"), blue = join(root, "blue.png"), green = join(root, "green.png");
+  const titlePath = join(root, "title.png");
   const output = join(root, "collage.mp4");
   for (const [path, color] of [[red, "red"], [blue, "blue"], [green, "green"]] as const) {
     const created = await runner.run("ffmpeg", [
@@ -356,6 +449,13 @@ test("collage renderer produces a decodable silent H.264 file with the configure
     ]);
     assert.equal(created.exitCode, 0, created.stderr);
   }
+  await renderSceneTitleLayer({
+    title: {
+      text: "Снег", position: { x: 0.5, y: 0.78 }, style: "plate", size: "medium", color: "#FFFFFF",
+      timing: { startSeconds: 0.5, endSeconds: 1.5 },
+    },
+    width: 180, height: 320, outputPath: titlePath,
+  });
   await renderCollage({
     background: { treatment: "darkened", kind: "image", sourcePath: green, sourceSize: { width: 80, height: 40 } },
     materials: [
@@ -381,6 +481,7 @@ test("collage renderer produces a decodable silent H.264 file with the configure
     width: 180,
     height: 320,
     fps: 5,
+    titleOverlay: { sourcePath: titlePath, timing: { startSeconds: 0.5, endSeconds: 1.5 } },
   }, runner);
   const metadata = await probeMedia(output, runner) as { streams: { codec_type: string; codec_name: string; pix_fmt: string; width: number; height: number }[] };
   assert.deepEqual(metadata.streams.map(({ codec_type }) => codec_type), ["video"]);

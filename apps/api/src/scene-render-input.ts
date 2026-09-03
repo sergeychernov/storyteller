@@ -1,7 +1,7 @@
 import { ApplicationError } from "@storyteller/application";
 import {
   centeredFocusPoint, collageCardMaterials, collageRendererId, getMaterialPresentation, getSelectedCollageLayout,
-  framesToSeconds, frameRateValue, getMaterialSource, resolveCollageSettings,
+  framesToSeconds, frameRateValue, getMaterialSource, resolveCollageSettings, sceneTitleRendererVersion,
   type RationalFrameRate, type Scene, type TimelineScene, type VideoExportMode,
 } from "@storyteller/domain";
 import {
@@ -109,6 +109,7 @@ export async function buildSceneRenderInput(
       background,
       materials,
       durationSeconds: scene.durationSeconds,
+      ...(scene.title ? { title: { ...scene.title, rendererVersion: sceneTitleRendererVersion } } : {}),
       output: { width: 1080, height: 1920, fps: 30, codec: "h264" },
     };
   }
@@ -144,6 +145,7 @@ export async function buildSceneRenderInput(
       ...(material.kind === "video" && exportMode === "audio" && material.audioTrack ? {} : { contentHash: sourceHash }),
     },
     durationSeconds: scene.durationSeconds, motion: scene.motion, focusPoint: scene.focusPoint ?? centeredFocusPoint,
+    ...(scene.title && exportMode !== "audio" ? { title: { ...scene.title, rendererVersion: sceneTitleRendererVersion } } : {}),
     output: { width: 1080, height: 1920, fps: 30, codec: "h264" as const },
   };
   if (material.kind === "image") return { ...common, rendererId: "still-image", rendererVersion: stillImageRendererVersion };
@@ -172,8 +174,9 @@ export async function buildSceneFrameInput(
     scene.materials[0]?.kind === "video" ? "video" : undefined,
     backgroundFrame,
   );
+  const { title: _title, ...baseVisualInput } = input;
   return {
-    ...input,
+    ...baseVisualInput,
     artifact: "scene-frame",
     frame: {
       rendererVersion: lastFrameRendererVersion,

@@ -21,13 +21,18 @@ const video: VideoMaterial = {
   mimeType: "video/mp4", sizeBytes: 1, width: 1080, height: 1920, hasAudio: false, audioTags: [], sourceDurationSeconds: 190,
 };
 
+const title = (text: string) => ({
+  text, position: { x: 0.5, y: 0.78 }, style: "shadow" as const, size: "medium" as const, color: "#FFFFFF" as const,
+  timing: { startSeconds: 0, endSeconds: 5 },
+});
+
 const initialScenes: readonly Scene[] = [{
-  id: "empty", title: "Переход", materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" },
+  id: "empty", materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" },
 }, {
-  id: "photo", title: "Озеро", materials: [createStorybookImageMaterial("portrait")],
+  id: "photo", title: title("Озеро"), materials: [createStorybookImageMaterial("portrait")],
   durationSeconds: 5, motion: "zoom-in", rendererId: "still-image", render: { status: "idle" },
 }, {
-  id: "video", title: "Дорога", materials: [video], durationSeconds: 5, motion: "none", render: { status: "idle" },
+  id: "video", title: title("Дорога"), materials: [video], durationSeconds: 5, motion: "none", render: { status: "idle" },
 }];
 
 const timeline: StoryTimeline = {

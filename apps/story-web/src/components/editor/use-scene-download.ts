@@ -71,7 +71,7 @@ export function useSceneDownload(scene: Scene, storyId: string, session: AuthSes
       signal.throwIfAborted();
       const prepared = {
         url: URL.createObjectURL(blob),
-        filename: `${safeFileName(scene.title) || `scene-${scene.id}`}-${mode}.${mode === "audio" ? "m4a" : "mp4"}`,
+        filename: `${safeFileName(scene.title?.text) || `scene-${scene.id}`}-${mode}.${mode === "audio" ? "m4a" : "mp4"}`,
       };
       preparedDownloadsRef.current = { ...preparedDownloadsRef.current, [mode]: prepared };
       setPreparedDownloads(preparedDownloadsRef.current);

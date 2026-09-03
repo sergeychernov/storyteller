@@ -1,4 +1,4 @@
-import type { AuthSession, Scene } from "../../api.js";
+import type { AuthSession, FocusPoint, Scene, SceneTitle } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneRendererPreview } from "./SceneRenderer.js";
@@ -18,10 +18,14 @@ interface SceneCanvasProps {
   readonly inactive?: boolean;
   readonly saving?: boolean;
   readonly onChange?: ((change: SceneChange) => void) | undefined;
+  readonly title?: SceneTitle | undefined;
+  readonly titleEditing?: boolean | undefined;
+  readonly onCommitTitlePosition?: ((position: FocusPoint) => void) | undefined;
 }
 
 export function SceneCanvas({
   scene, previousScene, copy, storyId, session, presentation, adjacent, dimmed = false, inactive = false, saving = false, onChange,
+  title, titleEditing, onCommitTitlePosition,
 }: SceneCanvasProps) {
   return (
     <div className={classNames(
@@ -47,6 +51,9 @@ export function SceneCanvas({
             active
             saving={saving}
             onChange={onChange}
+            title={title}
+            titleEditing={titleEditing}
+            onCommitTitlePosition={onCommitTitlePosition}
           />}
       </div>
     </div>

@@ -76,6 +76,7 @@ const routePolicies = new Map<string, RouteAccessPolicy>([
   route("GET", "/stories/:storyId/materials/:materialId/audio-content-access", "story.read"),
   route("PUT", "/stories/:storyId/scenes/:sceneId/material-order", "story.update"),
   route("PATCH", "/stories/:storyId/scenes/:sceneId", "story.update"),
+  route("PUT", "/stories/:storyId/scenes/:sceneId/title", "story.update"),
   route("GET", "/stories/:storyId/scenes/:sceneId/renders", "scene.render"),
   route("POST", "/stories/:storyId/scenes/:sceneId/renders", "scene.render"),
   route("GET", "/stories/:storyId/scenes/:sceneId/renders/:renderId", "scene.render"),

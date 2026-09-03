@@ -55,7 +55,7 @@ export function useDeleteScene({ story, session, selectedId, onSelect, copy, sav
       const scene = story.scenes[index];
       if (!scene) return;
       mutation.reset();
-      setTarget({ sceneId, name: scene.title || `${copy.scene} ${index + 1}`, story });
+      setTarget({ sceneId, name: scene.title?.text || `${copy.scene} ${index + 1}`, story });
     },
     close: () => { if (!inFlight.current) setTarget(undefined); },
     confirm: () => {

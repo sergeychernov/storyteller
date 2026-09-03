@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   collageFrameShapes, collageRowDirections, defaultCollageRowDirection,
-  normalizeCollageFrameWidth, profileLanguages,
+  normalizeCollageFrameWidth, profileLanguages, sceneTitleColors, sceneTitleSizes, sceneTitleStyles,
 } from "@storyteller/domain";
 
 export const profileLanguageSchema = z.enum(profileLanguages);
@@ -37,6 +37,17 @@ export const rationalFrameRateSchema = z.object({
 export const videoAudioTagSchema = z.enum(["voice", "music", "ambient"]);
 export const sceneMotionSchema = z.enum(["none", "zoom-in", "zoom-out", "pan-left", "pan-right"]);
 export const focusPointSchema = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) });
+export const sceneTitleSchema = z.object({
+  text: z.string().trim().min(1).max(120).refine((text) => text.replace(/\r\n?/g, "\n").split("\n").length <= 3, {
+    message: "scene title text must contain at most 3 lines",
+  }),
+  position: focusPointSchema,
+  style: z.enum(sceneTitleStyles),
+  size: z.enum(sceneTitleSizes),
+  color: z.enum(sceneTitleColors),
+  timing: z.object({ startSeconds: z.number().nonnegative(), endSeconds: z.number().positive() })
+    .refine(({ startSeconds, endSeconds }) => endSeconds > startSeconds, { message: "scene title timing must be positive" }),
+}).strict();
 const collageFrameInputSchema = z.object({
     width: z.number().int().min(0).max(24),
     color: z.string().regex(/^#[0-9a-f]{6}$/i),
@@ -162,7 +173,7 @@ export const sceneSchema = z.object({
   layoutId: z.string().optional(), motion: sceneMotionSchema, focusPoint: focusPointSchema.optional(),
   collage: collageSettingsSchema.optional(),
   collageBackground: collageBackgroundSchema.optional(),
-  rendererId: z.string().optional(), title: z.string().optional(),
+  rendererId: z.string().optional(), title: sceneTitleSchema.optional(),
   render: z.object({ status: z.enum(["idle", "queued", "running", "ready", "failed"]), artifactId: z.string().optional() }),
 });
 export const storySchema = z.object({
@@ -208,6 +219,9 @@ export const configureSceneSchema = z.object({
   durationSeconds: z.number().min(3).max(15).optional(), layoutId: z.string().nullable().optional(),
   motion: sceneMotionSchema.optional(), focusPoint: focusPointSchema.optional(), collage: editableCollageSettingsSchema.optional(),
 });
+export const setSceneTitleSchema = z.object({
+  title: sceneTitleSchema.nullable(), expectedRevision: z.number().int().positive(),
+}).strict();
 export const sceneRenderStatusSchema = z.enum(["queued", "running", "ready", "failed", "canceled"]);
 export const sceneRenderProgressPhaseSchema = z.enum(["queued", "downloading", "rendering", "finalizing", "uploading", "ready"]);
 export const sceneRenderRequestSchema = z.object({ mode: z.enum(["video", "audio", "combined"]).optional() }).nullish().default({});
@@ -403,7 +417,7 @@ export type MoveSceneMaterialsRequest = z.infer<typeof moveSceneMaterialsSchema>
 export type StoryTimelineResponse = z.infer<typeof storyTimelineSchema>;
 export interface CreateSceneRequest { readonly id: string }
 export interface SelectSceneRendererRequest { readonly rendererId: string }
-export interface SetSceneTitleRequest { readonly title: string | null }
+export type SetSceneTitleRequest = z.infer<typeof setSceneTitleSchema>;
 export interface AddNarrationRequest { readonly id: string; readonly assetId: string; readonly fromSceneId: string }
 export interface GenerateMusicRequest { readonly prompt?: string }
 export interface ApplyMusicRequest { readonly assetId: string }

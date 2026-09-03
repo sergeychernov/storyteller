@@ -120,6 +120,33 @@ test("upgrades a legacy scene with one image to the still-image renderer", () =>
   assert.deepEqual(normalized.scenes[0]?.focusPoint, { x: 0.5, y: 0.5 });
 });
 
+test("normalizes legacy string scene titles with defaults and the effective scene duration", () => {
+  const normalized = normalizeStoredStory({
+    id: "e95428cd-ae65-4334-8497-1f31b88c8124",
+    profileId: "675efe5b-18a4-46f9-a210-00a8ebf9a01d",
+    title: "Legacy title",
+    status: "draft",
+    revision: 3,
+    scenes: [{
+      id: "f89171cc-9473-4a01-a02a-fb93e5d4da6f",
+      title: "  Старый титр  ",
+      durationSeconds: 8,
+      motion: "zoom-in",
+      materials: [{
+        id: "08140c76-10ba-48c5-a000-fa56c9e7364a", kind: "image", name: "portrait.png", orientation: "portrait",
+        storageKey: "profile/story/portrait.png", mimeType: "image/png", sizeBytes: 1024, width: 1080, height: 1920,
+      }],
+      render: { status: "idle" },
+    }],
+    narrations: [],
+    music: { generationStatus: "idle", applied: false },
+  });
+  assert.deepEqual(normalized.scenes[0]?.title, {
+    text: "Старый титр", position: { x: 0.5, y: 0.78 }, style: "shadow", size: "medium", color: "#FFFFFF",
+    timing: { startSeconds: 0, endSeconds: 8 },
+  });
+});
+
 test("hydrates deterministic resting angles and offsets when opening a legacy collage", () => {
   const payload = {
     id: "e95428cd-ae65-4334-8497-1f31b88c8124",

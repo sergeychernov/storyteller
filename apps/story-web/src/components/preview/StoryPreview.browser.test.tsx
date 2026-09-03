@@ -11,8 +11,8 @@ import type { EffectiveAccess } from "../../api.js";
 const story: Story = {
   id: "story-1", profileId: "profile-1", title: "Travel diary", status: "draft", revision: 1,
   scenes: [
-    { id: "scene-1", title: "Opening", materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" } },
-    { id: "scene-2", title: "Second", materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" } },
+    { id: "scene-1", materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" } },
+    { id: "scene-2", materials: [], durationSeconds: 5, motion: "none", render: { status: "idle" } },
   ],
   narrations: [], music: { generationStatus: "idle", applied: false },
 };

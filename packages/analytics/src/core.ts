@@ -8,6 +8,7 @@ export type CollageMediaMix = "images_only" | "includes_video" | "not_applicable
 export type CollageBackgroundMode = "previous_scene_darkened" | "custom_material_original";
 export type CollageRowDirection = "ascending" | "level" | "descending" | "random";
 export type TimelineEditKind = "scene_reordered" | "material_moved_between_scenes";
+export type SceneTitleChangeKind = "added" | "text" | "position" | "appearance" | "timing" | "removed";
 export type ExportFailureStage = "request" | "processing" | "download";
 export type ExportFailureReason = "version_changed" | "queue_timeout" | "render_timeout" | "api_error" | "unknown";
 export type AnalyticsLanguage = "en" | "ru" | "sr-Latn" | "es";
@@ -25,6 +26,7 @@ export interface AnalyticsEventMap {
   readonly "collage background configured": { readonly collage_background_mode: CollageBackgroundMode };
   readonly "collage row direction configured": { readonly collage_row_direction: CollageRowDirection };
   readonly "timeline edited": { readonly timeline_edit_kind: TimelineEditKind };
+  readonly "scene title changed": { readonly title_change_kind: SceneTitleChangeKind };
   readonly "story preview completed": { readonly web_layout: WebLayout };
   readonly "story exported": { readonly output_profile: StoryOutputProfile };
   readonly "scene render requested": {
@@ -67,6 +69,7 @@ export const analyticsEventPropertyNames = {
   "collage background configured": ["surface", "collage_background_mode"],
   "collage row direction configured": ["surface", "collage_row_direction"],
   "timeline edited": ["surface", "timeline_edit_kind"],
+  "scene title changed": ["surface", "title_change_kind"],
   "story preview completed": ["surface", "web_layout"],
   "story exported": ["surface", "output_profile"],
   "scene render requested": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],

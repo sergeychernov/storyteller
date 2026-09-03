@@ -8,6 +8,12 @@ export type JobStatus = "idle" | "queued" | "running" | "ready" | "failed";
 export type MaterialOrientation = "portrait" | "landscape";
 export type VideoAudioTag = "voice" | "music" | "ambient";
 export type SceneMotion = "none" | "zoom-in" | "zoom-out" | "pan-left" | "pan-right";
+export const sceneTitleStyles = ["plain", "shadow", "plate"] as const;
+export type SceneTitleStyle = (typeof sceneTitleStyles)[number];
+export const sceneTitleSizes = ["small", "medium", "large"] as const;
+export type SceneTitleSize = (typeof sceneTitleSizes)[number];
+export const sceneTitleColors = ["#FFFFFF", "#FFE082", "#20201E"] as const;
+export type SceneTitleColor = (typeof sceneTitleColors)[number];
 export type MaterialRotation = 0 | 90 | 180 | 270;
 export const collageFrameShapes = ["straight", "torn", "none"] as const;
 export type CollageFrameShape = (typeof collageFrameShapes)[number];
@@ -55,6 +61,17 @@ export interface AppliedMaterialEdit extends MaterialEdit {
 export interface FocusPoint {
   readonly x: number;
   readonly y: number;
+}
+
+export interface SceneTitle {
+  readonly text: string;
+  /** Center point in normalized 1080×1920 output coordinates. */
+  readonly position: FocusPoint;
+  readonly style: SceneTitleStyle;
+  readonly size: SceneTitleSize;
+  readonly color: SceneTitleColor;
+  /** Seconds relative to the beginning of this scene. */
+  readonly timing: { readonly startSeconds: number; readonly endSeconds: number };
 }
 
 export interface CollageCardAngle {
@@ -220,7 +237,7 @@ export interface Scene {
   readonly collage?: CollageSettings;
   readonly collageBackground?: CollageBackground;
   readonly rendererId?: string;
-  readonly title?: string;
+  readonly title?: SceneTitle;
   readonly render: { readonly status: JobStatus; readonly artifactId?: string };
 }
 

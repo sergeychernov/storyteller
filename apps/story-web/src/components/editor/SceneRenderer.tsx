@@ -1,5 +1,6 @@
+import { getSceneDurationSeconds } from "@storyteller/domain";
 import { forwardRef, useEffect, useState, type ComponentType } from "react";
-import type { AuthSession, Scene } from "../../api.js";
+import type { AuthSession, FocusPoint, Scene, SceneTitle } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { FocusPointEditor } from "./FocusPointEditor.js";
 import { LayoutRendererSettings } from "./LayoutRendererSettings.js";
@@ -20,6 +21,9 @@ export interface SceneRendererPreviewProps {
   readonly session: AuthSession;
   readonly active: boolean;
   readonly saving: boolean;
+  readonly title?: SceneTitle | undefined;
+  readonly titleEditing?: boolean | undefined;
+  readonly onCommitTitlePosition?: ((position: FocusPoint) => void) | undefined;
   readonly onChange?: ((change: SceneChange) => void) | undefined;
 }
 
@@ -45,7 +49,7 @@ export const SceneRendererPreview = forwardRef<ScenePreviewLifecycle, SceneRende
   const generation = useScenePreviewInitialization(ref);
   const [playing, setPlaying] = useState(true);
   useEffect(() => setPlaying(true), [generation, props.scene.id]);
-  const localTimeSeconds = useLoopingSceneTime(props.active && playing, props.scene.durationSeconds, generation);
+  const localTimeSeconds = useLoopingSceneTime(props.active && playing, getSceneDurationSeconds(props.scene), generation);
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   if (!props.scene.materials.length) return <div className={styles.empty}><span>＋</span>{props.copy.emptyScene}</div>;
   return <ScenePlayer
@@ -62,8 +66,11 @@ export const SceneRendererPreview = forwardRef<ScenePreviewLifecycle, SceneRende
     reducedMotion={reducedMotion}
     preload={props.active ? "auto" : "metadata"}
     retryKey={generation}
+    title={props.title}
+    titleEditing={props.titleEditing}
+    onCommitTitlePosition={props.onCommitTitlePosition}
     editorMediaControls={{ onTogglePlayback: () => setPlaying((current) => !current) }}
-    renderSlotOverlay={(slot) => slot.role === "still-image" && props.onChange ? <FocusPointEditor
+    renderSlotOverlay={(slot) => !props.titleEditing && slot.role === "still-image" && props.onChange ? <FocusPointEditor
       focusPoint={props.scene.focusPoint ?? { x: 0.5, y: 0.5 }}
       label={props.copy.moveFocusPoint}
       disabled={props.saving}

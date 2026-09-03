@@ -11,7 +11,7 @@ import { sceneRenderFileType, type SceneRenderQueue, type StoryExportQueue } fro
 import {
   authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, deleteSceneSchema, editMaterialSchema, errorSchema, healthSchema,
   loginSchema, materialContentAccessSchema, materialWaveformSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
-  reorderSceneMaterialsSchema, sceneFrameSchema, sceneRenderRequestSchema, sceneRenderSchema, setPlatformCredentialSchema, storySchema, storySummarySchema, updateProfileSchema,
+  reorderSceneMaterialsSchema, sceneFrameSchema, sceneRenderRequestSchema, sceneRenderSchema, setPlatformCredentialSchema, setSceneTitleSchema, storySchema, storySummarySchema, updateProfileSchema,
 } from "@storyteller/schemas";
 import type { ObjectStorage } from "@storyteller/storage";
 import Fastify, { type FastifyRequest } from "fastify";
@@ -421,6 +421,20 @@ export async function buildApi(application: StoryApplication, options: {
       ...(request.body.focusPoint === undefined ? {} : { focusPoint: request.body.focusPoint }),
       ...(request.body.collage === undefined ? {} : { collage: request.body.collage }),
     },
+  )));
+  app.put("/stories/:storyId/scenes/:sceneId/title", {
+    schema: {
+      security: bearerSecurity,
+      params: sceneParams,
+      body: setSceneTitleSchema,
+      response: { 200: storySchema, 400: errorSchema, 401: errorSchema, 404: errorSchema, 409: errorSchema, 422: errorSchema },
+    },
+  }, async (request) => serializeStory(await application.setSceneTitle(
+    (await authenticate(application, request)).id,
+    request.params.storyId,
+    request.params.sceneId,
+    request.body.title,
+    request.body.expectedRevision,
   )));
 
   const renderParams = sceneParams.extend({ renderId: z.string().uuid() });

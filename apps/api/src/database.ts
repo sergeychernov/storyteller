@@ -1,8 +1,9 @@
 import { createCipheriv, randomBytes } from "node:crypto";
 import {
-  collageCardMaterials, createCollageCardAngles, createCollageCardOffsets, defaultStoryFrameRate, getAutomaticCollageLayout, getSelectedCollageLayout,
-  hasCompleteCollageCardAngles, hasCompleteCollageCardOffsets, normalizeFrameRate, resolveCollageSettings, type PlatformCredential, type PlatformProvider,
-  type Profile, type ProfileUpdate, type Story,
+  clampSceneTitleToDuration, collageCardMaterials, createCollageCardAngles, createCollageCardOffsets, createDefaultSceneTitle,
+  defaultStoryFrameRate, getAutomaticCollageLayout, getSelectedCollageLayout, hasCompleteCollageCardAngles,
+  hasCompleteCollageCardOffsets, normalizeFrameRate, resolveCollageSettings, type PlatformCredential, type PlatformProvider,
+  type Profile, type ProfileUpdate, type SceneMaterial, type SceneTitle, type Story,
 } from "@storyteller/domain";
 import {
   ApplicationError,
@@ -13,7 +14,7 @@ import {
   type SessionRecord,
   type StoryRepository,
 } from "@storyteller/application";
-import { sceneMaterialSchema, storySchema } from "@storyteller/schemas";
+import { sceneMaterialSchema, sceneTitleSchema, storySchema } from "@storyteller/schemas";
 import { Pool, type PoolClient } from "pg";
 
 export class PostgresStoryRepository implements StoryRepository {
@@ -248,11 +249,33 @@ export function normalizeStoredStory(payload: unknown): Story {
       ? { ...withoutFocus, rendererId: "still-image", focusPoint: oldFocusPoint ?? { x: 0.5, y: 0.5 } }
       : withoutFocus;
     const withBackground = collageBackground === undefined ? withRendererFocus : { ...withRendererFocus, collageBackground };
-    if (materials.length === scene.materials.length) return withBackground;
+    if (materials.length === scene.materials.length) return withNormalizedStoredTitle(withBackground, materials);
     const { layoutId: _legacyLayout, ...withoutLayout } = withRendererFocus;
-    return { ...withoutLayout, collageBackground, materials, render: { status: "idle" } };
+    return withNormalizedStoredTitle({ ...withoutLayout, collageBackground, materials, render: { status: "idle" } }, materials);
   });
   return withStoredCollageComposition(storySchema.parse({ ...payload, scenes }) as Story);
+}
+
+function withNormalizedStoredTitle(scene: Record<string, unknown>, materials: readonly SceneMaterial[]): Record<string, unknown> {
+  const rawTitle = scene.title;
+  if (rawTitle === undefined) return scene;
+  const durationSeconds = storedSceneDurationSeconds(scene, materials);
+  const title = !materials.length || durationSeconds <= 0 ? undefined : typeof rawTitle === "string"
+    ? rawTitle.trim() ? createDefaultSceneTitle(rawTitle, durationSeconds) : undefined
+    : (() => {
+        const parsed = sceneTitleSchema.parse(rawTitle) as SceneTitle;
+        return clampSceneTitleToDuration(parsed, durationSeconds);
+      })();
+  const { title: _title, ...withoutTitle } = scene;
+  return title ? { ...withoutTitle, title } : withoutTitle;
+}
+
+function storedSceneDurationSeconds(scene: Record<string, unknown>, materials: readonly SceneMaterial[]): number {
+  const material = materials[0];
+  if (materials.length === 1 && material?.kind === "video") {
+    return material.edit?.trim ? material.edit.trim.endSeconds - material.edit.trim.startSeconds : material.sourceDurationSeconds;
+  }
+  return typeof scene.durationSeconds === "number" ? scene.durationSeconds : 0;
 }
 
 function withStoredCollageComposition(story: Story): Story {

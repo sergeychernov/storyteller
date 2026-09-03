@@ -8,14 +8,15 @@ import {
   sceneRenderFileType, sceneRenderStorageKey, type SceneRenderJob, type SceneRenderProgressPhase, type SceneRenderQueue,
 } from "@storyteller/render-queue";
 import {
-  renderCollage, renderLastFrame, renderStillImage, renderVideo,
-  type CollageRenderSpec, type LastFrameRenderSpec, type StillImageRenderSpec, type VideoRenderSpec,
+  renderCollage, renderLastFrame, renderSceneTitleLayer, renderStillImage, renderVideo,
+  type CollageRenderSpec, type LastFrameRenderSpec, type SceneTitleLayerSpec, type StillImageRenderSpec, type VideoRenderSpec,
 } from "@storyteller/renderer";
 import { hashFileContent, type ObjectStorage } from "@storyteller/storage";
 
 export type StillImageRender = (spec: StillImageRenderSpec) => Promise<unknown>;
 export type LastFrameRender = (spec: LastFrameRenderSpec) => Promise<unknown>;
 export type CollageRender = (spec: CollageRenderSpec) => Promise<unknown>;
+export type SceneTitleLayerRender = (spec: SceneTitleLayerSpec) => Promise<void>;
 
 export interface SceneRenderWorkerLogger {
   info(message: string, details: Record<string, unknown>): void;
@@ -33,6 +34,7 @@ export class SceneRenderWorker {
     private readonly renderMotionVideo: (spec: VideoRenderSpec) => Promise<unknown> = renderVideo,
     private readonly renderFrame: LastFrameRender = renderLastFrame,
     private readonly renderPhotoCollage: CollageRender = renderCollage,
+    private readonly renderTitleLayer: SceneTitleLayerRender = renderSceneTitleLayer,
   ) {}
 
   async runOnce(kind?: "interactive" | "story-export-segment"): Promise<boolean> {
@@ -134,6 +136,14 @@ export class SceneRenderWorker {
       stage = "render";
       await progress.reportAndWait(10, "rendering");
       const onRenderProgress = (value: number) => progress.report(10 + value * 78, "rendering");
+      const titlePath = input.title ? join(temporaryDirectory, "title.png") : undefined;
+      if (input.title && titlePath) await this.renderTitleLayer({
+        title: input.title,
+        width: input.output.width,
+        height: input.output.height,
+        outputPath: titlePath,
+      });
+      const titleOverlay = input.title && titlePath ? { sourcePath: titlePath, timing: input.title.timing } : undefined;
       if (input.rendererId === "collage") {
         if (!collageSources) throw new Error("collage sources were not prepared");
         await this.renderPhotoCollage({
@@ -153,6 +163,7 @@ export class SceneRenderWorker {
           lossless: input.artifact === "scene-frame",
           overwrite: true,
           onProgress: onRenderProgress,
+          ...(titleOverlay ? { titleOverlay } : {}),
         });
       }
       else if (input.rendererId === "video") await this.renderMotionVideo({
@@ -164,6 +175,7 @@ export class SceneRenderWorker {
         ...(input.output.frameRate ? { frameRate: input.output.frameRate } : {}),
         ...(input.output.durationFrames ? { durationFrames: input.output.durationFrames } : {}),
         onProgress: onRenderProgress,
+        ...(titleOverlay ? { titleOverlay } : {}),
       });
       else if (sourcePath) await this.render({
         sourcePath,
@@ -181,6 +193,7 @@ export class SceneRenderWorker {
         lossless: input.artifact === "scene-frame",
         overwrite: true,
         onProgress: onRenderProgress,
+        ...(titleOverlay ? { titleOverlay } : {}),
       });
       await progress.reportAndWait(90, "finalizing");
       if (frame) await this.renderFrame({ sourcePath: visualOutputPath, outputPath, compressionLevel: frame.compressionLevel });

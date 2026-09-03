@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { classNames } from "../../class-names.js";
 import sharedStyles from "./editor-shared.module.css";
 import type { StoryEditorViewProps } from "./story-editor-view.js";
@@ -7,6 +8,8 @@ import { MaterialTimeline } from "./MaterialTimeline.js";
 import { SceneEdgeActions } from "./SceneEdgeActions.js";
 import { ScenePreview } from "./ScenePreview.js";
 import { SceneRail } from "./SceneRail.js";
+import { SceneTitlePanel } from "./SceneTitlePanel.js";
+import { useSceneTitleEditor } from "./use-scene-title-editor.js";
 import { isSingleVideoScene } from "./scene-renderer-model.js";
 import styles from "./DesktopStoryEditor.module.css";
 
@@ -18,7 +21,7 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
   const {
     story, session, selected, copy, saving, adding, uploading, backgroundUploading, uploadCount, operationErrorMessage, deleteDisabled,
     timeline, timelineLoading, timelineError, onRetryTimeline,
-    onSelect, onAdd, onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene,
+    onSelect, onAdd, onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder, onReorderScenes, onChange, onDeleteScene, onSetTitle,
   } = props;
   const showInspector = !!selected && !isSingleVideoScene(selected);
 
@@ -45,45 +48,12 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
           variant="desktop"
         />
         {selected ? <>
-          <main className={styles.workspace}>
-            <ScenePreview
-              scene={selected}
-              previousScene={story.scenes[story.scenes.findIndex(({ id }) => id === selected.id) - 1]}
-              copy={copy}
-              storyId={story.id}
-              session={session}
-              compact={props.compact}
-              saving={saving}
-              deleteDisabled={deleteDisabled}
-              onDeleteScene={onDeleteScene}
-              onChange={onChange}
-            />
-            <section className={styles.materialPanel}>
-              <div className={styles.materialHeading}>
-                <h2>{copy.materials}</h2>
-                <span>{selected.materials.length}</span>
-              </div>
-              <MaterialTimeline
-                scene={selected}
-                previousScene={story.scenes[story.scenes.findIndex(({ id }) => id === selected.id) - 1]}
-                copy={copy}
-                saving={saving}
-                storyId={story.id}
-                session={session}
-                uploading={uploading}
-                backgroundUploading={backgroundUploading}
-                uploadCount={uploadCount}
-                variant="desktopPanel"
-                onUpload={onUpload}
-                onUploadBackground={onUploadBackground}
-                onRemoveBackground={onRemoveBackground}
-                onDeleteMaterial={onDeleteMaterial}
-                onMoveToScene={onMoveMaterial}
-                onEditMaterial={onEditMaterial}
-                onReorder={onReorder}
-              />
-            </section>
-          </main>
+          <DesktopSceneWorkspace
+            {...props}
+            selected={selected}
+            previousScene={story.scenes[story.scenes.findIndex(({ id }) => id === selected.id) - 1]}
+            onSetTitle={onSetTitle}
+          />
           {showInspector && <DesktopSceneInspector
             scene={selected}
             copy={copy}
@@ -99,4 +69,71 @@ export function DesktopStoryEditor(props: DesktopStoryEditorProps) {
       </div>
     </div>
   );
+}
+
+type DesktopBottomTab = "materials" | "titles";
+
+function DesktopSceneWorkspace({
+  story, session, selected, previousScene, copy, saving, uploading, backgroundUploading, uploadCount, deleteDisabled, compact,
+  onUpload, onUploadBackground, onRemoveBackground, onDeleteMaterial, onMoveMaterial, onEditMaterial, onReorder,
+  onChange, onDeleteScene, onSetTitle,
+}: DesktopStoryEditorProps & { readonly selected: NonNullable<StoryEditorViewProps["selected"]>; readonly previousScene: StoryEditorViewProps["selected"] }) {
+  const [activeTab, setActiveTab] = useState<DesktopBottomTab>("materials");
+  const titleEditor = useSceneTitleEditor(selected, saving, onSetTitle);
+  const selectTab = (tab: DesktopBottomTab) => {
+    if (activeTab === "titles" && tab !== activeTab) void titleEditor.saveText().catch(() => undefined);
+    setActiveTab(tab);
+  };
+  return <main className={styles.workspace}>
+    <ScenePreview
+      scene={selected}
+      previousScene={previousScene}
+      copy={copy}
+      storyId={story.id}
+      session={session}
+      compact={compact}
+      saving={saving}
+      deleteDisabled={deleteDisabled}
+      onDeleteScene={onDeleteScene}
+      onChange={onChange}
+      title={titleEditor.title}
+      titleEditing={activeTab === "titles"}
+      onCommitTitlePosition={(position) => {
+        const title = titleEditor.title;
+        if (!title) return;
+        const changed = { ...title, position };
+        titleEditor.preview(changed);
+        void titleEditor.save(changed, "position").catch(() => undefined);
+      }}
+    />
+    <section className={styles.materialPanel}>
+      <div className={styles.bottomTabs} role="tablist" aria-label={copy.sceneTools}>
+        <button type="button" role="tab" aria-selected={activeTab === "materials"} onClick={() => selectTab("materials")}>
+          {copy.materials} <span>{selected.materials.length}</span>
+        </button>
+        <button type="button" role="tab" aria-selected={activeTab === "titles"} onClick={() => selectTab("titles")}>
+          {copy.titles} <span>{selected.title ? 1 : 0}</span>
+        </button>
+      </div>
+      {activeTab === "materials" ? <MaterialTimeline
+        scene={selected}
+        previousScene={previousScene}
+        copy={copy}
+        saving={saving}
+        storyId={story.id}
+        session={session}
+        uploading={uploading}
+        backgroundUploading={backgroundUploading}
+        uploadCount={uploadCount}
+        variant="desktopPanel"
+        onUpload={onUpload}
+        onUploadBackground={onUploadBackground}
+        onRemoveBackground={onRemoveBackground}
+        onDeleteMaterial={onDeleteMaterial}
+        onMoveToScene={onMoveMaterial}
+        onEditMaterial={onEditMaterial}
+        onReorder={onReorder}
+      /> : <SceneTitlePanel scene={selected} copy={copy} editor={titleEditor} variant="desktop" />}
+    </section>
+  </main>;
 }

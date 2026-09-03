@@ -13,13 +13,14 @@ export interface RenderDependency {
 export function sceneRenderParameters(input: SceneRenderInput): Record<string, unknown> {
   const renderer = { rendererId: input.rendererId, rendererVersion: input.rendererVersion };
   const artifact = input.artifact ? { artifact: input.artifact, ...(input.artifact === "scene-frame" ? { frame: input.frame } : {}) } : {};
+  const title = renderTitleParameters(input);
   if (input.rendererId === "still-image") return {
-    ...renderer, ...artifact, durationSeconds: input.durationSeconds, motion: input.motion, focusPoint: input.focusPoint,
+    ...renderer, ...artifact, ...title, durationSeconds: input.durationSeconds, motion: input.motion, focusPoint: input.focusPoint,
     source: { width: input.material.width, height: input.material.height, orientation: input.material.orientation },
     output: input.output,
   };
   if (input.rendererId === "collage") return {
-    ...renderer, ...artifact,
+    ...renderer, ...artifact, ...title,
     durationSeconds: input.durationSeconds,
     layoutId: input.layoutId,
     layoutRendererId: input.layoutRendererId,
@@ -54,7 +55,7 @@ export function sceneRenderParameters(input: SceneRenderInput): Record<string, u
     output: input.output,
   };
   return {
-    ...renderer, ...artifact, mode: input.mode, trim: input.edit.trim ?? null, sourceDurationSeconds: input.sourceDurationSeconds ?? null,
+    ...renderer, ...artifact, ...title, mode: input.mode, trim: input.edit.trim ?? null, sourceDurationSeconds: input.sourceDurationSeconds ?? null,
     ...(input.mode === "audio" ? {} : {
       rotation: input.edit.rotation, crop: input.edit.crop,
       source: { width: input.material.width, height: input.material.height },
@@ -62,6 +63,19 @@ export function sceneRenderParameters(input: SceneRenderInput): Record<string, u
     ...(input.mode === "video" ? {} : { hasAudio: input.hasAudio }),
     ...(input.mode === "audio" ? {} : { output: input.output }),
   };
+}
+
+function renderTitleParameters(input: SceneRenderInput): Record<string, unknown> {
+  if (!input.title || input.artifact === "scene-frame" || input.rendererId === "video" && input.mode === "audio") return {};
+  return { title: {
+    rendererVersion: input.title.rendererVersion,
+    textHash: createHash("sha256").update(input.title.text).digest("hex"),
+    position: input.title.position,
+    style: input.title.style,
+    size: input.title.size,
+    color: input.title.color,
+    timing: input.title.timing,
+  } };
 }
 
 export function hashSceneRenderInput(input: SceneRenderInput): string {

@@ -1,4 +1,5 @@
-import type { AuthSession, EditableCollageSettings, FocusPoint, MaterialEdit, Scene, SceneMotion, Story, StoryTimeline } from "../../api.js";
+import type { SceneTitleChangeKind } from "@storyteller/analytics";
+import type { AuthSession, EditableCollageSettings, FocusPoint, MaterialEdit, Scene, SceneMotion, SceneTitle, Story, StoryTimeline } from "../../api.js";
 import type { EditorCopy } from "./editor-copy.js";
 
 export interface SceneChange {
@@ -41,4 +42,5 @@ export interface StoryEditorViewProps {
   readonly onEditMaterial: (materialId: string, edit: MaterialEdit) => Promise<void>;
   readonly onReorder: (ids: readonly string[]) => void;
   readonly onChange: (change: SceneChange) => void;
+  readonly onSetTitle: (title: SceneTitle | null, changeKind: SceneTitleChangeKind) => Promise<void>;
 }

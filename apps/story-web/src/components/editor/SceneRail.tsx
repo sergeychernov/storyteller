@@ -91,7 +91,7 @@ export function SceneRail({
                 <span className={styles.number}>{String(index + 1).padStart(2, "0")}</span>
                 {emptyTimelineScene && <span className={styles.emptyMarker} aria-hidden="true">!</span>}
               </span>
-              <span><strong>{scene.title || `${copy.scene} ${index + 1}`}</strong><small className={emptyTimelineScene ? styles.emptyLabel : undefined}>
+              <span><strong>{scene.title?.text || `${copy.scene} ${index + 1}`}</strong><small className={emptyTimelineScene ? styles.emptyLabel : undefined}>
                 {emptyTimelineScene ? copy.timelineEmptySceneLabel : `${formatSceneDuration(scene)} ${copy.seconds} · ${scene.materials.length}`}
               </small></span>
             </button>

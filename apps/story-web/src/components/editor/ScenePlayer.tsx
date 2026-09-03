@@ -1,7 +1,7 @@
 import {
   forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode,
 } from "react";
-import type { AuthSession, Scene } from "../../api.js";
+import type { AuthSession, FocusPoint, Scene, SceneTitle } from "../../api.js";
 import { SceneFrameRenderer } from "./SceneFrameRenderer.js";
 import { SceneMedia, type SceneMediaHandle } from "./SceneMedia.js";
 import { buildScenePlaybackPlan, type ScenePlaybackSlot } from "./scene-playback-plan.js";
@@ -11,6 +11,7 @@ import {
   type SceneResourceEvent,
 } from "./scene-resource-model.js";
 import type { EditorCopy } from "./editor-copy.js";
+import { SceneTitleOverlay } from "./SceneTitleOverlay.js";
 
 export interface ScenePlayerHandle {
   readonly playAudibleFromGesture: () => void;
@@ -31,6 +32,9 @@ export interface ScenePlayerProps {
   readonly retryKey: number;
   readonly editorMediaControls?: { readonly onTogglePlayback: () => void } | undefined;
   readonly renderSlotOverlay?: ((slot: ScenePlaybackSlot) => ReactNode) | undefined;
+  readonly title?: SceneTitle | undefined;
+  readonly titleEditing?: boolean | undefined;
+  readonly onCommitTitlePosition?: ((position: FocusPoint) => void) | undefined;
   readonly onReady?: (() => void) | undefined;
   readonly onWaiting?: (() => void) | undefined;
   readonly onFailed?: (() => void) | undefined;
@@ -109,13 +113,24 @@ const ScenePlayerBody = forwardRef<ScenePlayerHandle, ScenePlayerProps & {
     />
     : undefined;
 
-  return <SceneFrameRenderer
-    plan={props.plan}
-    copy={props.copy}
-    localTimeSeconds={props.localTimeSeconds}
-    reducedMotion={props.reducedMotion}
-    renderMaterial={renderMaterial}
-    collageBackground={background}
-    onUnavailable={props.onFailed}
-  />;
+  const title = props.titleEditing ? props.title : props.scene.title;
+  return <>
+    <SceneFrameRenderer
+      plan={props.plan}
+      copy={props.copy}
+      localTimeSeconds={props.localTimeSeconds}
+      reducedMotion={props.reducedMotion}
+      renderMaterial={renderMaterial}
+      collageBackground={background}
+      onUnavailable={props.onFailed}
+    />
+    {title && <SceneTitleOverlay
+      title={title}
+      localTimeSeconds={props.localTimeSeconds}
+      editing={props.titleEditing}
+      disabled={!props.active}
+      moveLabel={props.copy.moveTitle}
+      onCommitPosition={props.onCommitTitlePosition}
+    />}
+  </>;
 });

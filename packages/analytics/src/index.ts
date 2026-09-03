@@ -17,6 +17,7 @@ export type {
   MaterialKind,
   ProductAnalytics,
   RendererKind,
+  SceneTitleChangeKind,
   TimelineEditKind,
   WebLayout,
 } from "./core.js";

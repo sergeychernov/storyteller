@@ -4,6 +4,7 @@ import type {
 } from "@storyteller/domain";
 import { probeMedia, type MediaProcessRunner, SpawnMediaProcessRunner } from "./ffmpeg.js";
 import { h264SegmentArguments } from "./h264.js";
+import { buildTitleOverlayFilter, titleOverlayInputArguments, type TitleOverlaySpec } from "./title-overlay.js";
 
 export const stillImageRendererVersion = 1;
 
@@ -23,10 +24,11 @@ export interface StillImageRenderSpec {
   readonly lossless?: boolean;
   readonly overwrite?: boolean;
   readonly onProgress?: (progress: number) => void;
+  readonly titleOverlay?: TitleOverlaySpec;
 }
 
-type NormalizedStillImageRenderSpec = Required<Omit<StillImageRenderSpec, "onProgress">>
-  & Pick<StillImageRenderSpec, "onProgress"> & { readonly exactFrameCount: boolean };
+type NormalizedStillImageRenderSpec = Required<Omit<StillImageRenderSpec, "onProgress" | "titleOverlay">>
+  & Pick<StillImageRenderSpec, "onProgress" | "titleOverlay"> & { readonly exactFrameCount: boolean };
 
 export function buildStillImageFilter(spec: StillImageRenderSpec): string {
   const normalized = normalizeSpec(spec);
@@ -50,7 +52,10 @@ export function buildStillImageFilter(spec: StillImageRenderSpec): string {
     + `crop=${canvasWidth}:${canvasHeight}:x=${cropX}:y=${cropY},setsar=1,fps=${fps},`
     + `trim=duration=${durationSeconds.toFixed(3)},setpts=PTS-STARTPTS`;
   if (motionPlan.kind === "zoom") filter += zoomPan(normalized, motionPlan);
-  return `${filter},scale=in_range=full:out_range=tv,format=yuv420p[v0]`;
+  filter += ",scale=in_range=full:out_range=tv";
+  if (!normalized.titleOverlay) return `${filter},format=yuv420p[v0]`;
+  return `${filter},format=rgba[title-base];${buildTitleOverlayFilter("title-base", 1, normalized.titleOverlay, "title-composited")};`
+    + "[title-composited]format=yuv420p[v0]";
 }
 
 export async function renderStillImage(
@@ -61,7 +66,9 @@ export async function renderStillImage(
   const result = await runner.run("ffmpeg", [
     normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "2", "-filter_complex_threads", "2",
     "-loop", "1", "-t", normalized.durationSeconds.toFixed(9),
-    "-i", normalized.sourcePath, "-filter_complex", buildStillImageFilter(normalized), "-map", "[v0]", "-an",
+    "-i", normalized.sourcePath,
+    ...(normalized.titleOverlay ? titleOverlayInputArguments(normalized.titleOverlay, normalized.durationSeconds) : []),
+    "-filter_complex", buildStillImageFilter(normalized), "-map", "[v0]", "-an",
     ...h264SegmentArguments(normalized.frameRate, normalized.lossless, normalized.exactFrameCount ? 1 : 2),
     ...(normalized.exactFrameCount ? ["-frames:v", String(normalized.durationFrames)] : []), normalized.outputPath,
   ], undefined, normalized.onProgress ? {

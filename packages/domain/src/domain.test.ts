@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  addMaterial, addNarration, addScene, configureScene, createStillImageMotionPlan, createStory, evaluateStillImageMotion,
+  addMaterial, addNarration, addScene, configureScene, createDefaultSceneTitle, createStillImageMotionPlan, createStory, evaluateStillImageMotion,
   focusDwellProgress, getLayoutOptions, mergeMaterialOrder, removeMaterial, removeScene, reorderMaterials, replaceMaterial, selectRenderer, setSceneTitle,
   setCollageBackground,
   buildStoryTimeline, collageCardMaterials, collageCardShadow, collageLayoutDefinitions, collageLayoutMaterials,
@@ -682,11 +682,59 @@ function fileMetadata(id: string, orientation: "portrait" | "landscape") {
 }
 
 test("editing a ready story creates a new draft revision", () => {
-  const draft = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  const draft = addMaterial(addScene(createStory({ id: "story", profileId: "profile" }), "scene-1"), "scene-1", imageMaterial("photo", "portrait"));
   const ready = { ...draft, status: "ready" as const };
-  const edited = setSceneTitle(ready, "scene-1", "Opening");
+  const edited = setSceneTitle(ready, "scene-1", createDefaultSceneTitle("Opening", 5));
   assert.equal(edited.status, "draft");
   assert.equal(edited.revision, ready.revision + 1);
+});
+
+test("scene titles are optional, validated and invalidate visual and approved results", () => {
+  const empty = addScene(createStory({ id: "story", profileId: "profile" }), "scene-1");
+  const defaults = createDefaultSceneTitle("  Вечер у озера  ", 5);
+  assert.deepEqual(defaults, {
+    text: "Вечер у озера", position: { x: 0.5, y: 0.78 }, style: "shadow", size: "medium", color: "#FFFFFF",
+    timing: { startSeconds: 0, endSeconds: 5 },
+  });
+  assert.throws(() => setSceneTitle(empty, "scene-1", defaults), /requires at least one material/);
+
+  const withMaterial = addMaterial(empty, "scene-1", imageMaterial("photo", "portrait"));
+  const approved: Story = {
+    ...withMaterial,
+    scenes: [{ ...withMaterial.scenes[0]!, render: { status: "ready", artifactId: "old" } }],
+    music: { generationStatus: "ready", assetId: "music", applied: true },
+    approvedMix: {
+      storageKey: "mix.m4a", contentHash: "a".repeat(64), mimeType: "audio/mp4", sizeBytes: 1,
+      sampleRate: 48_000, channels: 2, timelineHash: "b".repeat(64), durationFrames: 150,
+    },
+  };
+  const titled = setSceneTitle(approved, "scene-1", defaults);
+  assert.deepEqual(titled.scenes[0]?.title, defaults);
+  assert.deepEqual(titled.scenes[0]?.render, { status: "idle" });
+  assert.equal(titled.approvedMix, undefined);
+  assert.equal(titled.music.applied, false);
+  assert.equal(setSceneTitle(titled, "scene-1", null).scenes[0]?.title, undefined);
+
+  assert.throws(() => setSceneTitle(withMaterial, "scene-1", { ...defaults, text: "x".repeat(121) }), /at most 120/);
+  assert.throws(() => setSceneTitle(withMaterial, "scene-1", { ...defaults, text: "a\nb\nc\nd" }), /at most 3 lines/);
+  assert.throws(() => setSceneTitle(withMaterial, "scene-1", { ...defaults, position: { x: -0.1, y: 0.5 } }), /between 0 and 1/);
+  assert.throws(() => setSceneTitle(withMaterial, "scene-1", { ...defaults, timing: { startSeconds: 1, endSeconds: 1.4 } }), /at least 0.5/);
+});
+
+test("scene title timing preserves absolute seconds and moves to the end after duration and trim changes", () => {
+  let photo = addMaterial(addScene(createStory({ id: "photo-story", profileId: "profile" }), "scene"), "scene", imageMaterial("photo", "portrait"));
+  photo = configureScene(photo, "scene", { durationSeconds: 8 });
+  photo = setSceneTitle(photo, "scene", { ...createDefaultSceneTitle("Tail", 8), timing: { startSeconds: 6, endSeconds: 8 } });
+  photo = configureScene(photo, "scene", { durationSeconds: 4 });
+  assert.deepEqual(photo.scenes[0]?.title?.timing, { startSeconds: 3.5, endSeconds: 4 });
+
+  const original = { ...timelineVideo("clip", 10), edit: {
+    rotation: 0 as const, crop: { x: 0, y: 0, width: 1, height: 1 }, trim: { startSeconds: 0, endSeconds: 10 },
+  } };
+  let video = addMaterial(addScene(createStory({ id: "video-story", profileId: "profile" }), "scene"), "scene", original);
+  video = setSceneTitle(video, "scene", { ...createDefaultSceneTitle("Tail", 10), timing: { startSeconds: 7, endSeconds: 10 } });
+  video = replaceMaterial(video, "scene", { ...original, edit: { ...original.edit, trim: { startSeconds: 1, endSeconds: 4 } } });
+  assert.deepEqual(video.scenes[0]?.title?.timing, { startSeconds: 2.5, endSeconds: 3 });
 });
 
 test("narration starts at an existing scene", () => {

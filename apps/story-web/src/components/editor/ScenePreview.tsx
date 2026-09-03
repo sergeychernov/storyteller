@@ -1,4 +1,4 @@
-import type { AuthSession, Scene } from "../../api.js";
+import type { AuthSession, FocusPoint, Scene, SceneTitle } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneCanvas } from "./SceneCanvas.js";
@@ -18,9 +18,15 @@ interface ScenePreviewProps {
   readonly deleteDisabled: boolean;
   readonly onDeleteScene: (sceneId: string) => void;
   readonly onChange: (change: SceneChange) => void;
+  readonly title?: SceneTitle | undefined;
+  readonly titleEditing?: boolean | undefined;
+  readonly onCommitTitlePosition?: ((position: FocusPoint) => void) | undefined;
 }
 
-export function ScenePreview({ scene, previousScene, copy, storyId, session, compact, saving, deleteDisabled, onDeleteScene, onChange }: ScenePreviewProps) {
+export function ScenePreview({
+  scene, previousScene, copy, storyId, session, compact, saving, deleteDisabled, onDeleteScene, onChange,
+  title, titleEditing, onCommitTitlePosition,
+}: ScenePreviewProps) {
   return (
     <section className={classNames(styles.panel, styles.desktop, compact && styles.compact)}>
       <div className={styles.label}><span>{copy.preview}</span><span className={styles.labelActions}>
@@ -36,6 +42,9 @@ export function ScenePreview({ scene, previousScene, copy, storyId, session, com
         presentation="desktop"
         saving={saving}
         onChange={onChange}
+        title={title}
+        titleEditing={titleEditing}
+        onCommitTitlePosition={onCommitTitlePosition}
       />
     </section>
   );

@@ -45,6 +45,41 @@ test("worker renders a claimed scene and stores the reusable artifact", async (c
   ]);
 });
 
+test("worker rasterizes a title once and passes its alpha layer into the visual renderer", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-title-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/photo.jpg", { body: Readable.from(Buffer.from("photo")), contentType: "image/jpeg", contentLength: 5 });
+  const base = renderJob();
+  const input: StillImageRenderInput = { ...base.input, title: {
+    text: "Зимний вечер", position: { x: 0.5, y: 0.78 }, style: "shadow", size: "medium", color: "#FFFFFF",
+    timing: { startSeconds: 0.5, endSeconds: 4.5 }, rendererVersion: "scene-title.v1",
+  } };
+  const queue = new MemoryQueue({ ...base, input, inputHash: "title-hash" });
+  let layerRendered = 0;
+  const worker = new SceneRenderWorker(
+    "worker-1", queue, storage,
+    async (spec) => {
+      assert.ok(spec.titleOverlay);
+      assert.deepEqual(spec.titleOverlay?.timing, { startSeconds: 0.5, endSeconds: 4.5 });
+      assert.equal((await readFile(spec.titleOverlay!.sourcePath)).toString(), "transparent-title-layer");
+      await writeFile(spec.outputPath, "rendered-with-title");
+    },
+    undefined, undefined, undefined, undefined, undefined,
+    async (spec) => {
+      layerRendered += 1;
+      assert.equal(spec.title.text, "Зимний вечер");
+      assert.deepEqual({ width: spec.width, height: spec.height }, { width: 1080, height: 1920 });
+      await writeFile(spec.outputPath, "transparent-title-layer");
+    },
+  );
+
+  await worker.runOnce();
+  assert.equal(layerRendered, 1);
+  assert.equal(queue.failed, undefined);
+  assert.ok(queue.ready);
+});
+
 test("worker downloads every ordered collage source and invokes the collage renderer", async (context) => {
   const root = await mkdtemp(join(tmpdir(), "storyteller-worker-collage-test-"));
   context.after(() => rm(root, { recursive: true, force: true }));

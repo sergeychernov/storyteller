@@ -4658,6 +4658,7 @@ __metadata:
   resolution: "@storyteller/renderer@workspace:packages/renderer"
   dependencies:
     "@storyteller/domain": "workspace:*"
+    sharp: "npm:^0.35.3"
   languageName: unknown
   linkType: soft
 

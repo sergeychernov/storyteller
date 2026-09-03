@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { AuthSession, Scene } from "../../api.js";
+import type { AuthSession, FocusPoint, Scene, SceneTitle } from "../../api.js";
 import { classNames } from "../../class-names.js";
 import type { EditorCopy } from "./editor-copy.js";
 import { SceneCanvas } from "./SceneCanvas.js";
@@ -23,11 +23,17 @@ interface SceneCarouselProps {
   readonly onSelect: (id: string) => void;
   readonly onAdd: () => void;
   readonly onChange: (change: SceneChange) => void;
+  readonly title?: SceneTitle | undefined;
+  readonly titleEditing?: boolean | undefined;
+  readonly onCommitTitlePosition?: ((position: FocusPoint) => void) | undefined;
 }
 
 const emptyKey = "edge:empty";
 
-export function SceneCarousel({ scenes, selectedId, copy, storyId, session, adding, saving, deleteDisabled, onDeleteScene, onSelect, onAdd, onChange }: SceneCarouselProps) {
+export function SceneCarousel({
+  scenes, selectedId, copy, storyId, session, adding, saving, deleteDisabled, onDeleteScene, onSelect, onAdd, onChange,
+  title, titleEditing, onCommitTitlePosition,
+}: SceneCarouselProps) {
   const slots = useMemo(() => buildSceneCarouselSlots(scenes), [scenes]);
   const viewport = useRef<HTMLDivElement>(null);
   const scrollTimer = useRef<number | undefined>(undefined);
@@ -127,7 +133,7 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
             >
               {slot.kind === "scene" ? <>
                 <div className={classNames(styles.label, adjacent && styles.dimmed)}>
-                  <strong>{slot.scene.title || `${copy.scene} ${slot.index + 1}`}</strong>
+                  <strong>{slot.scene.title?.text || `${copy.scene} ${slot.index + 1}`}</strong>
                   <span className={styles.labelActions}>
                     <span><span className={styles.aspectRatio}>9:16 · </span>{formatSceneDuration(slot.scene)} {copy.seconds}</span>
                     {active && <ScenePreviewActions scene={slot.scene} storyId={storyId} session={session} copy={copy}
@@ -146,6 +152,9 @@ export function SceneCarousel({ scenes, selectedId, copy, storyId, session, addi
                   inactive={!active}
                   saving={saving}
                   onChange={slot.scene.id === selectedId ? onChange : undefined}
+                  title={slot.scene.id === selectedId ? title : undefined}
+                  titleEditing={slot.scene.id === selectedId && titleEditing}
+                  onCommitTitlePosition={slot.scene.id === selectedId ? onCommitTitlePosition : undefined}
                 />
               </> : <>
                 <div className={classNames(styles.label, adjacent && styles.dimmed)}><strong>{edgeTitle}</strong></div>

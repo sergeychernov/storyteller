@@ -22,22 +22,9 @@
   background: #d0cec5;
 }
 
-.materialsOnly {
-  grid-template-rows: 5px 24px minmax(0, 1fr);
-}
-
-.materialsHeading {
-  align-self: center;
-  margin: 0;
-  padding-inline: 3px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--tab-count, 3), minmax(0, 1fr));
   gap: 3px;
   padding: 3px;
   border-radius: 10px;
