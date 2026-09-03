@@ -41,7 +41,7 @@ test("worker render capacity admits at most two heavy renders and releases capac
   assert.throws(() => new RenderConcurrencyLimiter(0), /positive integer/);
 });
 
-test("scene workers share the render capacity while downloads and uploads remain independent", async (context) => {
+test("scene workers share the render capacity while downloads and uploads remain independent", { timeout: 5_000 }, async (context) => {
   const root = await mkdtemp(join(tmpdir(), "storyteller-worker-capacity-test-"));
   context.after(() => rm(root, { recursive: true, force: true }));
   const storage = new LocalObjectStorage(root);
@@ -49,6 +49,15 @@ test("scene workers share the render capacity while downloads and uploads remain
   const limiter = new RenderConcurrencyLimiter(2);
   let active = 0;
   let maximumActive = 0;
+  let renderStarts = 0;
+  let releaseRenders!: () => void;
+  const renderGate = new Promise<void>((resolve) => {
+    releaseRenders = resolve;
+  });
+  let confirmTwoRendersStarted!: () => void;
+  const twoRendersStarted = new Promise<void>((resolve) => {
+    confirmTwoRendersStarted = resolve;
+  });
   const logger = { info() {}, error() {} };
   const workers = Array.from({ length: 3 }, (_, index) => {
     const base = renderJob();
@@ -57,8 +66,10 @@ test("scene workers share the render capacity while downloads and uploads remain
       `worker-${index}`, new MemoryQueue(job), storage,
       async (spec) => {
         active += 1;
+        renderStarts += 1;
         maximumActive = Math.max(maximumActive, active);
-        await new Promise<void>((resolve) => setImmediate(resolve));
+        if (active === 2) confirmTwoRendersStarted();
+        await renderGate;
         active -= 1;
         await writeFile(spec.outputPath, `rendered-${index}`);
       },
@@ -66,7 +77,12 @@ test("scene workers share the render capacity while downloads and uploads remain
     );
   });
 
-  assert.deepEqual(await Promise.all(workers.map((worker) => worker.runOnce())), [true, true, true]);
+  const runs = workers.map((worker) => worker.runOnce());
+  await twoRendersStarted;
+  assert.equal(active, 2);
+  assert.equal(renderStarts, 2);
+  releaseRenders();
+  assert.deepEqual(await Promise.all(runs), [true, true, true]);
   assert.equal(maximumActive, 2);
 });
 
