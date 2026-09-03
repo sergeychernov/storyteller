@@ -146,11 +146,13 @@ Enable **Settings → Source → Wait for CI** for `api`, `worker`, `web`, and `
 
 Pre-release audit, 2026-08-28: production API/worker pre-deploy commands, worker backend build, API healthcheck, and the pre-B16 API/worker/web watch paths were saved and read back from Railway. B16 update, 2026-08-29: the Web service was changed to build with `yarn build:web`, start with `yarn workspace @storyteller/site start`, and use the frontend watch paths in this guide; all three fields and active `source.checkSuites: true` were read back from production configuration. The settings apply on the next deployment; this read-back does not claim that uncommitted B16 code is deployed.
 
-Production correction, 2026-09-02: the Web service received the repository-wide
-`/**` watch path while **Wait for CI** remained enabled. Applying the setting
-deployed commit `f99ac7d` as deployment
-`7294a16a-3106-4176-8a53-d50bd43b250c`; the production Preview then exposed the
-master-export panel and returned the expected approved-mix prerequisite error.
+Production correction, 2026-09-03: leave the Web service's **Watch Paths** list
+empty while **Wait for CI** remains enabled. Railway treats a nonempty list as an
+include filter; the attempted catch-all `/**` was still reported as “No changes to
+watched files” for commit `4ddb794`. Removing every pattern triggered deployment
+`4aa670a9-b6f8-45f2-ac48-cccac6e83002` from that already-successful CI commit.
+The deployment became active and the production Preview exposed the master-export
+panel and returned the expected approved-mix prerequisite error.
 
 ### B14 release order
 
@@ -199,19 +201,17 @@ The subsequent merge and Wait for CI activation are tracked in [PR #2](https://g
 
 ## Watch paths
 
-Railway's automatic monorepo import may initially watch only the application directory. Add these root-relative patterns so shared-package and lockfile changes also redeploy affected services.
+Railway's automatic monorepo import may initially watch only the application directory. Add these root-relative patterns where selective deploys are safe so shared-package and lockfile changes also redeploy affected services.
 
 ### `web`
 
-Keep the production Web service on a repository-wide trigger while **Wait for
-CI** is enabled. Railway evaluates watch paths against each individual commit,
-not against the cumulative diff from the active deployment. With narrow paths,
-a Web commit rejected by CI can remain undeployed after a later backend-only
-commit passes CI, leaving the API and browser bundle on different revisions.
-
-```text
-/**
-```
+Leave **Watch Paths** empty for the production Web service and keep **Wait for
+CI** enabled. An empty list makes every eligible commit trigger Web; the attempted
+catch-all `/**` was not reliable in production. Railway evaluates configured
+watch paths against each individual commit, not against the cumulative diff from
+the active deployment. With narrow paths, a Web commit rejected by CI can remain
+undeployed after a later backend-only commit passes CI, leaving the API and
+browser bundle on different revisions.
 
 ### `admin`
 
