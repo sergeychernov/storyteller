@@ -30,10 +30,10 @@ The worker is required for scene downloads. The MCP process is still a placehold
 | `web` | `yarn build:web` | — | `yarn workspace @storyteller/site start` |
 | `admin` | `yarn build:admin` | — | `yarn workspace @storyteller/admin start` |
 | `api` | `yarn workspace @storyteller/api build` | `yarn db:migrate` | `yarn workspace @storyteller/api start` |
-| `worker` | `yarn build:backend` | `yarn db:migrate` | `yarn workspace @storyteller/worker start` |
+| `worker` | `yarn build:backend` | `yarn db:migrate` | `node apps/worker/dist/index.js` |
 | `mcp` | `yarn workspace @storyteller/mcp build` | — | `yarn workspace @storyteller/mcp start` |
 
-The worker build includes the API TypeScript project so its image contains the same compiled migration entry point. It does not start an API or build either frontend. The migration command uses `node`, not the development-only `tsx` runner.
+The worker build includes the API TypeScript project so its image contains the same compiled migration entry point. It does not start an API or build either frontend. Start the compiled worker with `node` directly: keeping Yarn as the container's parent process adds a second long-lived Node runtime and wastes memory needed by FFmpeg. The migration command also uses `node`, not the development-only `tsx` runner.
 
 Railway should install dependencies with `yarn install --immutable`; the repository pins Yarn 4 through `packageManager`.
 The root `railpack.json` adds FFmpeg to the runtime image. The API uses `ffprobe` to inspect uploads and `ffmpeg` to separate video/audio and denoise/normalize audio before adding the material to a scene. Allow temporary disk space and request time for this processing, in addition to the uploaded file size.
