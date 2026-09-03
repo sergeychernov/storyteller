@@ -169,7 +169,13 @@ describe("shared editor ScenePlayer", () => {
     titleControl.setPointerCapture = vi.fn(() => { pointerCaptured = true; });
     titleControl.hasPointerCapture = vi.fn(() => pointerCaptured);
     titleControl.releasePointerCapture = vi.fn(() => { pointerCaptured = false; });
-    fireEvent.pointerDown(titleControl, { pointerId: 7, clientX: 450, clientY: 750 });
+    fireEvent.pointerDown(titleControl, { pointerId: 6, clientX: 450, clientY: 750, button: 2, isPrimary: true });
+    fireEvent.pointerUp(titleControl, { pointerId: 6, clientX: 450, clientY: 750, button: 2, isPrimary: true });
+    fireEvent.pointerDown(titleControl, { pointerId: 8, clientX: 450, clientY: 750, button: 0, isPrimary: false });
+    expect(titleControl.setPointerCapture).not.toHaveBeenCalled();
+    expect(titleControl.className).not.toMatch(/positionDragging/u);
+    expect(onCommitTitlePosition).not.toHaveBeenCalled();
+    fireEvent.pointerDown(titleControl, { pointerId: 7, clientX: 450, clientY: 750, button: 0, isPrimary: true });
     expect(titleControl.className).toMatch(/positionDragging/u);
     fireEvent.pointerMove(titleControl, { pointerId: 7, clientX: 550, clientY: 850 });
     expect(titleControl.style.left).toBe("60%");

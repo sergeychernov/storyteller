@@ -5,12 +5,13 @@ import {
   videoPixelCrop, type CollageSettings, type MaterialEdit,
   defaultStoryFrameRate, frameRateExpression, framesToSeconds, type RationalFrameRate,
 } from "@storyteller/domain";
+import { rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { probeMedia, type MediaProcessRunner, SpawnMediaProcessRunner } from "./ffmpeg.js";
 import { h264SegmentArguments } from "./h264.js";
 import { buildTitleOverlayFilter, titleOverlayInputArguments, type TitleOverlaySpec } from "./title-overlay.js";
 
-export const collageRendererVersion = 24;
+export const collageRendererVersion = 25;
 
 export interface CollageBackgroundSpec {
   readonly treatment: "darkened" | "original";
@@ -110,70 +111,85 @@ export function buildCollageCardFilter(spec: CollageRenderSpec, materialIndex: n
     const mask = paperEdgeMask(
       box.width, box.height, seed, tornPaperEdgeParameters(settings.frame.width), tornPaperEdgeSalts,
     );
-    filters.push(`[card-base]geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(${mask}\,alpha(X,Y)\,0)'[card]`);
+    filters.push(`[card-base]geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(${mask}\,alpha(X,Y)\,0)'[card-surface]`);
   } else {
-    filters.push("[card-base]null[card]");
+    filters.push("[card-base]null[card-surface]");
   }
+  const shadow = getCollageCardShadowMetrics(normalized.width);
+  const shadowed = { width: box.width + shadow.padding * 2, height: box.height + shadow.padding * 2 };
+  filters.push(
+    "[card-surface]split=2[card-front][card-shadow-source]",
+    `[card-front]pad=${shadowed.width}:${shadowed.height}:${shadow.padding}:${shadow.padding}:color=0x00000000[card-front-padded]`,
+    `[card-shadow-source]pad=${shadowed.width}:${shadowed.height}:`
+      + `${shadow.padding + shadow.offsetX}:${shadow.padding + shadow.offsetY}:color=0x00000000,`
+      + `colorchannelmixer=rr=0:gg=0:bb=0:aa=${fixed(collageCardShadow.opacity)},`
+      + `boxblur=lr=0:lp=1:cr=0:cp=1:ar=${Math.max(1, Math.round(shadow.blurSigma))}:ap=2[card-shadow]`,
+    "[card-shadow][card-front-padded]overlay=x=0:y=0:shortest=1:format=auto[card]",
+  );
+  return filters.join(";");
+}
+
+export function buildCollageCardAnimationFilter(spec: CollageRenderSpec, materialIndex: number): string {
+  const normalized = normalizeSpec(spec);
+  const box = createSchedule(normalized)[materialIndex];
+  if (!box || !normalized.materials[materialIndex]) throw new Error(`collage material index ${materialIndex} is out of range`);
+  const shadow = getCollageCardShadowMetrics(normalized.width);
+  const prepared = { width: box.width + shadow.padding * 2, height: box.height + shadow.padding * 2 };
+  const rotated = rotationCanvas(prepared.width, prepared.height, Math.max(
+    Math.abs(box.startAngleDegrees), Math.abs(box.finalAngleDegrees),
+  ));
+  const angle = rotationExpression(
+    box.startAngleDegrees, box.finalAngleDegrees, box.startSeconds, box.endSeconds,
+  );
+  return `[0:v]setsar=1,tpad=stop_mode=clone:stop_duration=${fixed(normalized.durationSeconds)},`
+    + `fps=${frameRateExpression(normalized.frameRate)},`
+    + `trim=duration=${fixed(normalized.durationSeconds)},setpts=PTS-STARTPTS,format=yuva420p,`
+    + `rotate=angle='${angle}':ow=${rotated.width}:oh=${rotated.height}:c=0x00000000,format=yuva420p[card-animated]`;
+}
+
+export function buildCollageLayerFilter(spec: CollageRenderSpec, materialIndex: number): string {
+  const normalized = normalizeSpec(spec);
+  const { width, height, durationSeconds } = normalized;
+  const fps = frameRateExpression(normalized.frameRate);
+  const box = createSchedule(normalized)[materialIndex];
+  if (!box) throw new Error(`collage material index ${materialIndex} is out of range`);
+  const filters: string[] = [
+    `[0:v]setsar=1,tpad=stop_mode=clone:stop_duration=${fixed(durationSeconds)},fps=${fps},`
+      + `trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuv420p[base]`,
+    `[1:v]setsar=1,tpad=stop_mode=clone:stop_duration=${fixed(durationSeconds)},fps=${fps},`
+      + `trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuva420p[card]`,
+  ];
+  const shadow = getCollageCardShadowMetrics(width);
+  const prepared = { width: box.width + shadow.padding * 2, height: box.height + shadow.padding * 2 };
+  const rotated = rotationCanvas(prepared.width, prepared.height, Math.max(
+    Math.abs(box.startAngleDegrees), Math.abs(box.finalAngleDegrees),
+  ));
+  const target = {
+    x: box.x + box.width / 2 - rotated.width / 2,
+    y: box.y + box.height / 2 - rotated.height / 2,
+  };
+  const position = motionExpression(preparedCardEntrance(box, prepared, width, height), target);
+  const enable = box.startSeconds > 0 ? `:enable='gte(t\,${fixed(box.startSeconds)})'` : "";
+  filters.push(
+    `[base][card]overlay=x='${position.x}':y='${position.y}':eval=frame${enable}:`
+      + "shortest=1:eof_action=pass:format=auto,format=yuv420p[composite]",
+  );
   return filters.join(";");
 }
 
 export function buildCollageFilter(spec: CollageRenderSpec): string {
   const normalized = normalizeSpec(spec);
-  const { width, height, durationSeconds, materials } = normalized;
+  const { durationSeconds } = normalized;
   const fps = frameRateExpression(normalized.frameRate);
-  const schedule = createSchedule(normalized);
-  const filters: string[] = [
-    `[0:v]setsar=1,fps=${fps},tpad=stop_mode=clone:stop_duration=${fixed(durationSeconds)},`
-      + `trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=rgba[base0]`,
-  ];
-  const layers = schedule.map((box, index) => ({ box, index }))
-    .sort((left, right) => left.box.stackOrder - right.box.stackOrder);
-  layers.forEach(({ box, index }, layerIndex) => {
-    const holdLastVideoFrame = materials[index]?.kind === "video"
-      ? `tpad=stop_mode=clone:stop_duration=${fixed(durationSeconds)},`
-      : "";
-    filters.push(
-      `[${index + 1}:v]setsar=1,fps=${fps},${holdLastVideoFrame}trim=duration=${fixed(durationSeconds)},`
-        + `setpts=PTS-STARTPTS,format=rgba[card-shape${index}]`,
-    );
-    const rotated = rotationCanvas(box.width, box.height, Math.max(
-      Math.abs(box.startAngleDegrees), Math.abs(box.finalAngleDegrees),
-    ));
-    const angle = rotationExpression(
-      box.startAngleDegrees, box.finalAngleDegrees, box.startSeconds, box.endSeconds,
-    );
-    const shadow = getCollageCardShadowMetrics(width);
-    const shadowed = { width: rotated.width + shadow.padding * 2, height: rotated.height + shadow.padding * 2 };
-    filters.push(
-      `[card-shape${index}]rotate=angle='${angle}':ow=${rotated.width}:oh=${rotated.height}:c=0x00000000[card-rotated${index}]`,
-      `[card-rotated${index}]split=2[card-front${index}][card-shadow-source${index}]`,
-      `[card-front${index}]pad=${shadowed.width}:${shadowed.height}:${shadow.padding}:${shadow.padding}:color=0x00000000[card-front-padded${index}]`,
-      `[card-shadow-source${index}]pad=${shadowed.width}:${shadowed.height}:`
-        + `${shadow.padding + shadow.offsetX}:${shadow.padding + shadow.offsetY}:color=0x00000000,`
-        + `colorchannelmixer=rr=0:gg=0:bb=0:aa=${fixed(collageCardShadow.opacity)},`
-        + `boxblur=lr=0:lp=1:cr=0:cp=1:ar=${Math.max(1, Math.round(shadow.blurSigma))}:ap=2[card-shadow${index}]`,
-      `[card-shadow${index}][card-front-padded${index}]overlay=x=0:y=0:shortest=1:format=auto[card${index}]`,
-    );
-    const target = {
-      x: box.x - Math.ceil((rotated.width - box.width) / 2) - shadow.padding,
-      y: box.y - Math.ceil((rotated.height - box.height) / 2) - shadow.padding,
-    };
-    const position = motionExpression(box, target);
-    const enable = box.startSeconds > 0 ? `:enable='gte(t\,${fixed(box.startSeconds)})'` : "";
-    filters.push(
-      `[base${layerIndex}][card${index}]overlay=x='${position.x}':y='${position.y}':eval=frame${enable}:`
-        + `shortest=1:eof_action=pass:format=auto[base${layerIndex + 1}]`,
-    );
-  });
-  const finalBase = `base${materials.length}`;
+  const base = `[0:v]setsar=1,tpad=stop_mode=clone:stop_duration=${fixed(durationSeconds)},fps=${fps},`
+    + `trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuv420p`;
   if (normalized.titleOverlay) {
-    filters.push(
-      `[${finalBase}]trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=rgba[title-base]`,
-      buildTitleOverlayFilter("title-base", materials.length + 1, normalized.titleOverlay, "title-composited"),
-      "[title-composited]format=yuv420p[v0]",
-    );
-  } else filters.push(`[${finalBase}]trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuv420p[v0]`);
-  return filters.join(";");
+    return `${base}[title-base];${buildTitleOverlayFilter(
+      "title-base", 1, normalized.titleOverlay, "title-composited", "yuva420p",
+    )};`
+      + "[title-composited]format=yuv420p[v0]";
+  }
+  return `${base}[v0]`;
 }
 
 export async function renderCollage(
@@ -201,7 +217,7 @@ export async function renderCollage(
       ? ["-t", fixed(backgroundSegment!.durationSeconds)] : []),
   ] : ["-i", normalized.background.sourcePath];
   const backgroundOutput = movingBackground
-    ? ["-an", "-c:v", "ffv1", "-level", "3", "-pix_fmt", "yuv444p", backgroundPath]
+    ? ["-an", "-c:v", "ffv1", "-level", "3", "-pix_fmt", "yuv420p", backgroundPath]
     : ["-frames:v", "1", "-update", "1", backgroundPath];
   const backgroundResult = await runner.run("ffmpeg", [
     normalized.overwrite ? "-y" : "-n", "-v", "error", ...backgroundInput,
@@ -221,7 +237,10 @@ export async function renderCollage(
     cardProgress[index] = Math.max(cardProgress[index] ?? 0, Math.min(1, progress));
     reportProgress(0.1 + cardProgress.reduce((sum, value) => sum + value, 0) / cardProgress.length * 0.4);
   };
-  const cards = await Promise.all(normalized.materials.map(async (material, index) => {
+  let compositePath = backgroundPath;
+  const layers = collageLayerOrder(normalized);
+  for (const [layerIndex, index] of layers.entries()) {
+    const material = normalized.materials[index]!;
     const video = material.kind === "video";
     const cardPath = join(dirname(normalized.outputPath), `.collage-card-${index}.${video ? "mkv" : "png"}`);
     const segment = video ? collageVideoSegment(material) : undefined;
@@ -231,35 +250,65 @@ export async function renderCollage(
       ...(segment!.durationSeconds === undefined ? [] : ["-t", fixed(segment!.durationSeconds)]),
     ] : ["-i", material.sourcePath];
     const output = video
-      ? ["-an", "-c:v", "ffv1", "-level", "3", "-pix_fmt", "yuva444p", cardPath]
+      ? ["-an", "-c:v", "ffv1", "-level", "3", "-pix_fmt", "yuva420p", cardPath]
       : ["-frames:v", "1", "-update", "1", cardPath];
     const result = await runner.run("ffmpeg", [
       normalized.overwrite ? "-y" : "-n", "-v", "error", ...input,
       "-filter_complex", buildCollageCardFilter(normalized, index), "-map", "[card]", ...output,
     ], undefined, video && segment?.durationSeconds ? {
       durationSeconds: segment.durationSeconds,
-      onProgress: (progress) => reportCardProgress(index, progress),
+      onProgress: (progress) => reportCardProgress(index, progress * 0.33),
     } : undefined);
     if (result.exitCode !== 0) {
       const termination = result.signal ? `signal ${result.signal}` : `exit ${result.exitCode}`;
       throw new Error(`ffmpeg collage card ${index + 1} failed (${termination}): ${result.stderr.trim()}`);
     }
+    reportCardProgress(index, 0.33);
+    const animatedPath = join(dirname(normalized.outputPath), `.collage-card-animated-${index}.mkv`);
+    const animatedResult = await runner.run("ffmpeg", [
+      normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "1", "-filter_complex_threads", "1",
+      "-i", cardPath,
+      "-filter_complex", buildCollageCardAnimationFilter(normalized, index), "-map", "[card-animated]", "-an",
+      "-c:v", "ffv1", "-level", "3", "-threads", "1", "-pix_fmt", "yuva420p", animatedPath,
+    ], undefined, {
+      durationSeconds: normalized.durationSeconds,
+      onProgress: (progress) => reportCardProgress(index, 0.33 + progress * 0.33),
+    });
+    if (animatedResult.exitCode !== 0) {
+      const termination = animatedResult.signal ? `signal ${animatedResult.signal}` : `exit ${animatedResult.exitCode}`;
+      throw new Error(`ffmpeg collage card animation ${index + 1} failed (${termination}): ${animatedResult.stderr.trim()}`);
+    }
+    reportCardProgress(index, 0.66);
+    const previousCompositePath = compositePath;
+    compositePath = join(dirname(normalized.outputPath), `.collage-composite-${layerIndex}.mkv`);
+    const compositeResult = await runner.run("ffmpeg", [
+      normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "1", "-filter_complex_threads", "1",
+      "-i", previousCompositePath, "-i", animatedPath,
+      "-filter_complex", buildCollageLayerFilter(normalized, index), "-map", "[composite]", "-an",
+      "-c:v", "ffv1", "-level", "3", "-threads", "1", "-pix_fmt", "yuv420p",
+      "-frames:v", String(normalized.durationFrames), compositePath,
+    ], undefined, {
+      durationSeconds: normalized.durationSeconds,
+      onProgress: (progress) => reportCardProgress(index, 0.66 + progress * 0.34),
+    });
+    if (compositeResult.exitCode !== 0) {
+      const termination = compositeResult.signal ? `signal ${compositeResult.signal}` : `exit ${compositeResult.exitCode}`;
+      throw new Error(`ffmpeg collage layer ${index + 1} failed (${termination}): ${compositeResult.stderr.trim()}`);
+    }
     reportCardProgress(index, 1);
-    return { path: cardPath, kind: material.kind };
-  }));
-  const backgroundArguments = movingBackground
-    ? ["-i", backgroundPath]
-    : ["-loop", "1", "-t", fixed(normalized.durationSeconds), "-i", backgroundPath];
-  const inputArguments = [...backgroundArguments,
-    ...cards.flatMap((card) => card.kind === "video"
-    ? ["-i", card.path]
-    : ["-loop", "1", "-t", fixed(normalized.durationSeconds), "-i", card.path]),
+    await Promise.all([
+      rm(previousCompositePath, { force: true }),
+      rm(cardPath, { force: true }),
+      rm(animatedPath, { force: true }),
+    ]);
+  }
+  const inputArguments = ["-i", compositePath,
     ...(normalized.titleOverlay ? titleOverlayInputArguments(normalized.titleOverlay, normalized.durationSeconds) : [])];
   const result = await runner.run("ffmpeg", [
-    normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "2", "-filter_complex_threads", "2",
+    normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "1", "-filter_complex_threads", "1",
     ...inputArguments,
     "-filter_complex", buildCollageFilter(normalized), "-map", "[v0]", "-an",
-    ...h264SegmentArguments(normalized.frameRate, normalized.lossless, normalized.exactFrameCount ? 1 : 2),
+    ...h264SegmentArguments(normalized.frameRate, normalized.lossless, 1, true),
     ...(normalized.exactFrameCount ? ["-frames:v", String(normalized.durationFrames)] : []), normalized.outputPath,
   ], undefined, {
     durationSeconds: normalized.durationSeconds,
@@ -269,8 +318,15 @@ export async function renderCollage(
     const termination = result.signal ? `signal ${result.signal}` : `exit ${result.exitCode}`;
     throw new Error(`ffmpeg collage failed (${termination}): ${result.stderr.trim()}`);
   }
+  await rm(compositePath, { force: true });
   reportProgress(1);
   return probeMedia(normalized.outputPath, runner);
+}
+
+export function collageLayerOrder(spec: CollageRenderSpec): readonly number[] {
+  return createSchedule(normalizeSpec(spec)).map((box, index) => ({ index, stackOrder: box.stackOrder }))
+    .sort((left, right) => left.stackOrder - right.stackOrder)
+    .map(({ index }) => index);
 }
 
 function createSchedule(spec: NormalizedCollageRenderSpec) {
@@ -373,6 +429,32 @@ function rotationCanvas(width: number, height: number, angleDegrees: number): { 
   return {
     width: Math.max(width, Math.ceil(width * Math.abs(Math.cos(radians)) + height * Math.abs(Math.sin(radians)))),
     height: Math.max(height, Math.ceil(width * Math.abs(Math.sin(radians)) + height * Math.abs(Math.cos(radians)))),
+  };
+}
+
+function preparedCardEntrance(
+  entrance: ReturnType<typeof createCollageEntranceSchedule>[number],
+  prepared: { readonly width: number; readonly height: number },
+  outputWidth: number,
+  outputHeight: number,
+): ReturnType<typeof createCollageEntranceSchedule>[number] {
+  const rotated = rotationCanvas(prepared.width, prepared.height, Math.max(
+    Math.abs(entrance.startAngleDegrees), Math.abs(entrance.finalAngleDegrees),
+  ));
+  const centerX = entrance.x + entrance.width / 2;
+  const centerY = entrance.y + entrance.height / 2;
+  const clearance = Math.max(2, Math.ceil(outputWidth * 0.002));
+  if (entrance.direction === "left") return {
+    ...entrance,
+    startOffsetX: Math.min(entrance.startOffsetX, Math.floor(-clearance - rotated.width / 2 - centerX)),
+  };
+  if (entrance.direction === "right") return {
+    ...entrance,
+    startOffsetX: Math.max(entrance.startOffsetX, Math.ceil(outputWidth + clearance + rotated.width / 2 - centerX)),
+  };
+  return {
+    ...entrance,
+    startOffsetY: Math.max(entrance.startOffsetY, Math.ceil(outputHeight + clearance + rotated.height / 2 - centerY)),
   };
 }
 

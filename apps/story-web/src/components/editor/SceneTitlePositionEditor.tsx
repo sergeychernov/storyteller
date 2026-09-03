@@ -93,6 +93,7 @@ export function SceneTitlePositionEditor({ position, label, disabled, children, 
         event.stopPropagation();
       }}
       onPointerDown={(event) => {
+        if (!event.isPrimary || event.button !== 0) return;
         event.currentTarget.focus();
         event.preventDefault();
         event.stopPropagation();

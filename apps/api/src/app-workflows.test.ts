@@ -19,7 +19,7 @@ import {
 } from "@storyteller/application";
 import { getMaterialPresentation, materialStorageKeys, type PlatformCredential, type PlatformProvider, type Profile, type ProfileUpdate, type SceneMaterial, type Story } from "@storyteller/domain";
 import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue } from "@storyteller/render-queue";
-import { probeMedia, renderVideo, SpawnMediaProcessRunner } from "@storyteller/renderer";
+import { collageRendererVersion, probeMedia, renderVideo, SpawnMediaProcessRunner } from "@storyteller/renderer";
 import { Readable } from "node:stream";
 import type { LightMyRequestResponse } from "fastify";
 import type { OpenAPIV3 } from "openapi-types";
@@ -251,7 +251,7 @@ test("protects a profile, uploads media and stores its stories", async (context)
   if (collageJob.input.rendererId !== "collage") throw new Error("expected collage render input");
   assert.equal(collageJob.input.layoutRendererId, "animated-collage.stack.v1");
   assert.equal(collageJob.input.layoutOverlapRatio, 0.4);
-  assert.equal(collageJob.input.rendererVersion, 24);
+  assert.equal(collageJob.input.rendererVersion, collageRendererVersion);
   assert.equal(collageJob.input.background?.source, "custom-material");
   if (collageJob.input.background?.source !== "custom-material") throw new Error("expected custom background");
   assert.equal(collageJob.input.background.materialId, backgroundMaterial.id);
