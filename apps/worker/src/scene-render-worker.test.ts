@@ -21,8 +21,11 @@ test("story export segment concurrency defaults to available CPU capped at four 
   assert.equal(storyExportSegmentConcurrency("invalid", 3), 3);
 });
 
-test("worker render capacity admits at most two heavy renders and releases capacity after failures", async () => {
-  assert.equal(workerRenderConcurrency, 2);
+test("worker render concurrency serializes heavy renders on a 1 GB worker", () => {
+  assert.equal(workerRenderConcurrency, 1);
+});
+
+test("render capacity admits the configured number of heavy renders and releases capacity after failures", async () => {
   const limiter = new RenderConcurrencyLimiter(2);
   let active = 0;
   let maximumActive = 0;

@@ -34,6 +34,6 @@ export class RenderConcurrencyLimiter implements RenderCapacity {
   }
 }
 
-/** Keep enough headroom for Node, Sharp/libvips, storage streams and PostgreSQL inside a 1 GB worker. */
-export const workerRenderConcurrency = 2;
+/** Production peaks above 900 MB, so a 1 GB worker must run heavy FFmpeg/Sharp work serially. */
+export const workerRenderConcurrency = 1;
 export const workerRenderCapacity = new RenderConcurrencyLimiter(workerRenderConcurrency);
