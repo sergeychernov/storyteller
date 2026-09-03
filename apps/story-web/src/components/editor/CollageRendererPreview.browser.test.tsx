@@ -163,8 +163,22 @@ describe("shared editor ScenePlayer", () => {
     expect(titleControl.dispatchEvent(nativeDrag)).toBe(false);
     expect(nativeDrag.defaultPrevented).toBe(true);
     expect(titleControl.getAttribute("draggable")).toBe("false");
+    vi.spyOn(titleControl.parentElement!, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1_000, 1_000));
+    vi.spyOn(titleControl, "getBoundingClientRect").mockReturnValue(new DOMRect(400, 730, 200, 100));
+    let pointerCaptured = false;
+    titleControl.setPointerCapture = vi.fn(() => { pointerCaptured = true; });
+    titleControl.hasPointerCapture = vi.fn(() => pointerCaptured);
+    titleControl.releasePointerCapture = vi.fn(() => { pointerCaptured = false; });
+    fireEvent.pointerDown(titleControl, { pointerId: 7, clientX: 450, clientY: 750 });
+    expect(titleControl.className).toMatch(/positionDragging/u);
+    fireEvent.pointerMove(titleControl, { pointerId: 7, clientX: 550, clientY: 850 });
+    expect(titleControl.style.left).toBe("60%");
+    expect(titleControl.style.top).toBe("88%");
+    fireEvent.pointerUp(titleControl, { pointerId: 7, clientX: 550, clientY: 850 });
+    expect(titleControl.className).not.toMatch(/positionDragging/u);
+    expect(onCommitTitlePosition).toHaveBeenLastCalledWith({ x: 0.6, y: 0.88 });
     fireEvent.keyDown(titleControl, { key: "ArrowLeft" });
-    expect(onCommitTitlePosition).toHaveBeenLastCalledWith({ x: 0.49, y: 0.78 });
+    expect(onCommitTitlePosition).toHaveBeenLastCalledWith({ x: 0.59, y: 0.88 });
 
     rerender(<SceneRendererPreview {...props} title={scene.title} titleEditing={false}
       onCommitTitlePosition={onCommitTitlePosition} />);

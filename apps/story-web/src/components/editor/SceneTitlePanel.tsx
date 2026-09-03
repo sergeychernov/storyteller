@@ -45,7 +45,7 @@ export function SceneTitlePanel({ scene, copy, editor, variant }: SceneTitlePane
         />
         <span className={styles.counter}>{[...title.text].length}/{sceneTitleMaximumCharacters}</span>
       </div>
-      <fieldset className={styles.controlGroup}>
+      <fieldset className={classNames(styles.controlGroup, styles.styleControl)}>
         <legend>{copy.titleStyle}</legend>
         <div className={classNames(styles.segmented, styles.styleOptions)}>{sceneTitleStyles.map((value) => <StylePresetButton
           key={value}
@@ -56,7 +56,7 @@ export function SceneTitlePanel({ scene, copy, editor, variant }: SceneTitlePane
           onClick={() => savePreset(editor, { ...title, style: value })}
         />)}</div>
       </fieldset>
-      <fieldset className={styles.controlGroup}>
+      <fieldset className={classNames(styles.controlGroup, styles.sizeControl)}>
         <legend>{copy.titleSize}</legend>
         <div className={styles.segmented}>{sceneTitleSizes.map((value) => <PresetButton
           key={value}
@@ -66,7 +66,7 @@ export function SceneTitlePanel({ scene, copy, editor, variant }: SceneTitlePane
           onClick={() => savePreset(editor, { ...title, size: value })}
         />)}</div>
       </fieldset>
-      <fieldset className={styles.controlGroup}>
+      <fieldset className={classNames(styles.controlGroup, styles.colorControl)}>
         <legend>{copy.titleColor}</legend>
         <div className={styles.colors}>{sceneTitleColors.map((value) => <button
           type="button"

@@ -13,9 +13,11 @@ interface SceneTitlePositionEditorProps {
 
 export function SceneTitlePositionEditor({ position, label, disabled, children, onCommit }: SceneTitlePositionEditorProps) {
   const [draft, setDraft] = useState(position);
+  const [dragging, setDragging] = useState(false);
   const [outsideSafeZone, setOutsideSafeZone] = useState(false);
   const surface = useRef<HTMLDivElement>(null);
   const control = useRef<HTMLButtonElement>(null);
+  const dragOffset = useRef({ x: 0, y: 0 });
 
   useLayoutEffect(() => {
     setDraft(position);
@@ -43,9 +45,11 @@ export function SceneTitlePositionEditor({ position, label, disabled, children, 
     if (!bounds || !titleBounds || !bounds.width || !bounds.height) return draft;
     const halfX = Math.min(0.5, titleBounds.width / bounds.width / 2);
     const halfY = Math.min(0.5, titleBounds.height / bounds.height / 2);
+    const titleCenterX = clientX - dragOffset.current.x;
+    const titleCenterY = clientY - dragOffset.current.y;
     return {
-      x: Math.max(halfX, Math.min(1 - halfX, (clientX - bounds.left) / bounds.width)),
-      y: Math.max(halfY, Math.min(1 - halfY, (clientY - bounds.top) / bounds.height)),
+      x: Math.max(halfX, Math.min(1 - halfX, (titleCenterX - bounds.left) / bounds.width)),
+      y: Math.max(halfY, Math.min(1 - halfY, (titleCenterY - bounds.top) / bounds.height)),
     };
   }
 
@@ -70,7 +74,11 @@ export function SceneTitlePositionEditor({ position, label, disabled, children, 
     <button
       ref={control}
       type="button"
-      className={classNames(styles.positionControl, outsideSafeZone && styles.positionWarning)}
+      className={classNames(
+        styles.positionControl,
+        dragging && styles.positionDragging,
+        outsideSafeZone && styles.positionWarning,
+      )}
       aria-label={label}
       title={outsideSafeZone ? `${label} · safe zone` : label}
       disabled={disabled}
@@ -88,6 +96,12 @@ export function SceneTitlePositionEditor({ position, label, disabled, children, 
         event.currentTarget.focus();
         event.preventDefault();
         event.stopPropagation();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        dragOffset.current = {
+          x: event.clientX - (bounds.left + bounds.width / 2),
+          y: event.clientY - (bounds.top + bounds.height / 2),
+        };
+        setDragging(true);
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerMove={(event) => {
@@ -99,14 +113,17 @@ export function SceneTitlePositionEditor({ position, label, disabled, children, 
         event.stopPropagation();
         const changed = pointFromPointer(event.clientX, event.clientY);
         setDraft(changed);
+        setDragging(false);
         event.currentTarget.releasePointerCapture(event.pointerId);
         onCommit(changed);
       }}
       onPointerCancel={(event) => {
         event.stopPropagation();
         setDraft(position);
+        setDragging(false);
         if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
       }}
+      onLostPointerCapture={() => setDragging(false)}
       onKeyDown={moveByKeyboard}
     >{children}<span className={styles.positionHint} aria-hidden="true">✣</span></button>
   </div>;

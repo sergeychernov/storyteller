@@ -21,6 +21,25 @@
   max-width: 420px;
 }
 
+.desktop {
+  display: grid;
+  grid-template-areas:
+    "text style size color actions"
+    "text timing timing timing actions";
+  grid-template-columns: minmax(180px, 1fr) max-content max-content max-content minmax(120px, 150px);
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: 4px 12px;
+  overflow: hidden;
+}
+
+.desktop .textGroup { grid-area: text; width: 100%; max-width: none; }
+.desktop .styleControl { grid-area: style; }
+.desktop .sizeControl { grid-area: size; }
+.desktop .colorControl { grid-area: color; }
+.desktop .timing { grid-area: timing; width: 100%; max-width: none; }
+.desktop .actions { grid-area: actions; min-width: 0; }
+
 .textGroup label,
 .controlGroup legend {
   display: block;
@@ -160,7 +179,17 @@
 .mobile .emptyState { grid-column: 1 / -1; min-height: 110px; flex-direction: column; }
 
 @media (max-width: 1050px) {
-  .desktop { gap: 9px; }
-  .desktop .actions { flex-basis: 120px; }
-  .desktop .textGroup { flex-basis: 190px; }
+  .desktop { column-gap: 9px; }
+}
+
+@container scene-bottom-panel (max-width: 680px) {
+  .desktop {
+    grid-template-areas:
+      "text text text text"
+      "style size color actions"
+      "timing timing timing actions";
+    grid-template-columns: max-content max-content max-content minmax(120px, 1fr);
+    gap: 6px 10px;
+    overflow: auto;
+  }
 }

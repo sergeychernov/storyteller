@@ -7,23 +7,30 @@ import { SceneTitlePanel } from "./SceneTitlePanel.js";
 import type { SceneTitleEditorController } from "./use-scene-title-editor.js";
 import styles from "./SceneTitleEditor.stories.module.css";
 
-interface TitleEditorStoryArgs { readonly variant: "desktop" | "mobile" }
+interface TitleEditorStoryArgs {
+  readonly variant: "desktop" | "mobile";
+  readonly panelWidth: number;
+}
 
 const meta = {
   title: "Editor/Scene title/Editor",
   component: TitleEditorStory,
   parameters: { layout: "fullscreen" },
-  args: { variant: "desktop" },
-  argTypes: { variant: { control: "inline-radio", options: ["desktop", "mobile"] } },
+  args: { variant: "desktop", panelWidth: 1080 },
+  argTypes: {
+    variant: { control: "inline-radio", options: ["desktop", "mobile"] },
+    panelWidth: { control: { type: "range", min: 520, max: 1080, step: 20 } },
+  },
 } satisfies Meta<typeof TitleEditorStory>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Desktop: Story = {};
-export const Mobile: Story = { args: { variant: "mobile" } };
+export const DesktopNarrow: Story = { args: { panelWidth: 640 } };
+export const Mobile: Story = { args: { variant: "mobile", panelWidth: 420 } };
 
-function TitleEditorStory({ variant }: TitleEditorStoryArgs) {
+function TitleEditorStory({ variant, panelWidth }: TitleEditorStoryArgs) {
   const [title, setTitle] = useState<SceneTitle | undefined>({
     text: "Первый снег\nнад Белградом",
     position: { x: 0.5, y: 0.78 },
@@ -55,7 +62,8 @@ function TitleEditorStory({ variant }: TitleEditorStoryArgs) {
       {title && <SceneTitleOverlay title={title} localTimeSeconds={2} editing moveLabel="Move title"
         onCommitPosition={(position) => setTitle({ ...title, position })} />}
     </div>
-    <div className={styles.panel}>
+    <div className={`${styles.panel} ${variant === "desktop" && panelWidth <= 680 ? styles.narrowPanel : ""}`}
+      style={variant === "desktop" ? { width: panelWidth } : undefined}>
       <SceneTitlePanel scene={scene} copy={getEditorCopy("ru")} editor={editor} variant={variant} />
     </div>
   </div>;
