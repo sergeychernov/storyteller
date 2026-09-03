@@ -9,6 +9,7 @@ import type { ObjectDeletionJob, SceneRenderJob, SceneRenderQueue, StillImageRen
 import { sceneRenderStorageKey } from "@storyteller/render-queue";
 import { LocalObjectStorage } from "@storyteller/storage";
 import { storyExportSegmentConcurrency } from "./environment.js";
+import { RenderConcurrencyLimiter, workerRenderConcurrency } from "./render-capacity.js";
 import { SceneRenderWorker } from "./scene-render-worker.js";
 
 test("story export segment concurrency defaults to available CPU capped at four and validates overrides", () => {
@@ -18,6 +19,55 @@ test("story export segment concurrency defaults to available CPU capped at four 
   assert.equal(storyExportSegmentConcurrency("100", 2), 32);
   assert.equal(storyExportSegmentConcurrency("0", 3), 3);
   assert.equal(storyExportSegmentConcurrency("invalid", 3), 3);
+});
+
+test("worker render capacity admits at most two heavy renders and releases capacity after failures", async () => {
+  assert.equal(workerRenderConcurrency, 2);
+  const limiter = new RenderConcurrencyLimiter(2);
+  let active = 0;
+  let maximumActive = 0;
+  const order: number[] = [];
+  await Promise.all(Array.from({ length: 5 }, (_, index) => limiter.run(async () => {
+    active += 1;
+    maximumActive = Math.max(maximumActive, active);
+    order.push(index);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    active -= 1;
+  })));
+  assert.equal(maximumActive, 2);
+  assert.deepEqual(order, [0, 1, 2, 3, 4]);
+  await assert.rejects(limiter.run(() => Promise.reject(new Error("render failed"))), /render failed/);
+  assert.equal(await limiter.run(() => Promise.resolve("released")), "released");
+  assert.throws(() => new RenderConcurrencyLimiter(0), /positive integer/);
+});
+
+test("scene workers share the render capacity while downloads and uploads remain independent", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-worker-capacity-test-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const storage = new LocalObjectStorage(root);
+  await storage.put("source/photo.jpg", { body: Readable.from("photo"), contentType: "image/jpeg", contentLength: 5 });
+  const limiter = new RenderConcurrencyLimiter(2);
+  let active = 0;
+  let maximumActive = 0;
+  const logger = { info() {}, error() {} };
+  const workers = Array.from({ length: 3 }, (_, index) => {
+    const base = renderJob();
+    const job = { ...base, id: `render-${index}`, sceneId: `scene-${index}`, inputHash: `hash-${index}` };
+    return new SceneRenderWorker(
+      `worker-${index}`, new MemoryQueue(job), storage,
+      async (spec) => {
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        active -= 1;
+        await writeFile(spec.outputPath, `rendered-${index}`);
+      },
+      undefined, logger, undefined, undefined, undefined, undefined, limiter,
+    );
+  });
+
+  assert.deepEqual(await Promise.all(workers.map((worker) => worker.runOnce())), [true, true, true]);
+  assert.equal(maximumActive, 2);
 });
 
 test("worker renders a claimed scene and stores the reusable artifact", async (context) => {

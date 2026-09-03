@@ -11,7 +11,7 @@ import { probeMedia, type MediaProcessRunner, SpawnMediaProcessRunner } from "./
 import { h264SegmentArguments } from "./h264.js";
 import { buildTitleOverlayFilter, titleOverlayInputArguments, type TitleOverlaySpec } from "./title-overlay.js";
 
-export const collageRendererVersion = 25;
+export const collageRendererVersion = 26;
 
 export interface CollageBackgroundSpec {
   readonly treatment: "darkened" | "original";
@@ -129,24 +129,6 @@ export function buildCollageCardFilter(spec: CollageRenderSpec, materialIndex: n
   return filters.join(";");
 }
 
-export function buildCollageCardAnimationFilter(spec: CollageRenderSpec, materialIndex: number): string {
-  const normalized = normalizeSpec(spec);
-  const box = createSchedule(normalized)[materialIndex];
-  if (!box || !normalized.materials[materialIndex]) throw new Error(`collage material index ${materialIndex} is out of range`);
-  const shadow = getCollageCardShadowMetrics(normalized.width);
-  const prepared = { width: box.width + shadow.padding * 2, height: box.height + shadow.padding * 2 };
-  const rotated = rotationCanvas(prepared.width, prepared.height, Math.max(
-    Math.abs(box.startAngleDegrees), Math.abs(box.finalAngleDegrees),
-  ));
-  const angle = rotationExpression(
-    box.startAngleDegrees, box.finalAngleDegrees, box.startSeconds, box.endSeconds,
-  );
-  return `[0:v]setsar=1,tpad=stop_mode=clone:stop_duration=${fixed(normalized.durationSeconds)},`
-    + `fps=${frameRateExpression(normalized.frameRate)},`
-    + `trim=duration=${fixed(normalized.durationSeconds)},setpts=PTS-STARTPTS,format=yuva420p,`
-    + `rotate=angle='${angle}':ow=${rotated.width}:oh=${rotated.height}:c=0x00000000,format=yuva420p[card-animated]`;
-}
-
 export function buildCollageLayerFilter(spec: CollageRenderSpec, materialIndex: number): string {
   const normalized = normalizeSpec(spec);
   const { width, height, durationSeconds } = normalized;
@@ -156,14 +138,20 @@ export function buildCollageLayerFilter(spec: CollageRenderSpec, materialIndex: 
   const filters: string[] = [
     `[0:v]setsar=1,tpad=stop_mode=clone:stop_duration=${fixed(durationSeconds)},fps=${fps},`
       + `trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuv420p[base]`,
-    `[1:v]setsar=1,tpad=stop_mode=clone:stop_duration=${fixed(durationSeconds)},fps=${fps},`
-      + `trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuva420p[card]`,
   ];
   const shadow = getCollageCardShadowMetrics(width);
   const prepared = { width: box.width + shadow.padding * 2, height: box.height + shadow.padding * 2 };
   const rotated = rotationCanvas(prepared.width, prepared.height, Math.max(
     Math.abs(box.startAngleDegrees), Math.abs(box.finalAngleDegrees),
   ));
+  const angle = rotationExpression(
+    box.startAngleDegrees, box.finalAngleDegrees, box.startSeconds, box.endSeconds,
+  );
+  filters.push(
+    `[1:v]setsar=1,tpad=stop_mode=clone:stop_duration=${fixed(durationSeconds)},fps=${fps},`
+      + `trim=duration=${fixed(durationSeconds)},setpts=PTS-STARTPTS,format=yuva420p,`
+      + `rotate=angle='${angle}':ow=${rotated.width}:oh=${rotated.height}:c=0x00000000,format=yuva420p[card]`,
+  );
   const target = {
     x: box.x + box.width / 2 - rotated.width / 2,
     y: box.y + box.height / 2 - rotated.height / 2,
@@ -264,32 +252,17 @@ export async function renderCollage(
       throw new Error(`ffmpeg collage card ${index + 1} failed (${termination}): ${result.stderr.trim()}`);
     }
     reportCardProgress(index, 0.33);
-    const animatedPath = join(dirname(normalized.outputPath), `.collage-card-animated-${index}.mkv`);
-    const animatedResult = await runner.run("ffmpeg", [
-      normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "1", "-filter_complex_threads", "1",
-      "-i", cardPath,
-      "-filter_complex", buildCollageCardAnimationFilter(normalized, index), "-map", "[card-animated]", "-an",
-      "-c:v", "ffv1", "-level", "3", "-threads", "1", "-pix_fmt", "yuva420p", animatedPath,
-    ], undefined, {
-      durationSeconds: normalized.durationSeconds,
-      onProgress: (progress) => reportCardProgress(index, 0.33 + progress * 0.33),
-    });
-    if (animatedResult.exitCode !== 0) {
-      const termination = animatedResult.signal ? `signal ${animatedResult.signal}` : `exit ${animatedResult.exitCode}`;
-      throw new Error(`ffmpeg collage card animation ${index + 1} failed (${termination}): ${animatedResult.stderr.trim()}`);
-    }
-    reportCardProgress(index, 0.66);
     const previousCompositePath = compositePath;
     compositePath = join(dirname(normalized.outputPath), `.collage-composite-${layerIndex}.mkv`);
     const compositeResult = await runner.run("ffmpeg", [
       normalized.overwrite ? "-y" : "-n", "-v", "error", "-filter_threads", "1", "-filter_complex_threads", "1",
-      "-i", previousCompositePath, "-i", animatedPath,
+      "-i", previousCompositePath, "-i", cardPath,
       "-filter_complex", buildCollageLayerFilter(normalized, index), "-map", "[composite]", "-an",
       "-c:v", "ffv1", "-level", "3", "-threads", "1", "-pix_fmt", "yuv420p",
       "-frames:v", String(normalized.durationFrames), compositePath,
     ], undefined, {
       durationSeconds: normalized.durationSeconds,
-      onProgress: (progress) => reportCardProgress(index, 0.66 + progress * 0.34),
+      onProgress: (progress) => reportCardProgress(index, 0.33 + progress * 0.67),
     });
     if (compositeResult.exitCode !== 0) {
       const termination = compositeResult.signal ? `signal ${compositeResult.signal}` : `exit ${compositeResult.exitCode}`;
@@ -299,7 +272,6 @@ export async function renderCollage(
     await Promise.all([
       rm(previousCompositePath, { force: true }),
       rm(cardPath, { force: true }),
-      rm(animatedPath, { force: true }),
     ]);
   }
   const inputArguments = ["-i", compositePath,

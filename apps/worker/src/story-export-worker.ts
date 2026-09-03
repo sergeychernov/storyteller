@@ -9,6 +9,7 @@ import {
   assembleStoryMaster, assertApprovedStoryMix, assertSegmentProfile, probeVideoProfile, verticalSocialOutputProfile,
 } from "@storyteller/renderer";
 import { hashFileContent, type ObjectStorage } from "@storyteller/storage";
+import { workerRenderCapacity, type RenderCapacity } from "./render-capacity.js";
 
 export class StoryExportWorker {
   constructor(
@@ -16,6 +17,7 @@ export class StoryExportWorker {
     private readonly queue: StoryExportQueue,
     private readonly storage: ObjectStorage,
     private readonly leaseMilliseconds = 20 * 60 * 1_000,
+    private readonly renderCapacity: RenderCapacity = workerRenderCapacity,
   ) {}
 
   async runOnce(): Promise<boolean> {
@@ -50,11 +52,11 @@ export class StoryExportWorker {
         throw exportError("approved_mix_mismatch", error instanceof Error ? error.message : "approved mix profile mismatch");
       }
       await this.queue.reportAssemblyProgress(job.id, this.workerId, 91, "assembling");
-      await assembleStoryMaster({
+      await this.renderCapacity.run(() => assembleStoryMaster({
         segmentPaths, approvedMixPath: mixPath, outputPath,
         frameRate: job.manifest.frameRate, totalFrames: job.manifest.totalFrames,
         onProgress: (value) => { void this.queue.reportAssemblyProgress(job.id, this.workerId, 91 + value * 6, "assembling"); },
-      });
+      }));
       const result = await probeVideoProfile(outputPath);
       const { audioCodec: _audioCodec, audioSampleRate: _audioSampleRate, audioChannels: _audioChannels, ...video } = result;
       assertSegmentProfile(video, job.manifest.frameRate, job.manifest.totalFrames);

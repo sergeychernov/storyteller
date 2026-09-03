@@ -9,8 +9,7 @@ import {
   createCollageEntranceSchedule, createStillImageMotionPlan, getCollageCardShadowMetrics,
 } from "@storyteller/domain";
 import {
-  buildCollageBackgroundFilter, buildCollageCardAnimationFilter, buildCollageCardFilter, buildCollageFilter,
-  buildCollageLayerFilter,
+  buildCollageBackgroundFilter, buildCollageCardFilter, buildCollageFilter, buildCollageLayerFilter,
   collageLayerOrder,
   buildStillImageFilter, buildTitleOverlayFilter,
   PcmWaveform, prepareVideoAudio, probeMedia, renderCollage,
@@ -149,8 +148,6 @@ test("collage renderer preserves full photo aspects, paper frame, rotation and e
     layoutOverlapRatio: 0.4, settings, durationSeconds: 5,
   };
   const cardFilter = buildCollageCardFilter(spec, 0);
-  const cardAnimationFilter = buildCollageCardAnimationFilter(spec, 0);
-  const secondCardAnimationFilter = buildCollageCardAnimationFilter(spec, 1);
   const layerFilter = buildCollageLayerFilter(spec, 0);
   const secondLayerFilter = buildCollageLayerFilter(spec, 1);
   const backgroundFilter = buildCollageBackgroundFilter(spec);
@@ -182,13 +179,13 @@ test("collage renderer preserves full photo aspects, paper frame, rotation and e
     "static paper contours and shadows must not be recalculated in the full-frame animation");
   assert.match(titleFilter, /\[1:v\]loop=loop=-1:size=1:start=0,format=yuva420p,fade=t=in:st=0\.200:d=0\.150:alpha=1/);
   assert.match(titleFilter, /\[title-base\]\[title-overlay\]overlay/);
-  assert.match(cardAnimationFilter, /rotate=angle=/);
-  assert.match(cardAnimationFilter, /:c=0x00000000/);
+  assert.match(layerFilter, /rotate=angle=/);
+  assert.match(layerFilter, /:c=0x00000000/);
   assert.doesNotMatch(filter, /rotate=angle=/,
-    "card rotation must be prepared before the full-frame animation graph");
+    "card rotation must happen before the final H.264 graph");
   assert.match(layerFilter, /pow\(1-/);
-  assert.match(cardAnimationFilter, /-0\.07853982/);
-  assert.match(secondCardAnimationFilter, /0\.10908308/);
+  assert.match(layerFilter, /-0\.07853982/);
+  assert.match(secondLayerFilter, /0\.10908308/);
   assert.match(secondLayerFilter, /enable='gte\(t,3\.300\)'/);
   const entrance = createCollageEntranceSchedule({
     layoutId: spec.layoutId,
@@ -311,25 +308,30 @@ test("collage renderer preserves full photo aspects, paper frame, rotation and e
     },
   });
   const ffmpegCalls = calls.filter(({ executable }) => executable === "ffmpeg");
-  assert.equal(ffmpegCalls.length, 8);
+  assert.equal(ffmpegCalls.length, 6);
   assert.ok(ffmpegCalls[0]?.args.includes("[background]"));
   const cardShapeCalls = ffmpegCalls.filter(({ args }) => args.includes("[card]"));
   assert.equal(cardShapeCalls.length, 2);
   assert.ok(cardShapeCalls.every(({ args }) => args.includes("-frames:v")));
-  const animationCall = ffmpegCalls.find(({ args }) => args.at(-1) === "collage.mp4");
-  assert.ok(animationCall);
+  const finalCall = ffmpegCalls.find(({ args }) => args.at(-1) === "collage.mp4");
+  assert.ok(finalCall);
   assert.equal(maximumActiveCardPreparations, 1, "card preparation must keep a bounded FFmpeg memory footprint");
-  assert.deepEqual(animationCall.args.filter((argument) => argument === "-loop"), []);
-  assert.equal(ffmpegCalls.filter(({ args }) => args.includes("[card-animated]")).length, 2);
+  assert.deepEqual(finalCall.args.filter((argument) => argument === "-loop"), []);
+  assert.equal(ffmpegCalls.some(({ args }) => args.some((argument) => argument.includes(".collage-card-animated-"))), false,
+    "card animation must be fused with compositing instead of writing a full-duration intermediate");
   assert.equal(ffmpegCalls.filter(({ args }) => args.includes("[composite]")).length, 2);
-  assert.deepEqual(animationCall.args.slice(animationCall.args.indexOf("-filter_threads"), animationCall.args.indexOf("-filter_threads") + 2),
+  assert.ok(ffmpegCalls.filter(({ args }) => args.includes("[composite]")).every(({ args }) => {
+    const graph = args[args.indexOf("-filter_complex") + 1] ?? "";
+    return graph.includes("rotate=angle=") && graph.includes("format=yuva420p[card]");
+  }), "each layer must animate its prepared card inside the composite pass");
+  assert.deepEqual(finalCall.args.slice(finalCall.args.indexOf("-filter_threads"), finalCall.args.indexOf("-filter_threads") + 2),
     ["-filter_threads", "1"]);
-  assert.deepEqual(animationCall.args.slice(
-    animationCall.args.indexOf("-filter_complex_threads"), animationCall.args.indexOf("-filter_complex_threads") + 2,
+  assert.deepEqual(finalCall.args.slice(
+    finalCall.args.indexOf("-filter_complex_threads"), finalCall.args.indexOf("-filter_complex_threads") + 2,
   ), ["-filter_complex_threads", "1"]);
-  assert.deepEqual(animationCall.args.slice(animationCall.args.indexOf("-threads"), animationCall.args.indexOf("-threads") + 2),
+  assert.deepEqual(finalCall.args.slice(finalCall.args.indexOf("-threads"), finalCall.args.indexOf("-threads") + 2),
     ["-threads", "1"]);
-  assert.equal(animationCall.args[animationCall.args.indexOf("-x264-params") + 1],
+  assert.equal(finalCall.args[finalCall.args.indexOf("-x264-params") + 1],
     "colorprim=bt709:transfer=bt709:colormatrix=bt709:range=limited:rc-lookahead=0:sync-lookahead=0");
 
   const videoCalls: { executable: string; args: readonly string[] }[] = [];
@@ -346,13 +348,13 @@ test("collage renderer preserves full photo aspects, paper frame, rotation and e
         : { exitCode: 0, stdout: '{"streams":[{"codec_type":"video"}]}', stderr: "" };
     },
   });
-  const videoAnimation = videoCalls.find(({ executable, args }) =>
-    executable === "ffmpeg" && args.at(-1) === ".collage-card-animated-0.mkv")!;
-  const videoCardInput = videoAnimation.args.indexOf(".collage-card-0.mkv");
-  assert.equal(videoAnimation.args[videoCardInput - 1], "-i");
-  assert.notEqual(videoAnimation.args[videoCardInput - 3], "-stream_loop",
+  const videoLayer = videoCalls.find(({ executable, args }) =>
+    executable === "ffmpeg" && args.at(-1) === ".collage-composite-0.mkv")!;
+  const videoCardInput = videoLayer.args.indexOf(".collage-card-0.mkv");
+  assert.equal(videoLayer.args[videoCardInput - 1], "-i");
+  assert.notEqual(videoLayer.args[videoCardInput - 3], "-stream_loop",
     "a video card must be decoded once instead of restarting after EOF");
-  assert.match(buildCollageCardAnimationFilter(videoSpec, 0),
+  assert.match(buildCollageLayerFilter(videoSpec, 0),
     /tpad=stop_mode=clone:stop_duration=5\.000,fps=30\/1,trim=duration=5\.000/,
     "the last decoded video-card frame must remain visible for the rest of the scene");
 });
@@ -444,15 +446,14 @@ test("a non-PPL collage keeps trimmed video moving inside a framed card", async 
     settings, durationSeconds: 1.5, width: 180, height: 320, fps: 5, overwrite: true,
   };
   const videoCardFilter = buildCollageCardFilter(spec, 0);
-  const videoAnimationFilter = buildCollageCardAnimationFilter(spec, 0);
-  const staticAnimationFilter = buildCollageCardAnimationFilter(spec, 1);
   const layerFilter = buildCollageLayerFilter(spec, 0);
+  const staticLayerFilter = buildCollageLayerFilter(spec, 1);
   assert.match(layerFilter, /\[0:v\].*tpad=stop_mode=clone/,
     "the current composite must hold its final frame instead of looping");
   assert.match(videoCardFilter, /crop=80:40:0:0/);
   assert.match(videoCardFilter, /force_original_aspect_ratio=decrease/);
-  assert.match(videoAnimationFilter, /tpad=stop_mode=clone:stop_duration=1\.500/);
-  assert.match(staticAnimationFilter, /tpad=stop_mode=clone:stop_duration=1\.500/,
+  assert.match(layerFilter, /tpad=stop_mode=clone:stop_duration=1\.500/);
+  assert.match(staticLayerFilter, /tpad=stop_mode=clone:stop_duration=1\.500/,
     "every prepared card must remain available through the full final animation");
   await renderCollage(spec, runner);
 

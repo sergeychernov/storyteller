@@ -7,6 +7,7 @@ import { loadLocalEnvironment, storyExportSegmentConcurrency } from "./environme
 import { SceneRenderWorker } from "./scene-render-worker.js";
 import { StoryExportWorker } from "./story-export-worker.js";
 import { pruneOperationalHistory } from "./operational-retention.js";
+import { workerRenderConcurrency } from "./render-capacity.js";
 
 loadLocalEnvironment();
 const connectionString = process.env.DATABASE_URL;
@@ -25,7 +26,10 @@ const exportWorker = new StoryExportWorker(`${workerPrefix}:assembly:${randomUUI
 const controller = new AbortController();
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => controller.abort());
 
-console.info("storyteller-worker started", { storyExportSegmentConcurrency: workers.length });
+console.info("storyteller-worker started", {
+  storyExportSegmentConcurrency: workers.length,
+  workerRenderConcurrency,
+});
 async function runLoop(name: string, runOnce: () => Promise<boolean>) {
   while (!controller.signal.aborted) {
     try {
