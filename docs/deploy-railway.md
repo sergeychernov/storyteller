@@ -33,6 +33,8 @@ The worker is required for scene downloads. The MCP process is still a placehold
 | `worker` | `yarn build:backend` | `yarn db:migrate` | `node apps/worker/dist/index.js` |
 | `mcp` | `yarn workspace @storyteller/mcp build` | — | `yarn workspace @storyteller/mcp start` |
 
+Configure these commands as per-service overrides in **Railway → Service → Settings → Deploy**. The root `railpack.json` is shared by every service in this monorepo, so it intentionally contains only common image configuration and must not define a service-specific start command.
+
 The worker build includes the API TypeScript project so its image contains the same compiled migration entry point. It does not start an API or build either frontend. Start the compiled worker with `node` directly: keeping Yarn as the container's parent process adds a second long-lived Node runtime and wastes memory needed by FFmpeg. The migration command also uses `node`, not the development-only `tsx` runner.
 
 Railway should install dependencies with `yarn install --immutable`; the repository pins Yarn 4 through `packageManager`.
