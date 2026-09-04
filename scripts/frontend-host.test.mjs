@@ -19,6 +19,12 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
     writeFixture(siteRoot, "app.html", "SITE_APP"),
     writeFixture(siteRoot, "ru/index.html", "SITE_RU"),
     writeFixture(siteRoot, "assets/site.js", "SITE_ASSET"),
+    writeFixture(siteRoot, "favicon.ico", "SITE_ICON"),
+    writeFixture(siteRoot, "favicon.svg", "SITE_ICON_SVG"),
+    writeFixture(siteRoot, "favicon-16x16.png", "SITE_ICON_16"),
+    writeFixture(siteRoot, "favicon-32x32.png", "SITE_ICON_32"),
+    writeFixture(siteRoot, "apple-touch-icon.png", "SITE_TOUCH_ICON"),
+    writeFixture(siteRoot, "brand/make-it-a-story-mark-light.svg", "SITE_BRAND_MARK"),
     writeFixture(storyRoot, "index.html", "STORY_APP"),
     writeFixture(storyRoot, "assets/story.js", "STORY_ASSET"),
     writeFixture(clipRoot, "index.html", "CLIP_APP"),
@@ -49,6 +55,20 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
   assert.equal(siteAsset.body, "SITE_ASSET");
   assert.equal(siteAsset.headers["Cache-Control"], "public, max-age=31536000, immutable");
   assert.equal((await inject(server, "/app.html")).status, 404);
+
+  const favicon = await inject(server, "/favicon.ico");
+  assert.equal(favicon.status, 200);
+  assert.equal(favicon.body, "SITE_ICON");
+  assert.equal(favicon.headers["Content-Type"], "image/x-icon");
+  assert.equal(favicon.headers["Cache-Control"], "no-cache");
+  assert.equal((await inject(server, "/favicon.svg", "HEAD")).body, "");
+  assert.equal((await inject(server, "/favicon-16x16.png")).status, 200);
+  assert.equal((await inject(server, "/favicon-32x32.png")).status, 200);
+  assert.equal((await inject(server, "/apple-touch-icon.png")).status, 200);
+  const brandMark = await inject(server, "/brand/make-it-a-story-mark-light.svg");
+  assert.equal(brandMark.status, 200);
+  assert.equal(brandMark.body, "SITE_BRAND_MARK");
+  assert.equal(brandMark.headers["Content-Type"], "image/svg+xml");
 
   const roadmapResponse = await inject(server, "/product-roadmap.json");
   assert.equal(roadmapResponse.status, 200);

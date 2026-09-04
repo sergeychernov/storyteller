@@ -9,6 +9,9 @@
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   color: inherit;
   font-size: 20px;
   font-weight: 600;
@@ -16,7 +19,12 @@
   text-decoration: none;
 }
 
-.brand span {
+.brandMark {
+  width: 31px;
+  height: 31px;
+}
+
+.productName {
   color: #d9fb76;
   font-weight: 400;
 }
@@ -75,4 +83,8 @@
   .status {
     display: none;
   }
+}
+
+@media (max-width: 640px) {
+  .brandName { display: none; }
 }

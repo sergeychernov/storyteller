@@ -30,7 +30,15 @@ const contentTypes = {
 };
 
 const publicPaths = new Set(listPublicPages().map((page) => page.path));
-const siteStaticPaths = new Set(["/favicon.ico", "/robots.txt", "/sitemap.xml"]);
+const siteStaticPaths = new Set([
+  "/apple-touch-icon.png",
+  "/favicon-16x16.png",
+  "/favicon-32x32.png",
+  "/favicon.ico",
+  "/favicon.svg",
+  "/robots.txt",
+  "/sitemap.xml",
+]);
 
 export function createFrontendHost({
   siteRoot = defaultSiteRoot,
@@ -84,7 +92,7 @@ export function createFrontendHost({
       if (await serveApplication(request, response, pathname, "/app/stories", storyRoot)) return;
       if (await serveApplication(request, response, pathname, "/app/clips", clipRoot)) return;
 
-      if (pathname.startsWith("/assets/") || siteStaticPaths.has(pathname)) {
+      if (pathname.startsWith("/assets/") || pathname.startsWith("/brand/") || siteStaticPaths.has(pathname)) {
         const siteRelativePath = safeRelativePath(pathname);
         if (!siteRelativePath) {
           respondNotFound(response, "File not found");
@@ -181,7 +189,11 @@ async function sendRequiredFile(request, response, filePath, application) {
 
 function sendFile(request, response, filePath, status = 200, application = false) {
   const basename = filePath.slice(filePath.lastIndexOf("/") + 1);
-  const noCache = filePath.endsWith(".html") || basename === "robots.txt" || basename === "sitemap.xml";
+  const noCache = filePath.endsWith(".html")
+    || basename.startsWith("favicon")
+    || basename === "apple-touch-icon.png"
+    || basename === "robots.txt"
+    || basename === "sitemap.xml";
   response.writeHead(status, {
     "Content-Type": contentTypes[extname(filePath)] ?? "application/octet-stream",
     "Cache-Control": noCache ? "no-cache" : "public, max-age=31536000, immutable",

@@ -3,7 +3,7 @@ import { ProfileAvatar, type Profile } from "@storyteller/auth-client";
 import type { Locale } from "@storyteller/localization";
 import { checkHealth } from "../api.js";
 import { classNames } from "../class-names.js";
-import { LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
+import { BrandMark, LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import styles from "./AppHeader.module.css";
 
 export function AppHeader({ profile, onLanguageChange }: {
@@ -15,7 +15,11 @@ export function AppHeader({ profile, onLanguageChange }: {
 
   return (
     <header className={styles.topbar}>
-      <a className={styles.brand} href="/">Make It a Story <span>Story Studio</span></a>
+      <a aria-label="Make It a Story" className={styles.brand} href="/">
+        <BrandMark className={styles.brandMark} />
+        <span className={styles.brandName}>Make It a Story</span>
+        <span className={styles.productName}>Story Studio</span>
+      </a>
       <div className={styles.actions}>
         <LanguageSwitcher onLocaleChange={onLanguageChange} />
         <span className={classNames(styles.status, health.data && styles.online)}>

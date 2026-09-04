@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+export { BrandMark, type BrandMarkProps } from "./BrandMark.js";
 const storageKey = "storyteller.locale";
 
 interface LocalizationContextValue {

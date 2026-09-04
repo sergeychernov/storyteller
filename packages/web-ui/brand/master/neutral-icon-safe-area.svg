@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Make It a Story neutral icon master</title>
+  <desc id="desc">The turning-point mark centered inside an 80 percent safe-area square on a transparent canvas.</desc>
+  <g transform="translate(-29.9 -92.8) scale(2.15)" fill="#22221d">
+    <path d="M416 76H184C113 76 76 115 76 177C76 232 111 265 180 282L215 291L236 216L185 207C160 201 149 191 149 174C149 154 165 144 193 144H382L416 76Z" transform="translate(-10 36)" />
+    <path d="M258 302L331 319C354 325 365 335 365 351C365 371 350 382 323 382H92L126 450H334C402 450 438 411 438 348C438 291 403 260 338 244L279 226L258 302Z" />
+  </g>
+</svg>

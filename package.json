@@ -18,7 +18,7 @@
     "clean": "node ./node_modules/typescript/bin/tsc -b --clean",
     "check": "node ./node_modules/typescript/bin/tsc -b --pretty false",
     "test:roadmap": "node --test scripts/public-roadmap.test.mjs",
-    "test:site": "node ./node_modules/typescript/bin/tsc -b apps/site --force && node --test apps/site/dist/components/roadmap/public-roadmap-client.test.js scripts/public-site.test.mjs scripts/frontend-host.test.mjs",
+    "test:site": "node ./node_modules/typescript/bin/tsc -b apps/site --force && node --test apps/site/dist/components/roadmap/public-roadmap-client.test.js scripts/public-site.test.mjs scripts/frontend-host.test.mjs scripts/brand-assets.test.mjs",
     "test:story-web": "yarn workspace @storyteller/story-web test",
     "test:api:postgres": "yarn build:backend && node --test apps/api/dist/access-control.postgres.test.js apps/api/dist/admin-access.postgres.test.js apps/api/dist/admin.postgres.test.js apps/api/dist/app-story-export.postgres.test.js apps/api/dist/migrations.postgres.test.js apps/api/dist/scene-deletion.postgres.test.js",
     "test:admin": "yarn workspace @storyteller/admin test",

@@ -1,6 +1,6 @@
 import { ProfileAvatar, type Profile } from "@storyteller/auth-client";
 import type { Locale } from "@storyteller/localization";
-import { LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
+import { BrandMark, LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import styles from "./ClipShell.module.css";
 
 const copy: Record<Locale, {
@@ -60,7 +60,11 @@ export function ClipShell({ profile, onLanguageChange }: {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <a href="/">Make It a Story <span>Clip Studio</span></a>
+        <a aria-label="Make It a Story" className={styles.brand} href="/">
+          <BrandMark className={styles.brandMark} />
+          <span className={styles.brandName}>Make It a Story</span>
+          <span className={styles.productName}>Clip Studio</span>
+        </a>
         <div className={styles.actions}>
           <LanguageSwitcher onLocaleChange={onLanguageChange} />
           <a className={styles.avatarLink} href="/app/profile" aria-label={t("profile.open")}>

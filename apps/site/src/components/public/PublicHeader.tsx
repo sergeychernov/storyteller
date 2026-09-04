@@ -1,5 +1,7 @@
+import { ProfileAvatar, type Profile } from "@storyteller/auth-client";
+import type { Locale } from "@storyteller/localization";
+import { BrandMark, LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import { Link, useNavigate } from "react-router-dom";
-import { LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import { getLocalizedVersions, getPageByKey, publicSite } from "./public-site-model.js";
 import type { PublicPageKey, ResolvedPublicPage } from "./public-site-types.js";
 import styles from "./PublicHeader.module.css";
@@ -19,7 +21,13 @@ export function PublicHeader({ resolvedPage, profile, studioPath, onLanguageChan
 
   return (
     <header className={styles.header}>
-      <Link className={styles.brand} to={getPageByKey(locale, "home").path}>{publicSite.brand}<span>{localeData.brandTagline}</span></Link>
+      <Link aria-label={publicSite.brand} className={styles.brand} to={getPageByKey(locale, "home").path}>
+        <BrandMark className={styles.brandMark} />
+        <span className={styles.brandCopy}>
+          <span className={styles.brandName}>{publicSite.brand}</span>
+          <span className={styles.brandTagline}>{localeData.brandTagline}</span>
+        </span>
+      </Link>
       <nav className={styles.navigation} aria-label={localeData.primaryNavigation}>
         {Object.entries(localeData.nav).map(([key, label]) => {
           const target = getPageByKey(locale, key as PublicPageKey);
@@ -37,5 +45,3 @@ export function PublicHeader({ resolvedPage, profile, studioPath, onLanguageChan
     </header>
   );
 }
-import { ProfileAvatar, type Profile } from "@storyteller/auth-client";
-import type { Locale } from "@storyteller/localization";

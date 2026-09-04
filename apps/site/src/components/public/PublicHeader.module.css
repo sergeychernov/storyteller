@@ -14,15 +14,30 @@
 .brand {
   display: flex;
   flex: 0 0 auto;
-  flex-direction: column;
+  align-items: center;
+  gap: 9px;
   color: inherit;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.035em;
   text-decoration: none;
 }
 
-.brand span {
+.brandMark {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+}
+
+.brandCopy {
+  display: flex;
+  flex-direction: column;
+}
+
+.brandName {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.brandTagline {
   margin-top: 2px;
   color: #989b8d;
   font-size: 9px;
@@ -117,8 +132,12 @@
 
 @media (max-width: 540px) {
   .header { gap: 14px; }
-  .brand span { display: none; }
+  .brandTagline { display: none; }
   .studio { padding: 9px; }
   .studio span { display: none; }
   .navigation { gap: 18px; justify-content: flex-start; }
+}
+
+@media (max-width: 420px) {
+  .brandCopy { display: none; }
 }

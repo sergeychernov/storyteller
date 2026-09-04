@@ -1,6 +1,6 @@
 import { ProfileAvatar, type Profile } from "@storyteller/auth-client";
 import type { Locale } from "@storyteller/localization";
-import { LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
+import { BrandMark, LanguageSwitcher, useLocalization } from "@storyteller/web-ui";
 import styles from "./SiteAppHeader.module.css";
 
 interface SiteAppHeaderProps {
@@ -12,7 +12,10 @@ export function SiteAppHeader({ profile, onLanguageChange }: SiteAppHeaderProps)
   const { t } = useLocalization();
   return (
     <header className={styles.header}>
-      <a className={styles.brand} href="/">Make It a Story</a>
+      <a aria-label="Make It a Story" className={styles.brand} href="/">
+        <BrandMark className={styles.brandMark} />
+        <span>Make It a Story</span>
+      </a>
       <div className={styles.actions}>
         <LanguageSwitcher onLocaleChange={onLanguageChange} />
         {profile && <a className={styles.avatarLink} href="/app/profile" aria-label={t("profile.open")}>

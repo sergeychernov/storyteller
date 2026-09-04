@@ -20,7 +20,18 @@
   text-decoration: none;
 }
 
-.header a span {
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.brandMark {
+  width: 31px;
+  height: 31px;
+}
+
+.header a .productName {
   color: #d9fb76;
   font-weight: 400;
 }
@@ -118,6 +129,10 @@
 @media (max-width: 640px) {
   .header {
     padding: 0 18px;
+  }
+
+  .brandName {
+    display: none;
   }
 
   .content {

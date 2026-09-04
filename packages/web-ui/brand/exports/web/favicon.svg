@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Make It a Story</title>
+  <rect width="512" height="512" rx="96" fill="#f3f1eb" />
+  <g transform="translate(32 32) scale(28)" fill="#22221d">
+    <path d="M14 2H6C3.2 2 1.8 3.3 1.8 5.5C1.8 7.5 3.2 8.6 5.9 9.3L6 9.3L6.6 6.9L6 6.5C5.2 6.3 4.8 6 4.8 5.4C4.8 4.8 5.3 4.4 6.2 4.4H12.8L14 2Z" transform="translate(-.32 1.15)" />
+    <path d="M7.5 9.7L10.2 10.4C11.1 10.6 11.5 10.9 11.5 11.5C11.5 12.2 11 12.6 10 12.6H2.3L3.4 15H10.5C12.9 15 14.3 13.7 14.3 11.4C14.3 9.3 13 8.2 10.5 7.6L8.1 7.3L7.5 9.7Z" />
+  </g>
+</svg>
