@@ -20,6 +20,12 @@ const allowedTimelineEditKinds = new Set(["scene_reordered", "material_moved_bet
 const allowedSceneTitleChangeKinds = new Set(["added", "text", "position", "appearance", "timing", "removed"]);
 const allowedWebLayouts = new Set(["desktop", "mobile_web"]);
 const allowedStoryOutputProfiles = new Set(["vertical_social"]);
+const allowedTrafficChannels = new Set([
+  "direct", "organic_search", "paid_search", "campaign", "referral", "internal", "unknown",
+]);
+const allowedSearchEngines = new Set([
+  "google", "yandex", "bing", "duckduckgo", "yahoo", "baidu", "other", "not_applicable",
+]);
 const allowedFailureStages = new Set(["request", "processing", "download"]);
 const allowedFailureReasons = new Set(["version_changed", "queue_timeout", "render_timeout", "api_error", "unknown"]);
 const safePage = /^[a-z0-9:/_-]+$/;
@@ -162,8 +168,18 @@ function sanitizeEventProperties(eventType: AnalyticsEventName, value: unknown):
     return { ok: false, message: `analytics properties for ${eventType} do not match the taxonomy` };
   }
   if (!allowedSurfaces.has(value.surface as string)) return { ok: false, message: "analytics surface is invalid" };
-  if (eventType === "page viewed" && !isSafeString(value.page, 160, safePage)) {
-    return { ok: false, message: "analytics page is invalid" };
+  if (eventType === "page viewed") {
+    if (!isSafeString(value.page, 160, safePage)) return { ok: false, message: "analytics page is invalid" };
+    if (!allowedTrafficChannels.has(value.traffic_channel as string)) {
+      return { ok: false, message: "analytics traffic channel is invalid" };
+    }
+    if (!allowedSearchEngines.has(value.search_engine as string)) {
+      return { ok: false, message: "analytics search engine is invalid" };
+    }
+    const isSearch = value.traffic_channel === "organic_search" || value.traffic_channel === "paid_search";
+    if (isSearch === (value.search_engine === "not_applicable")) {
+      return { ok: false, message: "analytics search attribution is inconsistent" };
+    }
   }
   if (eventType === "material uploaded" && !allowedMaterialKinds.has(value.material_kind as string)) {
     return { ok: false, message: "analytics material kind is invalid" };

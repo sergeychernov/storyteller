@@ -19,9 +19,11 @@ function fixture(onFlush: () => Promise<void> = () => Promise.resolve()) {
   return { analytics: createProductAnalytics(adapter), calls };
 }
 
+const directTraffic = { traffic_channel: "direct", search_engine: "not_applicable" } as const;
+
 test("stays disabled without an API key", () => {
   const { analytics, calls } = fixture();
-  assert.equal(analytics.initialize({ apiKey: "  ", serverZone: "EU", surface: "site" }), false);
+  assert.equal(analytics.initialize({ apiKey: "  ", serverZone: "EU", surface: "site", trafficAttribution: directTraffic }), false);
   analytics.setUser("profile-id");
   analytics.track("account signed in", {});
   analytics.track("profile language changed", { language: "es" });
@@ -31,7 +33,9 @@ test("stays disabled without an API key", () => {
 
 test("adds the surface and never needs content identifiers", () => {
   const { analytics, calls } = fixture();
-  assert.equal(analytics.initialize({ apiKey: "public-key", serverZone: "EU", surface: "story-web" }), true);
+  assert.equal(analytics.initialize({
+    apiKey: "public-key", serverZone: "EU", surface: "story-web", trafficAttribution: directTraffic,
+  }), true);
   analytics.setUser("profile-id");
   analytics.track("material uploaded", { material_kind: "video" });
   analytics.track("collage background configured", { collage_background_mode: "custom_material_original" });
@@ -71,7 +75,9 @@ test("adds the surface and never needs content identifiers", () => {
 
 test("deduplicates the current page and resets identity safely", () => {
   const { analytics, calls } = fixture();
-  analytics.initialize({ apiKey: "public-key", serverZone: "US", surface: "site" });
+  analytics.initialize({ apiKey: "public-key", serverZone: "US", surface: "site", trafficAttribution: {
+    traffic_channel: "organic_search", search_engine: "google",
+  } });
   analytics.setUser("profile-id");
   analytics.setUser("profile-id");
   analytics.trackPage("public:/ru/features");
@@ -81,9 +87,13 @@ test("deduplicates the current page and resets identity safely", () => {
 
   assert.deepEqual(calls.slice(1), [
     { name: "setUserId", arguments: ["profile-id"] },
-    { name: "track", arguments: ["page viewed", { surface: "site", page: "public:/ru/features" }] },
+    { name: "track", arguments: ["page viewed", {
+      surface: "site", page: "public:/ru/features", traffic_channel: "organic_search", search_engine: "google",
+    }] },
     { name: "reset", arguments: [] },
-    { name: "track", arguments: ["page viewed", { surface: "site", page: "sign-in" }] },
+    { name: "track", arguments: ["page viewed", {
+      surface: "site", page: "sign-in", traffic_channel: "organic_search", search_engine: "google",
+    }] },
   ]);
 });
 
@@ -102,7 +112,7 @@ test("exposes adapter flush completion to navigation callers", async () => {
   let finishFlush: (() => void) | undefined;
   const adapterCompletion = new Promise<void>((resolve) => { finishFlush = resolve; });
   const { analytics, calls } = fixture(() => adapterCompletion);
-  analytics.initialize({ apiKey: "public-key", serverZone: "US", surface: "site" });
+  analytics.initialize({ apiKey: "public-key", serverZone: "US", surface: "site", trafficAttribution: directTraffic });
   analytics.track("account signed in", {});
 
   let completed = false;

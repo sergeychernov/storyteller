@@ -22,6 +22,8 @@ export type {
   WebLayout,
 } from "./core.js";
 export { analyticsEventPropertyNames, createProductAnalytics, resolveAnalyticsRelayUrl, resolveAnalyticsServerZone } from "./core.js";
+export type { SearchEngine, TrafficAttribution, TrafficChannel } from "./traffic-attribution.js";
+export { resolveBrowserTrafficAttribution, resolveTrafficAttribution } from "./traffic-attribution.js";
 
 type AmplitudeClient = typeof import("@amplitude/analytics-browser");
 let amplitudeClient: Promise<AmplitudeClient> | undefined;

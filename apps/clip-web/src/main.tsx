@@ -1,4 +1,6 @@
-import { analytics, resolveAnalyticsRelayUrl, resolveAnalyticsServerZone } from "@storyteller/analytics";
+import {
+  analytics, resolveAnalyticsRelayUrl, resolveAnalyticsServerZone, resolveBrowserTrafficAttribution,
+} from "@storyteller/analytics";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -11,6 +13,7 @@ analytics.initialize({
   relayUrl: resolveAnalyticsRelayUrl(import.meta.env.VITE_API_URL),
   serverZone: resolveAnalyticsServerZone(import.meta.env.VITE_AMPLITUDE_SERVER_ZONE),
   surface: "clip-web",
+  trafficAttribution: resolveBrowserTrafficAttribution(),
 });
 
 const root = document.getElementById("root");

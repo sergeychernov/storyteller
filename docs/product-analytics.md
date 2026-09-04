@@ -51,6 +51,9 @@ metadata outside its allowlist, and rejects any extra event property.
   enrichment are disabled.
 - Session replay is not installed. In particular, the authenticated editors do
   not record personal photos, videos, text or signed media URLs.
+- Traffic attribution emits only a closed channel category and a closed search
+  engine category. Full referrers, referring domains, landing URLs, search
+  queries, raw UTM values, click IDs and campaign names never leave the browser.
 - The first-party relay does not forward client-supplied IP or arbitrary user
   properties. Its fixed destination and typed property allowlist prevent it
   from becoming a general-purpose proxy.
@@ -64,7 +67,7 @@ Event names follow the `object verb` form and are compile-time checked by
 
 | Event | Properties | Recorded after |
 | --- | --- | --- |
-| `page viewed` | `surface`, `page` | A safe logical route without resource IDs is shown |
+| `page viewed` | `surface`, `page`, `traffic_channel`, `search_engine` | A safe logical route without resource IDs is shown; the browser classifies the document entry source locally |
 | `account created` | `surface` | Registration succeeds |
 | `account signed in` | `surface` | Sign-in succeeds |
 | `profile language changed` | `surface`, `language` | The authenticated profile API confirms a supported language |
@@ -87,6 +90,22 @@ frontend bundle. A failed analytics request never prevents the authenticated
 session from continuing. The API returns the authoritative `accountCreated`
 result; the client never infers registration from whether the name field was
 shown or submitted.
+
+`traffic_channel` is restricted to `direct`, `organic_search`, `paid_search`,
+`campaign`, `referral`, `internal`, or `unknown`. `search_engine` is restricted
+to `google`, `yandex`, `bing`, `duckduckgo`, `yahoo`, `baidu`, `other`, or
+`not_applicable`; it must be `not_applicable` for every non-search channel.
+Classification happens in the browser from the current document URL and
+referrer, but only those categorical values reach the typed event and relay.
+Malformed inputs become `unknown`, and existing historical events are not
+backfilled.
+
+To answer whether search traffic is arriving in Amplitude, create an Event
+Segmentation chart for `page viewed`, filter `surface = site`, and group by the
+event property `traffic_channel`. Filter that property to `organic_search` or
+`paid_search` and group by `search_engine` to compare the privacy-safe provider
+categories. The report becomes meaningful only after the version containing
+these fields is deployed; pre-deployment traffic has no source attribution.
 
 `profile language changed` is emitted only after `PATCH /profile` succeeds. Its
 `language` property is restricted to the supported locale identifiers and never

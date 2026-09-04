@@ -1,3 +1,5 @@
+import type { TrafficAttribution } from "./traffic-attribution.js";
+
 export type AnalyticsSurface = "site" | "story-web" | "clip-web";
 export type AnalyticsServerZone = "EU" | "US";
 export type MaterialKind = "image" | "video";
@@ -16,7 +18,7 @@ export type WebLayout = "desktop" | "mobile_web";
 export type StoryOutputProfile = "vertical_social";
 
 export interface AnalyticsEventMap {
-  readonly "page viewed": { readonly page: string };
+  readonly "page viewed": { readonly page: string } & TrafficAttribution;
   readonly "account created": Record<string, never>;
   readonly "account signed in": Record<string, never>;
   readonly "profile language changed": { readonly language: AnalyticsLanguage };
@@ -59,7 +61,7 @@ type AnalyticsValue = string | number | boolean;
 type AdapterProperties = Readonly<Record<string, AnalyticsValue>>;
 
 export const analyticsEventPropertyNames = {
-  "page viewed": ["surface", "page"],
+  "page viewed": ["surface", "page", "traffic_channel", "search_engine"],
   "account created": ["surface"],
   "account signed in": ["surface"],
   "profile language changed": ["surface", "language"],
@@ -92,6 +94,7 @@ export interface AnalyticsConfiguration {
   readonly apiKey: string;
   readonly serverZone: AnalyticsServerZone;
   readonly surface: AnalyticsSurface;
+  readonly trafficAttribution: TrafficAttribution;
   readonly relayUrl?: string;
 }
 
@@ -110,6 +113,7 @@ export function createProductAnalytics(adapter: AnalyticsAdapter): ProductAnalyt
   let currentProfileId: string | undefined;
   let identityInitialized = false;
   let lastPage: string | undefined;
+  let trafficAttribution: TrafficAttribution | undefined;
 
   const track: ProductAnalytics["track"] = (eventName, properties) => {
     if (!enabled || !surface) return;
@@ -121,6 +125,7 @@ export function createProductAnalytics(adapter: AnalyticsAdapter): ProductAnalyt
       if (enabled) return true;
       const apiKey = configuration.apiKey.trim();
       surface = configuration.surface;
+      trafficAttribution = configuration.trafficAttribution;
       if (!apiKey) return false;
       adapter.initialize(apiKey, configuration.serverZone, configuration.relayUrl?.trim() || undefined);
       enabled = true;
@@ -146,7 +151,10 @@ export function createProductAnalytics(adapter: AnalyticsAdapter): ProductAnalyt
       const normalized = page.trim();
       if (!normalized || normalized === lastPage) return;
       lastPage = normalized;
-      track("page viewed", { page: normalized });
+      track("page viewed", {
+        page: normalized,
+        ...(trafficAttribution ?? { traffic_channel: "unknown", search_engine: "not_applicable" }),
+      });
     },
     flush() {
       return enabled ? adapter.flush() : Promise.resolve();

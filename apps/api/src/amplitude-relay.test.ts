@@ -10,7 +10,7 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
   const upstreamRequests: { readonly url: string; readonly body: unknown }[] = [];
   const fetchUpstream = (async (input: string | URL | Request, init?: RequestInit) => {
     upstreamRequests.push({ url: String(input), body: JSON.parse(String(init?.body)) as unknown });
-    return new Response(JSON.stringify({ code: 200, events_ingested: 9 }), {
+    return new Response(JSON.stringify({ code: 200, events_ingested: 10 }), {
       status: 200, headers: { "content-type": "application/json" },
     });
   }) as typeof fetch;
@@ -24,6 +24,12 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
     payload: {
       api_key: projectKey,
       events: [{
+        event_type: "page viewed",
+        event_properties: {
+          surface: "site", page: "public:/ru/features", traffic_channel: "organic_search", search_engine: "google",
+        },
+        device_id: "device-1",
+      }, {
         event_type: "material uploaded",
         event_properties: { surface: "story-web", material_kind: "video" },
         device_id: "device-1", user_id: "profile-1", time: 1_700_000_000_000, session_id: 123,
@@ -69,12 +75,18 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
   });
 
   assert.equal(response.statusCode, 200, response.body);
-  assert.deepEqual(response.json(), { code: 200, events_ingested: 9 });
+  assert.deepEqual(response.json(), { code: 200, events_ingested: 10 });
   assert.deepEqual(upstreamRequests, [{
     url: "https://api2.amplitude.com/2/httpapi",
     body: {
       api_key: projectKey,
       events: [{
+        event_type: "page viewed",
+        event_properties: {
+          surface: "site", page: "public:/ru/features", traffic_channel: "organic_search", search_engine: "google",
+        },
+        device_id: "device-1",
+      }, {
         event_type: "material uploaded",
         event_properties: { surface: "story-web", material_kind: "video" },
         device_id: "device-1", user_id: "profile-1", time: 1_700_000_000_000, session_id: 123,
@@ -263,6 +275,42 @@ test("rejects events and properties outside the analytics taxonomy", async (cont
       }],
     },
   });
+  const invalidTrafficChannel = await api.inject({
+    method: "POST", url: "/analytics/amplitude",
+    payload: {
+      api_key: projectKey,
+      events: [{
+        event_type: "page viewed", device_id: "device-1",
+        event_properties: {
+          surface: "site", page: "public:/", traffic_channel: "raw-referrer", search_engine: "not_applicable",
+        },
+      }],
+    },
+  });
+  const invalidSearchEngine = await api.inject({
+    method: "POST", url: "/analytics/amplitude",
+    payload: {
+      api_key: projectKey,
+      events: [{
+        event_type: "page viewed", device_id: "device-1",
+        event_properties: {
+          surface: "site", page: "public:/", traffic_channel: "organic_search", search_engine: "www.google.com",
+        },
+      }],
+    },
+  });
+  const inconsistentSearchAttribution = await api.inject({
+    method: "POST", url: "/analytics/amplitude",
+    payload: {
+      api_key: projectKey,
+      events: [{
+        event_type: "page viewed", device_id: "device-1",
+        event_properties: {
+          surface: "site", page: "public:/", traffic_channel: "referral", search_engine: "google",
+        },
+      }],
+    },
+  });
 
   assert.equal(unknownEvent.statusCode, 400);
   assert.equal(unexpectedProperty.statusCode, 400);
@@ -275,6 +323,9 @@ test("rejects events and properties outside the analytics taxonomy", async (cont
   assert.equal(invalidTimelineEditKind.statusCode, 400);
   assert.equal(invalidSceneTitleChangeKind.statusCode, 400);
   assert.equal(invalidWebLayout.statusCode, 400);
+  assert.equal(invalidTrafficChannel.statusCode, 400);
+  assert.equal(invalidSearchEngine.statusCode, 400);
+  assert.equal(inconsistentSearchAttribution.statusCode, 400);
   assert.equal(upstreamCalls, 0);
 });
 
