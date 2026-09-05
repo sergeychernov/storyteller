@@ -103,8 +103,14 @@ export class MemoryRepository implements StoryRepository {
     const current = this.stories.get(story.id);
     if (!current || current.profileId !== story.profileId) throw new ApplicationError("story not found", 404);
     if (current.revision !== story.revision - 1) throw new ApplicationError("story has changed", 409, "story_revision_conflict");
-    this.stories.set(story.id, story);
+    this.stories.set(story.id, current.soundtrackMix ? { ...story, soundtrackMix: current.soundtrackMix } : story);
     if (activity) this.activities.push({ profileId: story.profileId, ...activity });
+  }
+  async updateStorySettings(story: Story) {
+    const current = this.stories.get(story.id);
+    if (!current || current.profileId !== story.profileId) throw new ApplicationError("story not found", 404);
+    if (current.revision !== story.revision) throw new ApplicationError("story has changed", 409, "story_revision_conflict");
+    this.stories.set(story.id, story.soundtrackMix ? { ...current, soundtrackMix: story.soundtrackMix } : current);
   }
   async deleteScene(story: Story, _sceneId: string, storageKeys: readonly string[]) {
     await this.updateStory(story);

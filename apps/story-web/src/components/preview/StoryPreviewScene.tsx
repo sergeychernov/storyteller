@@ -16,7 +16,7 @@ interface StoryPreviewSceneProps {
   readonly status: StoryPreviewStatus;
   readonly active: boolean;
   readonly pending: boolean;
-  readonly muted: boolean;
+  readonly videoLevel: number;
   readonly reducedMotion: boolean;
   readonly retryKey: number;
   readonly copy: EditorCopy;
@@ -40,7 +40,7 @@ export const StoryPreviewScene = forwardRef<ScenePlayerHandle, StoryPreviewScene
       localTimeSeconds={props.localTimeSeconds}
       playing={props.status === "playing"}
       active={props.active}
-      muted={props.muted}
+      videoLevel={props.videoLevel}
       reducedMotion={props.reducedMotion}
       preload={preload}
       retryKey={props.retryKey}

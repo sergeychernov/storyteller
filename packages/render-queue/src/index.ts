@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import type { RenderDependency } from "./render-version.js";
 export { hashSceneRenderInput, sceneRenderParameters, type RenderDependency } from "./render-version.js";
 export * from "./story-export.js";
+export * from "./soundtrack.js";
 
 export const sceneRenderStatuses = ["queued", "running", "ready", "failed", "canceled"] as const;
 export type SceneRenderStatus = (typeof sceneRenderStatuses)[number];

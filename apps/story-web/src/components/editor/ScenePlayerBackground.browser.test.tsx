@@ -61,7 +61,7 @@ function renderPlayer(scene: Scene, previousSceneValue?: Scene) {
     localTimeSeconds={0}
     playing
     active
-    muted
+    videoLevel={1}
     reducedMotion={false}
     preload="auto"
     retryKey={0}

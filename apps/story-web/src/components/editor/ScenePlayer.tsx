@@ -26,7 +26,8 @@ export interface ScenePlayerProps {
   readonly localTimeSeconds: number;
   readonly playing: boolean;
   readonly active: boolean;
-  readonly muted: boolean;
+  /** 0 silences the source audio; anything above plays it at that level. */
+  readonly videoLevel: number;
   readonly reducedMotion: boolean;
   readonly preload: "auto" | "metadata";
   readonly retryKey: number;
@@ -87,7 +88,7 @@ const ScenePlayerBody = forwardRef<ScenePlayerHandle, ScenePlayerProps & {
       localTimeSeconds={props.localTimeSeconds}
       playing={props.playing}
       active={props.active}
-      muted={props.muted}
+      videoLevel={props.videoLevel}
       preload={props.preload}
       retryKey={props.retryKey}
       controlsCopy={props.editorMediaControls && slot.role === "layout" ? props.copy : undefined}

@@ -7,7 +7,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { ApplicationError, createBaselineAccessControl, type AccessControlService, type StoryApplication } from "@storyteller/application";
 import { getMaterialPresentation, getMaterialSource, materialStorageKeys, type MaterialEdit, type SceneMaterial, type Story } from "@storyteller/domain";
-import { sceneRenderFileType, type SceneRenderQueue, type StoryExportQueue } from "@storyteller/render-queue";
+import { sceneRenderFileType, type SceneRenderQueue, type SoundtrackRenderQueue, type StoryExportQueue } from "@storyteller/render-queue";
 import {
   authenticationSchema, bearerSecurity, configureSceneSchema, createStorySchema, deleteSceneSchema, editMaterialSchema, errorSchema, healthSchema,
   loginSchema, materialContentAccessSchema, materialWaveformSchema, platformCredentialSchema, platformParamsSchema, profileSchema, registerSchema, signInSchema,
@@ -27,6 +27,8 @@ import { accessPolicyForRoute, registerAccessControl } from "./access-control.js
 import { registerAdminRoutes } from "./admin-routes.js";
 import { registerStoryExportRoutes } from "./story-export-routes.js";
 import { StoryExportService } from "./story-exports.js";
+import { registerSoundtrackRoutes } from "./soundtrack-routes.js";
+import { SoundtrackService } from "./soundtracks.js";
 import type { AdminReadModel } from "./admin-database.js";
 import type { AdminAccessService } from "./admin-access.js";
 
@@ -35,6 +37,7 @@ export async function buildApi(application: StoryApplication, options: {
   readonly objectStorage?: ObjectStorage;
   readonly renderQueue?: SceneRenderQueue;
   readonly exportQueue?: StoryExportQueue;
+  readonly soundtrackQueue?: SoundtrackRenderQueue;
   readonly amplitudeRelay?: AmplitudeRelayOptions;
   readonly accessControl?: AccessControlService;
   readonly adminReadModel?: AdminReadModel;
@@ -42,7 +45,9 @@ export async function buildApi(application: StoryApplication, options: {
 } = {}) {
   const mediaStorage = options.mediaStorage ?? new MediaStorage();
   const renderService = options.renderQueue && new SceneRenderService(application, options.renderQueue, mediaStorage);
-  const exportService = options.exportQueue && new StoryExportService(application, options.exportQueue, mediaStorage);
+  const exportService = options.exportQueue
+    && new StoryExportService(application, options.exportQueue, mediaStorage, options.soundtrackQueue);
+  const soundtrackService = options.soundtrackQueue && new SoundtrackService(application, options.soundtrackQueue);
   const app = Fastify({ logger: process.env.NODE_ENV !== "test" })
     .setValidatorCompiler(validatorCompiler).setSerializerCompiler(serializerCompiler).withTypeProvider<ZodTypeProvider>();
   const accessControl = options.accessControl ?? createBaselineAccessControl();
@@ -158,6 +163,7 @@ export async function buildApi(application: StoryApplication, options: {
   }, async (request) => serializeStory(await application.getStory((await authenticate(application, request)).id, request.params.storyId)));
   registerStoryTimelineRoutes(app, application);
   registerStoryExportRoutes(app, application, exportService, options.objectStorage);
+  registerSoundtrackRoutes(app, application, soundtrackService, options.objectStorage);
   const sceneParams = storyParams.extend({ sceneId: z.string().uuid() });
   app.post("/stories/:storyId/scenes", {
     schema: { security: bearerSecurity, params: storyParams, response: { 201: storySchema, 401: errorSchema, 404: errorSchema, 409: errorSchema } },

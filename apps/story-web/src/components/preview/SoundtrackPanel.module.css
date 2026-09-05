@@ -1,0 +1,105 @@
+.panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 10px;
+  color: #d9d8cf;
+  background: #ffffff0a;
+}
+
+.heading,
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.heading div { display: grid; gap: 3px; }
+.heading small,
+.status,
+.license { margin: 0; color: #aaa99f; font-size: 11px; }
+
+.panel progress { width: 100%; height: 4px; accent-color: #d9fb76; }
+.player { width: 100%; height: 38px; }
+.actions { justify-content: flex-start; flex-wrap: wrap; }
+.actions button,
+.actions a {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid #d9fb76;
+  border-radius: 9px;
+  color: #25261f;
+  background: #d9fb76;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 38px;
+  text-decoration: none;
+  cursor: pointer;
+}
+/* The same braces glyph the scene toolbar uses for its debug payload, so the two read as one control. */
+.actions .iconAction {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+  color: #d9d8cf;
+  border-color: #ffffff2e;
+  background: transparent;
+  font: 700 14px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.actions .iconAction:hover {
+  color: #d9fb76;
+  border-color: #d9fb76;
+}
+.actions button:disabled { cursor: not-allowed; opacity: .45; }
+.license a { color: #d9fb76; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+
+@media (max-width: 480px) {
+  .actions > * { width: 100%; box-sizing: border-box; text-align: center; }
+}
+
+.mixer {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  gap: 18px;
+  padding: 12px 14px;
+  border: 1px solid #ffffff14;
+  border-radius: 9px;
+  background: #17171466;
+}
+
+.channel {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.channelValue,
+.channelName {
+  color: #aaa99f;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.channelName { max-width: 72px; }
+
+.fader {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  appearance: slider-vertical;
+  -webkit-appearance: slider-vertical;
+  width: 22px;
+  height: 96px;
+  accent-color: #d9fb76;
+}
+.fader:disabled { opacity: .4; cursor: not-allowed; }
+
+@media (max-width: 480px) {
+  .mixer { gap: 10px; justify-content: space-between; }
+  .fader { height: 84px; }
+}

@@ -26,10 +26,10 @@ export function StoryExportPanel({ story, session }: { readonly story: Story; re
   if (!canExport) return null;
   const value = exportQuery.data;
   const active = value && ["queued", "rendering", "assembling"].includes(value.status);
-  const stale = value && (value.status === "canceled" || value.storyRevision !== story.revision);
+  const stale = value && (value.status === "canceled" || !value.current);
   const error = requestExport.error ?? exportQuery.error;
   const errorText = error instanceof ApiError ? exportErrorText(error.code, copy) : error ? copy.exportUnknownError : undefined;
-  const canDownload = value?.status === "ready" && value.storyRevision === story.revision;
+  const canDownload = value?.status === "ready" && value.current;
   const frameRate = value ? value.frameRate.numerator / value.frameRate.denominator : undefined;
 
   return <section className={styles.panel} aria-labelledby="story-export-title">
@@ -69,8 +69,7 @@ function exportStatus(
 }
 
 function exportErrorText(code: string | undefined, copy: ReturnType<typeof getPreviewCopy>): string {
-  if (code === "story_export_approved_mix_required") return copy.exportMixRequired;
-  if (code === "story_export_approved_mix_stale" || code === "approved_mix_mismatch") return copy.exportMixStale;
+  if (code === "soundtrack_mismatch") return copy.exportSoundtrackFailed;
   if (code === "story_export_empty_scene" || code === "story_export_empty_story") return copy.exportEmptyScene;
   if (code === "story_revision_conflict" || code === "story_revision_changed") return copy.exportStale;
   if (code === "segment_failed" || code === "segment_profile_mismatch") return copy.exportSegmentFailed;

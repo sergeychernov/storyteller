@@ -201,6 +201,40 @@ The API returned HTTP 200 for `/health` and `/docs/json`; its OpenAPI schema inc
 
 The subsequent merge and Wait for CI activation are tracked in [PR #2](https://github.com/sergeychernov/storyteller/pull/2). Verify active `source.checkSuites` values after applying the environment changes; the successful application rollout alone does not prove CI gating is enabled.
 
+### Migrations 13–17 and built-in soundtrack rollout
+
+Migration 13 additively creates `soundtrack_renders`, registers the
+`story.soundtrack.generate` creator capability, and adds soundtrack request/ready
+product activity codes. Existing API and worker versions ignore the new table.
+Release the migration and new worker first, then API, then Web, so the one-click
+control cannot enqueue work before a soundtrack worker is available. The worker
+uses the existing global heavy-render capacity; do not add another Railway
+service for the MVP. Verify queue age, render duration, failure rate, and RSS for
+a 180-second render before increasing concurrency.
+
+Migration 14 adds the stem listening derivatives. Each render then stores five
+objects: the AAC mix, both lossless FLAC stems that the source-audio mix
+consumes, and AAC derivatives of the same two stems that the Story Web track
+mixer streams. Engine version 2 renders an event-based pentatonic score, so
+migration 14 deletes every soundtrack row left from engine version 1 — their
+provenance no longer validates and their input hash can never be reused. Delete
+the corresponding objects from storage separately; the migration does not touch
+object storage. Apply migration 14 before the new worker, because the completion
+write needs the new columns. Migration 15 drops renders made with the retired
+`calm` and `adventure` presets and migrations 16 and 17 drop everything left from an
+earlier engine version: neither can be reproduced or serialised, and until the
+MVP ships the types accept only the current version rather than carrying old
+shapes. Delete their objects from storage separately. Budget up to 35 s of worker CPU and 35 MB of RSS for a
+180-second render; the cost is set by the style, not the duration alone — `dnb`
+synthesises in about 9 s while `lounge` needs about 20 s for its longer plucked
+notes, and FFmpeg adds roughly 5 s of encoding on top.
+
+Completing a render now deletes the story's earlier soundtrack variants and their
+objects, so only the newest one is stored. Playback levels live in the story
+payload and are written on the story's current revision, which keeps the preview
+timeline valid while a creator moves a fader; no migration is involved, and an
+approved mix is left alone because it is invalidated by its own timeline hash.
+
 ## Watch paths
 
 Railway's automatic monorepo import may initially watch only the application directory. Add these root-relative patterns where selective deploys are safe so shared-package and lockfile changes also redeploy affected services.
@@ -242,6 +276,7 @@ browser bundle on different revisions.
 /packages/schemas/**
 /packages/renderer/**
 /packages/render-queue/**
+/packages/soundtrack/**
 /packages/storage/**
 /package.json
 /yarn.lock
@@ -261,6 +296,7 @@ browser bundle on different revisions.
 /packages/schemas/**
 /packages/renderer/**
 /packages/render-queue/**
+/packages/soundtrack/**
 /packages/storage/**
 /package.json
 /yarn.lock

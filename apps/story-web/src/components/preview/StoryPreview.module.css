@@ -170,8 +170,7 @@
   font-weight: 700;
 }
 
-.buttons .transportToggle,
-.buttons .iconButton {
+.buttons .transportToggle {
   display: grid;
   width: 38px;
   min-width: 38px;
@@ -179,18 +178,10 @@
   place-items: center;
 }
 
-.transportToggle svg,
-.iconButton svg {
+.transportToggle svg {
   width: 18px;
   height: 18px;
   fill: currentColor;
-}
-
-.iconButton .soundMark {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 2;
 }
 
 .clock {

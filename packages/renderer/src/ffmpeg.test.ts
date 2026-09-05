@@ -13,7 +13,7 @@ import {
   collageLayerOrder,
   buildStillImageFilter, buildTitleOverlayFilter,
   PcmWaveform, prepareVideoAudio, probeMedia, renderCollage,
-  assembleStoryMaster, assertApprovedStoryMix, assertSegmentProfile, probeVideoProfile, renderLastFrame, renderSceneTitleLayer,
+  assembleStoryMaster, assertSegmentProfile, assertStoryMasterAudio, buildStoryMasterAudio, probeVideoProfile, renderLastFrame, renderSceneTitleLayer,
   renderStillImage, renderVideo, SpawnMediaProcessRunner, type MediaProcessRunner,
 } from "./index.js";
 
@@ -831,7 +831,7 @@ test("story assembly copies normalized video and approved audio without re-encod
   context.after(() => rm(root, { recursive: true, force: true }));
   const calls: string[][] = [];
   await assembleStoryMaster({
-    segmentPaths: [join(root, "one.mp4"), join(root, "two.mp4")], approvedMixPath: join(root, "mix.m4a"),
+    segmentPaths: [join(root, "one.mp4"), join(root, "two.mp4")], audioPath: join(root, "mix.m4a"),
     outputPath: join(root, "master.mp4"), frameRate: { numerator: 30, denominator: 1 }, totalFrames: 300,
   }, { run: async (_executable, args) => {
     calls.push([...args]); return { exitCode: 0, stdout: "", stderr: "" };
@@ -871,9 +871,9 @@ test("a copied master fully decodes with the exact segment frame sum and approve
     "-c:a", "aac", "-profile:a", "aac_low", "-b:a", "192k", "-ar", "48000", "-ac", "2", mix,
   ]);
   assert.equal(mixResult.exitCode, 0, mixResult.stderr);
-  await assertApprovedStoryMix(mix, 6, frameRate, runner);
+  await assertStoryMasterAudio(mix, 6, frameRate, runner);
   const master = join(root, "master.mp4");
-  await assembleStoryMaster({ segmentPaths: segments, approvedMixPath: mix, outputPath: master, frameRate, totalFrames: 6 }, runner);
+  await assembleStoryMaster({ segmentPaths: segments, audioPath: mix, outputPath: master, frameRate, totalFrames: 6 }, runner);
   const profile = await probeVideoProfile(master, runner);
   assert.equal(profile.frameCount, 6);
   assert.equal(profile.audioCodec, "aac");
@@ -881,6 +881,41 @@ test("a copied master fully decodes with the exact segment frame sum and approve
   assert.equal(profile.audioChannels, 2);
   const decoded = await runner.run("ffmpeg", ["-v", "error", "-i", master, "-f", "null", "-"]);
   assert.equal(decoded.exitCode, 0, decoded.stderr);
+});
+
+test("the melody stays ducked across the seam between two clips that carry sound", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-ducking-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const runner = new SpawnMediaProcessRunner();
+  const write = async (path: string, source: string, seconds: number) => {
+    const result = await runner.run("ffmpeg", ["-y", "-v", "error", "-f", "lavfi", "-i", source, "-t", String(seconds),
+      "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "2", path]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    return path;
+  };
+  // The clips are silent: what the windows do to the melody is the whole measurement, not what the scenes contain.
+  const clips = [await write(join(root, "one.wav"), "anullsrc=r=48000:cl=stereo", 1),
+    await write(join(root, "two.wav"), "anullsrc=r=48000:cl=stereo", 1)];
+  const melody = await write(join(root, "melody.wav"), "sine=frequency=440:sample_rate=48000", 3);
+  const rhythm = await write(join(root, "rhythm.wav"), "anullsrc=r=48000:cl=stereo", 3);
+  const master = join(root, "master.m4a");
+  await buildStoryMasterAudio({
+    outputPath: master, durationSeconds: 3,
+    levels: { video: 1, rhythm: 1, melody: 1, duckedMelody: 0 },
+    source: [{ path: clips[0]!, startSeconds: 0, durationSeconds: 1 },
+      { path: clips[1]!, startSeconds: 1, durationSeconds: 1 }],
+    soundtrack: { rhythmPath: rhythm, melodyPath: melody },
+  }, runner);
+  const peakDecibels = async (path: string, window?: { from: number; to: number }) => {
+    const measured = await runner.run("ffmpeg", ["-v", "info", "-i", path, "-af",
+      window ? `atrim=start=${window.from}:end=${window.to},volumedetect` : "volumedetect", "-f", "null", "-"]);
+    assert.equal(measured.exitCode, 0, measured.stderr);
+    return Number(/max_volume: (-?\d+(?:\.\d+)?) dB/.exec(measured.stderr)?.[1]);
+  };
+  assert.ok(await peakDecibels(master, { from: 0.9, to: 1.1 }) < -60, "the seam between two clips must stay silent");
+  assert.ok(await peakDecibels(master, { from: 0.3, to: 0.7 }) < -60, "a clip ducks the melody while it plays");
+  assert.ok(await peakDecibels(master, { from: 2.6, to: 3 }) > await peakDecibels(melody) - 1.5,
+    "the melody comes back to its own level once the clips are over");
 });
 
 test("lossless scene frame contains the actual last frame rather than the first", async (context) => {

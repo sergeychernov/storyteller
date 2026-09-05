@@ -155,7 +155,7 @@ function slot(value: VideoMaterial): ScenePlaybackSlot {
 function createProps(value: ScenePlaybackSlot, localTimeSeconds = 1) {
   return {
     storyId: "story-1", session, slot: value, localTimeSeconds,
-    playing: true, active: true, muted: false, preload: "auto" as const, retryKey: 0,
+    playing: true, active: true, videoLevel: 1, preload: "auto" as const, retryKey: 0,
     onUnexpectedPause: vi.fn(),
   };
 }

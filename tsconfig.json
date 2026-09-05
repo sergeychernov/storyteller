@@ -12,6 +12,7 @@
     { "path": "packages/renderer" },
     { "path": "packages/storage" },
     { "path": "packages/render-queue" },
+    { "path": "packages/soundtrack" },
     { "path": "packages/publishers" },
     { "path": "apps/api" },
     { "path": "apps/worker" },

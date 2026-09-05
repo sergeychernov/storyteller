@@ -3,6 +3,7 @@ import {
   collageFrameShapes, collageRowDirections, defaultCollageRowDirection,
   normalizeCollageFrameWidth, profileLanguages, sceneTitleColors, sceneTitleSizes, sceneTitleStyles,
 } from "@storyteller/domain";
+import { maximumMelodyVariant, soundtrackPresetIds, soundtrackStemIds } from "@storyteller/soundtrack";
 
 export const profileLanguageSchema = z.enum(profileLanguages);
 export const profileSchema = z.object({ id: z.string().uuid(), name: z.string(), email: z.email(), language: profileLanguageSchema });
@@ -176,17 +177,20 @@ export const sceneSchema = z.object({
   rendererId: z.string().optional(), title: sceneTitleSchema.optional(),
   render: z.object({ status: z.enum(["idle", "queued", "running", "ready", "failed"]), artifactId: z.string().optional() }),
 });
+export const soundtrackMixSchema = z.object({
+  video: z.number().min(0).max(1), rhythm: z.number().min(0).max(1),
+  melody: z.number().min(0).max(1), duckedMelody: z.number().min(0).max(1),
+}).strict();
+export const updateSoundtrackMixSchema = z.object({
+  expectedRevision: z.number().int().positive(), mix: soundtrackMixSchema,
+}).strict();
 export const storySchema = z.object({
   id: z.string().uuid(), profileId: z.string().uuid(), title: z.string().optional(),
   status: z.enum(["draft", "rendering", "ready", "publishing", "published"]), scenes: z.array(sceneSchema),
   narrations: z.array(z.object({ id: z.string(), assetId: z.string(), fromSceneId: z.string() })),
   music: z.object({ generationStatus: z.enum(["idle", "queued", "running", "ready", "failed"]), assetId: z.string().optional(), applied: z.boolean() }),
+  soundtrackMix: soundtrackMixSchema.optional(),
   outputFrameRate: rationalFrameRateSchema.optional(),
-  approvedMix: z.object({
-    storageKey: z.string(), contentHash: z.string().regex(/^[a-f0-9]{64}$/), mimeType: z.literal("audio/mp4"),
-    sizeBytes: z.number().int().nonnegative(), sampleRate: z.literal(48000), channels: z.literal(2),
-    timelineHash: z.string().regex(/^[a-f0-9]{64}$/), durationFrames: z.number().int().positive(),
-  }).optional(),
   revision: z.number().int().positive(),
 });
 export const reorderSceneMaterialsSchema = z.object({ materialIds: z.array(z.string().uuid()) });
@@ -247,7 +251,7 @@ export const storyExportRequestSchema = z.object({
 }).strict();
 export const storyExportSchema = z.object({
   id: z.string().uuid(), status: z.enum(["queued", "rendering", "assembling", "ready", "failed", "canceled"]),
-  currentRevision: z.number().int().positive(), storyRevision: z.number().int().positive(),
+  current: z.boolean(), currentRevision: z.number().int().positive(), storyRevision: z.number().int().positive(),
   outputProfileId: z.literal("vertical-social-v1"), frameRate: rationalFrameRateSchema,
   totalFrames: z.number().int().positive(), progressPercent: z.number().int().min(0).max(100),
   progressPhase: z.enum(["queued", "rendering_segments", "assembling", "uploading", "ready"]),
@@ -255,6 +259,44 @@ export const storyExportSchema = z.object({
   sizeBytes: z.number().int().nonnegative().optional(),
   errorCode: z.enum(["story_revision_changed", "segment_failed", "segment_profile_mismatch", "approved_mix_mismatch", "assembly_failed"]).optional(),
 });
+
+export const soundtrackPresetIdSchema = z.enum(soundtrackPresetIds);
+export const soundtrackStemIdSchema = z.enum(soundtrackStemIds);
+export const soundtrackPresetSchema = z.object({
+  id: soundtrackPresetIdSchema, version: z.literal(1), bpm: z.number().int().min(40).max(220),
+  default: z.boolean(),
+});
+export const soundtrackRenderRequestSchema = z.object({
+  expectedRevision: z.number().int().positive(), presetId: soundtrackPresetIdSchema,
+  melodyVariant: z.number().int().min(0).max(maximumMelodyVariant).optional(),
+}).strict();
+export const soundtrackRenderSchema = z.object({
+  id: z.string().uuid(), status: z.enum(["queued", "running", "ready", "failed"]),
+  progressPercent: z.number().int().min(0).max(100),
+  progressPhase: z.enum(["queued", "synthesizing", "encoding", "verifying", "uploading", "ready"]),
+  current: z.boolean(), currentRevision: z.number().int().positive(), storyRevision: z.number().int().positive(),
+  inputHash: z.string().regex(/^[a-f0-9]{64}$/), preset: soundtrackPresetSchema,
+  frameRate: rationalFrameRateSchema, totalFrames: z.number().int().positive(), totalSampleFrames: z.number().int().positive(),
+  sizeBytes: z.number().int().nonnegative().optional(), contentHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  stems: z.array(soundtrackStemIdSchema).optional(), melodyVariant: z.number().int().min(0).max(maximumMelodyVariant),
+  createdAt: z.iso.datetime(), error: z.string().optional(),
+});
+export const soundtrackProvenanceSchema = z.object({
+  origin: z.literal("storyteller_procedural"), engineId: z.literal("storyteller-procedural"), engineVersion: z.literal(5),
+  presetId: soundtrackPresetIdSchema, presetVersion: z.literal(1), seed: z.string().regex(/^[a-f0-9]{64}$/),
+  melodyVariant: z.number().int().min(0).max(maximumMelodyVariant),
+  sampleRate: z.literal(48000), channels: z.literal(2), sampleFrames: z.number().int().positive(),
+  durationFrames: z.number().int().positive(), frameRate: rationalFrameRateSchema,
+  previewPcmSha256: z.string().regex(/^[a-f0-9]{64}$/), previewSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  rhythmStemSha256: z.string().regex(/^[a-f0-9]{64}$/), melodyStemSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  rhythmPreviewSha256: z.string().regex(/^[a-f0-9]{64}$/), melodyPreviewSha256: z.string().regex(/^[a-f0-9]{64}$/),
+  externalAudioAssets: z.literal(false), licenseVersion: z.literal("storyteller-generated-music-1.0"),
+  generatedAt: z.iso.datetime(),
+});
+export type SoundtrackStemId = z.infer<typeof soundtrackStemIdSchema>;
+export type SoundtrackPresetSummary = z.infer<typeof soundtrackPresetSchema>;
+export type SoundtrackRender = z.infer<typeof soundtrackRenderSchema>;
+export type SoundtrackProvenance = z.infer<typeof soundtrackProvenanceSchema>;
 
 export const platformProviderSchema = z.enum(["telegram", "tiktok", "instagram"]);
 export const platformParamsSchema = z.object({ provider: platformProviderSchema });
@@ -268,6 +310,7 @@ export const platformCredentialSchema = z.object({
 export const productActivityCodeSchema = z.enum([
   "auth.registered", "auth.logged_in", "story.created", "material.uploaded",
   "scene.render_requested", "scene.render_ready", "story.export_requested", "story.export_ready",
+  "story.soundtrack_requested", "story.soundtrack_ready",
   "publication.requested", "publication.succeeded", "publication.failed",
 ]);
 export const adminPageRequestSchema = z.object({

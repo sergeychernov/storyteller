@@ -44,6 +44,7 @@ test("adds the surface and never needs content identifiers", () => {
   analytics.track("scene title changed", { title_change_kind: "position" });
   analytics.track("story preview completed", { web_layout: "mobile_web" });
   analytics.track("story exported", { output_profile: "vertical_social" });
+  analytics.track("story soundtrack generated", { preset: "road", duration_bucket: "under_1_minute" });
   analytics.track("profile language changed", { language: "es" });
   analytics.track("scene render succeeded", {
     export_mode: "combined", renderer_kind: "collage", collage_card_orientation: "angled", collage_media_mix: "includes_video",
@@ -65,6 +66,9 @@ test("adds the surface and never needs content identifiers", () => {
     { name: "track", arguments: ["scene title changed", { surface: "story-web", title_change_kind: "position" }] },
     { name: "track", arguments: ["story preview completed", { surface: "story-web", web_layout: "mobile_web" }] },
     { name: "track", arguments: ["story exported", { surface: "story-web", output_profile: "vertical_social" }] },
+    { name: "track", arguments: ["story soundtrack generated", {
+      surface: "story-web", preset: "road", duration_bucket: "under_1_minute",
+    }] },
     { name: "track", arguments: ["profile language changed", { surface: "story-web", language: "es" }] },
     { name: "track", arguments: ["scene render succeeded", {
       surface: "story-web", export_mode: "combined", renderer_kind: "collage", collage_card_orientation: "angled",

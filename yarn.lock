@@ -4544,6 +4544,7 @@ __metadata:
     "@storyteller/render-queue": "workspace:*"
     "@storyteller/renderer": "workspace:*"
     "@storyteller/schemas": "workspace:*"
+    "@storyteller/soundtrack": "workspace:*"
     "@storyteller/storage": "workspace:*"
     "@types/pg": "npm:8.21.0"
     fastify: "npm:5.11.3"
@@ -4648,6 +4649,7 @@ __metadata:
   resolution: "@storyteller/render-queue@workspace:packages/render-queue"
   dependencies:
     "@storyteller/domain": "workspace:*"
+    "@storyteller/soundtrack": "workspace:*"
     "@types/pg": "npm:8.21.0"
     pg: "npm:8.23.0"
   languageName: unknown
@@ -4667,6 +4669,7 @@ __metadata:
   resolution: "@storyteller/schemas@workspace:packages/schemas"
   dependencies:
     "@storyteller/domain": "workspace:*"
+    "@storyteller/soundtrack": "workspace:*"
     zod: "npm:4.4.3"
   languageName: unknown
   linkType: soft
@@ -4687,6 +4690,15 @@ __metadata:
     react-dom: "npm:19.2.3"
     react-router-dom: "npm:7.18.0"
     vite: "npm:8.2.1"
+  languageName: unknown
+  linkType: soft
+
+"@storyteller/soundtrack@workspace:*, @storyteller/soundtrack@workspace:packages/soundtrack":
+  version: 0.0.0-use.local
+  resolution: "@storyteller/soundtrack@workspace:packages/soundtrack"
+  dependencies:
+    "@types/node": "npm:22.20.1"
+    zod: "npm:4.4.3"
   languageName: unknown
   linkType: soft
 
@@ -4752,6 +4764,7 @@ __metadata:
   dependencies:
     "@storyteller/render-queue": "workspace:*"
     "@storyteller/renderer": "workspace:*"
+    "@storyteller/soundtrack": "workspace:*"
     "@storyteller/storage": "workspace:*"
     "@types/pg": "npm:8.21.0"
     pg: "npm:8.23.0"

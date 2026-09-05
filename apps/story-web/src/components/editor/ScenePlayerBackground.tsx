@@ -36,7 +36,7 @@ export function ScenePlayerBackground(props: ScenePlayerBackgroundProps) {
       localTimeSeconds={props.localTimeSeconds}
       playing={props.playing}
       active={props.active}
-      muted
+      videoLevel={0}
       preload={props.preload}
       retryKey={props.retryKey}
       onResourceState={props.onResourceState}
@@ -70,7 +70,7 @@ function PreviousSceneFrameBackground(props: ScenePlayerBackgroundProps & {
           localTimeSeconds={0}
           playing={false}
           active={props.active}
-          muted
+          videoLevel={0}
           preload={props.preload}
           retryKey={props.retryKey}
           onResourceState={reportFallbackAsPreviousFrame}

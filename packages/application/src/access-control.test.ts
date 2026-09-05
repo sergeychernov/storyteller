@@ -17,6 +17,8 @@ test("baseline plan gives existing users creator access and typed limits", () =>
   assert.deepEqual(access.roles, ["creator"]);
   assert.equal(capability(access, "studio.access").allowed, true);
   assert.equal(capability(access, "story.create").allowed, true);
+  assert.equal(capability(access, "story.soundtrack.generate").allowed, true);
+  assert.equal(capability(access, "ai.music.generate").allowed, false);
   assert.equal(capability(access, "admin.console.access").allowed, false);
   assert.equal(limit(access, "limit.stories.active").value, 3);
   assert.equal(limit(access, "limit.ai.credits.month").value, 0);

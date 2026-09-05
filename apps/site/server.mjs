@@ -29,7 +29,7 @@ const contentTypes = {
   ".xml": "application/xml; charset=utf-8",
 };
 
-const publicPaths = new Set(listPublicPages().map((page) => page.path));
+const publicPaths = new Set([...listPublicPages().map((page) => page.path), "/music-license"]);
 const siteStaticPaths = new Set([
   "/apple-touch-icon.png",
   "/favicon-16x16.png",

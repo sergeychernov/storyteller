@@ -48,7 +48,8 @@ test("each page family exposes reciprocal language alternates", () => {
 test("sitemap includes every canonical page and hreflang family", () => {
   const sitemap = renderSitemap();
   for (const page of listPublicPages()) assert.match(sitemap, new RegExp(`<loc>${publicSite.origin}${page.path}</loc>`));
-  assert.equal((sitemap.match(/<url>/g) ?? []).length, 16);
+  assert.equal((sitemap.match(/<url>/g) ?? []).length, 17);
+  assert.match(sitemap, /<loc>https:\/\/makeitastory\.app\/music-license<\/loc>/);
   assert.equal((sitemap.match(/hreflang="x-default"/g) ?? []).length, 16);
   assert.equal(sitemap.includes("undefined"), false);
 });
@@ -78,6 +79,10 @@ test("prerender writes crawlable HTML, sitemap and robots policy", async (contex
   assert.match(spanishHome, /rel="canonical" href="https:\/\/makeitastory\.app\/es"/);
   assert.match(spanishHome, /hreflang="es" href="https:\/\/makeitastory\.app\/es"/);
   assert.equal(spanishHome.includes("undefined"), false);
+
+  const musicLicense = await readFile(join(directory, "music-license/index.html"), "utf8");
+  assert.match(musicLicense, /Storyteller Generated Music License/);
+  assert.match(musicLicense, /rel="canonical" href="https:\/\/makeitastory\.app\/music-license"/);
 
   const robots = await readFile(join(directory, "robots.txt"), "utf8");
   assert.match(robots, /Allow: \//);

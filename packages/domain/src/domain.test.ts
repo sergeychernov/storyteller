@@ -7,7 +7,7 @@ import {
   buildStoryTimeline, collageCardMaterials, collageCardShadow, collageLayoutDefinitions, collageLayoutMaterials,
   collageCardAngleDefaultMaximumDegrees, collageCardAngleMinimumDegrees,
   createCollageCardAngles, createCollageCardOffsets, createCollageEntranceSchedule, createTornPaperClipPath, createTornPaperInnerFramePath,
-  defaultCollageSettings,
+  defaultCollageSettings, defaultSoundtrackMix, DomainError, resolveSoundtrackMix, setSoundtrackMix,
   getCollageCardShadowMetrics, getCollageLayoutDefinition, getCollageLayoutOptions, getCollagePauseDurationSeconds,
   getImplementedCollageOrientationSequences, getSceneDurationSeconds,
   materialOrientationSequence,
@@ -703,15 +703,10 @@ test("scene titles are optional, validated and invalidate visual and approved re
     ...withMaterial,
     scenes: [{ ...withMaterial.scenes[0]!, render: { status: "ready", artifactId: "old" } }],
     music: { generationStatus: "ready", assetId: "music", applied: true },
-    approvedMix: {
-      storageKey: "mix.m4a", contentHash: "a".repeat(64), mimeType: "audio/mp4", sizeBytes: 1,
-      sampleRate: 48_000, channels: 2, timelineHash: "b".repeat(64), durationFrames: 150,
-    },
   };
   const titled = setSceneTitle(approved, "scene-1", defaults);
   assert.deepEqual(titled.scenes[0]?.title, defaults);
   assert.deepEqual(titled.scenes[0]?.render, { status: "idle" });
-  assert.equal(titled.approvedMix, undefined);
   assert.equal(titled.music.applied, false);
   assert.equal(setSceneTitle(titled, "scene-1", null).scenes[0]?.title, undefined);
 
@@ -720,6 +715,19 @@ test("scene titles are optional, validated and invalidate visual and approved re
   assert.throws(() => setSceneTitle(withMaterial, "scene-1", { ...defaults, position: { x: -0.1, y: 0.5 } }), /between 0 and 1/);
   assert.throws(() => setSceneTitle(withMaterial, "scene-1", { ...defaults, timing: { startSeconds: 1, endSeconds: 1.4 } }), /at least 0.5/);
 });
+
+test("story soundtrack levels persist without moving the timeline revision", () => {
+  const story = createStory({ id: "story-1", profileId: "profile-1" });
+  assert.deepEqual(resolveSoundtrackMix(story), defaultSoundtrackMix);
+  const mixed = setSoundtrackMix(story, { video: 0.5, rhythm: 1, melody: 0.333, duckedMelody: 0 });
+  assert.deepEqual(mixed.soundtrackMix, { video: 0.5, rhythm: 1, melody: 0.33, duckedMelody: 0 });
+  assert.equal(mixed.revision, story.revision, "a level change must not invalidate the timeline");
+  assert.deepEqual(resolveSoundtrackMix(mixed), mixed.soundtrackMix);
+  for (const invalid of [-0.01, 1.01, Number.NaN]) {
+    assert.throws(() => setSoundtrackMix(story, { ...defaultSoundtrackMix, melody: invalid }), DomainError);
+  }
+});
+
 
 test("scene title timing preserves absolute seconds and moves to the end after duration and trim changes", () => {
   let photo = addMaterial(addScene(createStory({ id: "photo-story", profileId: "profile" }), "scene"), "scene", imageMaterial("photo", "portrait"));

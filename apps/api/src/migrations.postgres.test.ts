@@ -18,9 +18,10 @@ test("PostgreSQL: release migration works on a fresh database, concurrently and 
   await runReleaseMigration(connectionString);
   assert.deepEqual((await pool.query("SELECT version, applied_at FROM schema_migrations ORDER BY version")).rows, applied);
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM scene_renders")).rows[0].count, 0);
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM soundtrack_renders")).rows[0].count, 0);
 });
 
-test("PostgreSQL: migrations 4–12 preserve legacy rows, baseline access, and old API/worker writes", options, async (context) => {
+test("PostgreSQL: migrations 4–19 preserve legacy rows, baseline access, and old API/worker writes", options, async (context) => {
   const { pool } = await createPostgresTestPool(context);
   await applyVersion3(pool);
   const profileId = randomUUID(), storyId = randomUUID(), sceneId = randomUUID(), renderId = randomUUID();
@@ -43,15 +44,17 @@ test("PostgreSQL: migrations 4–12 preserve legacy rows, baseline access, and o
   assert.equal((await pool.query("SELECT access_plan_version_code FROM profiles WHERE id = $1", [profileId])).rows[0].access_plan_version_code, "free-v1");
   assert.equal(Number((await pool.query("SELECT access_revision FROM profiles WHERE id = $1", [profileId])).rows[0].access_revision), 0);
   assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_roles")).rows[0].count, 2);
-  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_capabilities")).rows[0].count, 35);
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_capabilities")).rows[0].count, 36);
   const migratedSession = (await pool.query("SELECT id, last_seen_at, revoked_at FROM sessions WHERE token_hash = $1", ["a".repeat(64)])).rows[0];
   assert.match(migratedSession.id, /^[0-9a-f-]{36}$/);
   assert.equal(new Date(migratedSession.last_seen_at).toISOString(), "2026-01-01T00:00:00.000Z");
   assert.equal(migratedSession.revoked_at, null);
-  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM product_activity_event_types")).rows[0].count, 11);
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM product_activity_event_types")).rows[0].count, 13);
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM access_role_capabilities WHERE role_code = 'creator' AND capability_code = 'story.soundtrack.generate'")).rows[0].count, 1);
   await assert.rejects(pool.query("UPDATE profiles SET language = 'unsupported' WHERE id = $1", [profileId]), { code: "23514" });
   assert.deepEqual((await pool.query("SELECT * FROM scene_renders WHERE id = $1", [renderId])).rows[0], {
     ...before, content_hash: null, progress_percent: 100, progress_phase: "ready", render_slot: "scene-render:video",
+    last_used_at: null,
   });
   assert.deepEqual((await pool.query("SELECT payload FROM stories WHERE id = $1", [storyId])).rows[0].payload, payload);
   const nextId = randomUUID();

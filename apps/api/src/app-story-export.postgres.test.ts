@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import {
-  PostgresSceneRenderQueue, PostgresStoryExportQueue, type StoryExportManifest,
+  PostgresSceneRenderQueue, PostgresStoryExportQueue, pruneExpiredExportSegments, type StoryExportManifest,
 } from "@storyteller/render-queue";
 import { migrateDatabase } from "./migrations.js";
 import { createPostgresTestPool, postgresTestOptions as options } from "./postgres-test-fixture.js";
@@ -51,11 +51,16 @@ test("PostgreSQL: story export enqueues every segment atomically, barriers assem
   assert.deepEqual((await pool.query("SELECT code FROM product_activity_events ORDER BY id")).rows.map(({ code }) => code), [
     "story.export_requested", "story.export_ready",
   ]);
-  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM object_deletion_jobs")).rows[0].count, 2);
+  // Segments outlive the master they built: the next export reuses whatever the story has not changed.
+  assert.equal((await pool.query("SELECT count(*)::integer AS count FROM object_deletion_jobs")).rows[0].count, 0);
+  assert.equal((await pool.query(
+    `SELECT count(*)::integer AS count FROM scene_renders
+     WHERE story_id = $1 AND status = 'ready' AND storage_key IS NOT NULL AND last_used_at IS NOT NULL`, [storyId],
+  )).rows[0].count, 2);
 
   const staleId = randomUUID();
   await queue.enqueue({ id: staleId, profileId, storyId, manifestHash: "d".repeat(64), manifest: {
-    ...manifest, approvedMix: { ...manifest.approvedMix, contentHash: "c".repeat(64) },
+    ...manifest, levels: { ...manifest.levels, melody: 0.5 },
   } });
   await pool.query("UPDATE stories SET revision = 8 WHERE id = $1", [storyId]);
   const stale = await queue.findAuthorized(profileId, storyId, staleId);
@@ -66,6 +71,77 @@ test("PostgreSQL: story export enqueues every segment atomically, barriers assem
      WHERE link.export_id = $1 AND render.status IN ('queued', 'running')`, [staleId],
   )).rows[0].count, 0);
 });
+
+test("PostgreSQL: segments outlive the master, drop when a scene changes and expire a week after their last use", options, async (context) => {
+  const { pool } = await createPostgresTestPool(context);
+  await migrateDatabase(pool);
+  const profileId = randomUUID(), storyId = randomUUID();
+  const sceneIds = [randomUUID(), randomUUID()];
+  await pool.query(
+    "INSERT INTO profiles (id, name, email, password_hash) VALUES ($1, 'Retention', $2, 'hash')",
+    [profileId, `${profileId}@example.test`],
+  );
+  await pool.query(
+    `INSERT INTO stories (id, profile_id, title, status, scene_count, revision, payload)
+     VALUES ($1, $2, 'Retention', 'draft', 2, 7, $3)`,
+    [storyId, profileId, { id: storyId, profileId, revision: 7, scenes: sceneIds.map((id) => ({ id })) }],
+  );
+  const queue = new PostgresStoryExportQueue(pool);
+  const renderQueue = new PostgresSceneRenderQueue(pool);
+  const manifest = exportManifest(sceneIds);
+  const buildMaster = async (exportId: string, built: StoryExportManifest, manifestHash: string) => {
+    await queue.enqueue({ id: exportId, profileId, storyId, manifestHash, manifest: built });
+    for (let job; (job = await renderQueue.claim("segments", 10_000, "story-export-segment"));) {
+      await renderQueue.complete(job.id, "segments", `${job.id}.mp4`, 100, "b".repeat(64));
+    }
+    assert.ok(await queue.claimAssembly("assembly", 10_000));
+    assert.equal(await queue.complete(exportId, "assembly", `${exportId}.mp4`, 1_000, "e".repeat(64)), true);
+  };
+  const segmentKeys = async () => (await pool.query<{ storage_key: string }>(
+    "SELECT storage_key FROM scene_renders WHERE story_id = $1 ORDER BY storage_key", [storyId],
+  )).rows.map(({ storage_key }) => storage_key);
+  const deletionQueue = async () => (await pool.query<{ storage_key: string }>(
+    "SELECT storage_key FROM object_deletion_jobs ORDER BY storage_key",
+  )).rows.map(({ storage_key }) => storage_key);
+
+  await buildMaster(randomUUID(), manifest, "1".repeat(64));
+  const built = await segmentKeys();
+  assert.equal(built.length, 2);
+  assert.deepEqual(await deletionQueue(), []);
+
+  // Editing one scene changes only that segment's input hash: its render is unreachable, the other is still reused.
+  const editedHash = "a".repeat(64);
+  const edited: StoryExportManifest = {
+    ...manifest, segments: [{ ...manifest.segments[0]!, inputHash: editedHash }, manifest.segments[1]!],
+  };
+  const replaced = (await pool.query<{ storage_key: string }>(
+    "SELECT storage_key FROM scene_renders WHERE story_id = $1 AND input_hash = $2",
+    [storyId, manifest.segments[0]!.inputHash],
+  )).rows[0]!.storage_key;
+  const secondId = randomUUID();
+  await queue.enqueue({ id: secondId, profileId, storyId, manifestHash: "2".repeat(64), manifest: edited });
+  assert.deepEqual(await deletionQueue(), [replaced]);
+  assert.deepEqual((await pool.query<{ input_hash: string }>(
+    "SELECT input_hash FROM scene_renders WHERE story_id = $1 ORDER BY input_hash", [storyId],
+  )).rows.map(({ input_hash }) => input_hash), [editedHash, manifest.segments[1]!.inputHash].sort());
+
+  // However old their last use, segments an unfinished export still needs stay.
+  await pool.query("UPDATE scene_renders SET last_used_at = now() - interval '8 days' WHERE story_id = $1", [storyId]);
+  await pruneExpiredExportSegments(pool, new Date());
+  assert.equal((await segmentKeys()).length, 2);
+
+  for (let job; (job = await renderQueue.claim("segments", 10_000, "story-export-segment"));) {
+    await renderQueue.complete(job.id, "segments", `${job.id}.mp4`, 100, "b".repeat(64));
+  }
+  assert.ok(await queue.claimAssembly("assembly", 10_000));
+  assert.equal(await queue.complete(secondId, "assembly", "second.mp4", 1_000, "f".repeat(64)), true);
+  const surviving = await segmentKeys();
+  await pool.query("UPDATE scene_renders SET last_used_at = now() - interval '8 days' WHERE story_id = $1", [storyId]);
+  await pruneExpiredExportSegments(pool, new Date());
+  assert.deepEqual(await segmentKeys(), []);
+  assert.deepEqual(await deletionQueue(), [replaced, ...surviving].sort());
+});
+
 
 test("PostgreSQL: a 30-scene export overlaps bounded claim waves, waits at the barrier, and retries only failures", options, async (context) => {
   const { pool } = await createPostgresTestPool(context);
@@ -132,9 +208,15 @@ test("PostgreSQL: a 30-scene export overlaps bounded claim waves, waits at the b
 
 function exportManifest(sceneIds: readonly string[]): StoryExportManifest {
   return {
-    version: 1, storyRevision: 7, timelineHash: "a".repeat(64), outputProfileId: "vertical-social-v1",
+    version: 2, storyRevision: 7, timelineHash: "a".repeat(64), outputProfileId: "vertical-social-v1",
     frameRate: { numerator: 30, denominator: 1 }, totalFrames: 300,
-    approvedMix: { storageKey: "mix.m4a", contentHash: "b".repeat(64), durationFrames: 300 },
+    soundtrack: {
+      renderId: "00000000-0000-4000-8000-0000000000aa",
+      rhythm: { storageKey: "rhythm.flac", contentHash: "b".repeat(64) },
+      melody: { storageKey: "melody.flac", contentHash: "c".repeat(64) },
+    },
+    levels: { video: 1, rhythm: 1, melody: 1, duckedMelody: 0.3 },
+    audioSegments: [],
     segments: sceneIds.map((sceneId, position) => ({
       position, sceneId, durationFrames: 150, inputHash: (position + 1).toString(16).padStart(64, "0"),
       input: {

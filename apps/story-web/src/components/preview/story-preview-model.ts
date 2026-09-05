@@ -1,4 +1,5 @@
-import type { StoryTimeline } from "../../api.js";
+import type { Story, StoryTimeline } from "../../api.js";
+import { buildScenePlaybackPlan } from "../editor/scene-playback-plan.js";
 
 type TimelineScene = StoryTimeline["scenes"][number];
 
@@ -50,6 +51,20 @@ export function formatPreviewClock(durationSeconds: number): string {
   return hours > 0
     ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
     : `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+/**
+ * True while the scene under the playhead carries source audio the creator can actually hear. A collage card or a
+ * still-image slot holds a video whose track is never unmuted, so the playback plan decides this, not the material.
+ */
+export function sceneAudioIsAudible(story: Story, timeline: StoryTimeline, playheadSeconds: number): boolean {
+  const position = positionAtPlayhead(timeline, playheadSeconds);
+  if (!position) return false;
+  const scene = story.scenes.find(({ id }) => id === position.scene.sceneId);
+  if (!scene) return false;
+  return buildScenePlaybackPlan(scene, story.scenes[position.scene.index - 1]).slots.some(
+    ({ material, audioEnabled }) => audioEnabled && material.kind === "video" && material.hasAudio,
+  );
 }
 
 export function timelineMatchesStory(timeline: StoryTimeline, story: { readonly id: string; readonly revision: number }): boolean {

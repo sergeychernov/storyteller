@@ -26,8 +26,9 @@ export function registerStoryExportRoutes(
     const job = await exportService.request(
       profile.id, request.params.storyId, request.body.expectedRevision, request.body.outputProfileId,
     );
+    // A master requested a moment ago is current by construction: it was built from the story as it stands.
     return reply.status(202).header("cache-control", "private, no-store").send(storyExportSchema.parse(serializeStoryExport({
-      job, currentRevision: request.body.expectedRevision,
+      job, currentRevision: request.body.expectedRevision, current: true,
     })));
   });
   app.get("/stories/:storyId/exports/current", {

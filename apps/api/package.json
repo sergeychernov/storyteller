@@ -25,6 +25,7 @@
     "@storyteller/render-queue": "workspace:*",
     "@storyteller/renderer": "workspace:*",
     "@storyteller/schemas": "workspace:*",
+    "@storyteller/soundtrack": "workspace:*",
     "@storyteller/storage": "workspace:*",
     "fastify": "5.11.3",
     "fastify-type-provider-zod": "7.0.0",

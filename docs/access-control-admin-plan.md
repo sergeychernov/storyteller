@@ -180,6 +180,7 @@ AdminJS, второй user store и прямой DB-доступ UI-контей
 | `media.upload` | Загружать материалы. |
 | `scene.render` | Запускать рендер сцены. |
 | `story.export` | Собирать и скачивать мастер или пакет. |
+| `story.soundtrack.generate` | Создавать встроенный процедурный саундтрек без AI-кредитов. |
 | `profile.platform_credentials.manage` | Управлять собственными подключениями площадок. |
 | `publish.youtube` | Подготавливать и подтверждать публикацию в YouTube. |
 

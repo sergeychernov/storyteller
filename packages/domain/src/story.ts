@@ -7,7 +7,8 @@ import {
 import { createCollageCardAngles, createCollageCardOffsets } from "./collage-layout.js";
 import { getAutomaticCollageLayout, getCollageLayoutOptions, getLayoutOptions, getSelectedCollageLayout } from "./layout.js";
 import type {
-  CollageBackground, CollageSettings, EditableCollageSettings, FocusPoint, Narration, Scene, SceneMaterial, SceneMotion, SceneTitle, Story,
+  CollageBackground, CollageSettings, EditableCollageSettings, FocusPoint, Narration, Scene, SceneMaterial, SceneMotion, SceneTitle,
+  SoundtrackMix, Story,
 } from "./model.js";
 import { defaultSingleImageMotion, getSceneMotionOptions } from "./scene-motion.js";
 import { centeredFocusPoint } from "./still-image-motion.js";
@@ -24,6 +25,26 @@ export function createStory(input: { id: string; profileId: string; title?: stri
     music: { generationStatus: "idle", applied: false },
     revision: 1,
   };
+}
+
+/** Melody ducking defaults to the plan's rule of stepping well back under narration without disappearing. */
+export const defaultSoundtrackMix: SoundtrackMix = { video: 1, rhythm: 1, melody: 1, duckedMelody: 0.3 };
+export const soundtrackMixChannels = ["video", "rhythm", "melody", "duckedMelody"] as const;
+
+export function resolveSoundtrackMix(story: Pick<Story, "soundtrackMix">): SoundtrackMix {
+  return story.soundtrackMix ?? defaultSoundtrackMix;
+}
+
+export function setSoundtrackMix(story: Story, mix: SoundtrackMix): Story {
+  assertEditable(story);
+  const normalized = Object.fromEntries(soundtrackMixChannels.map((channel) => {
+    const value = mix[channel];
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new DomainError(`soundtrack ${channel} level must be between 0 and 1`);
+    return [channel, Math.round(value * 100) / 100];
+  })) as unknown as SoundtrackMix;
+  // Levels leave the visual timeline untouched, so an approved mix stays bound by its own timeline hash;
+  // binding the levels into that hash belongs to the approved-mix milestone, not here.
+  return { ...story, soundtrackMix: normalized };
 }
 
 export function addScene(story: Story, sceneId: string): Story {
@@ -259,8 +280,7 @@ export function setSceneTitle(story: Story, sceneId: string, title: SceneTitle |
     if (!scene.materials.length) throw new DomainError("a scene title requires at least one material");
     return { ...withoutTitle, title: normalizeSceneTitle(title, getSceneDurationSeconds(scene)), render: { status: "idle" } };
   });
-  const { approvedMix: _approvedMix, ...withoutApprovedMix } = updated;
-  return { ...withoutApprovedMix, music: { ...updated.music, applied: false } };
+  return { ...updated, music: { ...updated.music, applied: false } };
 }
 
 export function addNarration(story: Story, narration: Narration): Story {

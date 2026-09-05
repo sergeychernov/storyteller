@@ -57,7 +57,7 @@ describe("StoryPreviewScene", () => {
         status="paused"
         active
         pending={false}
-        muted
+        videoLevel={1}
         reducedMotion={false}
         retryKey={0}
         copy={getEditorCopy("en")}
@@ -93,7 +93,7 @@ describe("StoryPreviewScene", () => {
     };
     const props = {
       storyId: "story-1", session, scene, timelineIndex: 0, status: "playing" as const, active: true, pending: false,
-      muted: true, reducedMotion: true, retryKey: 0, copy: getEditorCopy("en"),
+      videoLevel: 0, reducedMotion: true, retryKey: 0, copy: getEditorCopy("en"),
       onReady: vi.fn(), onWaiting: vi.fn(), onFailed: vi.fn(), onUnexpectedPause: vi.fn(),
     };
     const { container, rerender } = render(<StoryPreviewScene {...props} localTimeSeconds={0} />);
@@ -121,7 +121,7 @@ describe("StoryPreviewScene", () => {
     };
     const props = {
       storyId: "story-1", session, scene, timelineIndex: 0, status: "playing" as const, active: true, pending: false,
-      muted: true, reducedMotion: false, retryKey: 0, copy: getEditorCopy("en"),
+      videoLevel: 0, reducedMotion: false, retryKey: 0, copy: getEditorCopy("en"),
       onReady: vi.fn(), onWaiting: vi.fn(), onFailed: vi.fn(), onUnexpectedPause: vi.fn(),
     };
     const { container, rerender } = render(<StoryPreviewScene {...props} localTimeSeconds={0} />);
@@ -157,7 +157,7 @@ describe("StoryPreviewScene", () => {
       status="buffering"
       active
       pending
-      muted
+      videoLevel={1}
       reducedMotion={false}
       retryKey={0}
       copy={getEditorCopy("en")}
@@ -200,7 +200,7 @@ describe("StoryPreviewScene", () => {
       status="playing"
       active
       pending={false}
-      muted
+      videoLevel={1}
       reducedMotion={false}
       retryKey={0}
       copy={getEditorCopy("en")}
