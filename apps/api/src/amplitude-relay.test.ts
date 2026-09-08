@@ -64,6 +64,10 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
         event_properties: { surface: "story-web", output_profile: "vertical_social" },
         device_id: "device-1", user_id: "profile-1",
       }, {
+        event_type: "story soundtrack generated",
+        event_properties: { surface: "story-web", preset: "dnb", duration_bucket: "under_1_minute" },
+        device_id: "device-1", user_id: "profile-1",
+      }, {
         event_type: "scene render succeeded",
         event_properties: {
           surface: "story-web", export_mode: "video", renderer_kind: "collage", collage_card_orientation: "angled",
@@ -118,6 +122,10 @@ test("relays a sanitized analytics batch to the configured Amplitude region", as
       }, {
         event_type: "story exported",
         event_properties: { surface: "story-web", output_profile: "vertical_social" },
+        device_id: "device-1", user_id: "profile-1",
+      }, {
+        event_type: "story soundtrack generated",
+        event_properties: { surface: "story-web", preset: "dnb", duration_bucket: "under_1_minute" },
         device_id: "device-1", user_id: "profile-1",
       }, {
         event_type: "scene render succeeded",

@@ -3,12 +3,44 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { SceneRenderInput, SceneRenderJob } from "./index.js";
 
+/** A week covers the overwhelming majority of editing sessions, so a rebuild that soon still reuses its segments. */
+export const exportSegmentRetentionDays = 7;
+
+/**
+ * Export segments are kept after the master is built so the next rebuild reuses them instead of re-rendering every
+ * scene; once a story has gone quiet they are only storage. Runs against a client so retention keeps its transaction.
+ */
+export async function pruneExpiredExportSegments(
+  queryable: { query(text: string, values: readonly unknown[]): Promise<unknown> }, cutoff: Date,
+): Promise<void> {
+  await queryable.query(
+    `WITH expired AS (
+       DELETE FROM scene_renders render
+       WHERE render.input->>'artifact' = 'story-export-segment'
+         AND render.last_used_at IS NOT NULL AND render.last_used_at < $1
+         AND NOT EXISTS (
+           SELECT 1 FROM story_export_segments link JOIN story_exports export ON export.id = link.export_id
+           WHERE link.scene_render_id = render.id AND export.status IN ('queued', 'assembling')
+         )
+       RETURNING render.storage_key
+     )
+     ${scheduleSegmentDeletions}`,
+    [cutoff],
+  );
+}
+
+/** Both cleanups hand the freed objects to the deletion worker the same way; the storage key is all it needs. */
+const scheduleSegmentDeletions = `INSERT INTO object_deletion_jobs (storage_key)
+     SELECT DISTINCT storage_key FROM expired WHERE storage_key IS NOT NULL
+     ON CONFLICT (storage_key) DO UPDATE SET status = 'queued', attempts = 0, worker_id = NULL,
+       locked_until = NULL, error = NULL, updated_at = now()`;
+
 export const storyExportStatuses = ["queued", "rendering", "assembling", "ready", "failed", "canceled"] as const;
 export type StoryExportStatus = typeof storyExportStatuses[number];
 export const storyExportPhases = ["queued", "rendering_segments", "assembling", "uploading", "ready"] as const;
 export type StoryExportPhase = typeof storyExportPhases[number];
 export type StoryExportErrorCode = "story_revision_changed" | "segment_failed" | "segment_profile_mismatch"
-  | "approved_mix_mismatch" | "assembly_failed";
+  | "soundtrack_mismatch" | "assembly_failed";
 
 export interface StoryExportManifestSegment {
   readonly position: number;
@@ -19,18 +51,36 @@ export interface StoryExportManifestSegment {
 }
 
 export interface StoryExportManifest {
-  readonly version: 1;
+  /** How the master is built. Raise it when the assembly changes, so every stored master is rebuilt rather than served stale. */
+  readonly version: 2;
   readonly storyRevision: number;
   readonly timelineHash: string;
   readonly outputProfileId: "vertical-social-v1";
   readonly frameRate: RationalFrameRate;
   readonly totalFrames: number;
-  readonly approvedMix: {
-    readonly storageKey: string;
-    readonly contentHash: string;
-    readonly durationFrames: number;
+  /**
+   * The music the master carries, chosen when the creator asked for the master. Absent means a silent track:
+   * a story without a soundtrack still exports. Levels are part of the manifest, so changing a fader and asking
+   * again produces a different master rather than reusing the previous one.
+   */
+  readonly soundtrack?: {
+    readonly renderId: string;
+    readonly rhythm: { readonly storageKey: string; readonly contentHash: string };
+    readonly melody: { readonly storageKey: string; readonly contentHash: string };
   };
   readonly segments: readonly StoryExportManifestSegment[];
+  /**
+   * The scenes whose own sound reaches the master, in timeline order. Scenes without sound are absent and become
+   * silence, so the source track always spans the whole timeline.
+   */
+  readonly audioSegments: readonly StoryExportManifestSegment[];
+  /** The levels the preview applied, so the master sounds like what the creator listened to. */
+  readonly levels: {
+    readonly video: number;
+    readonly rhythm: number;
+    readonly melody: number;
+    readonly duckedMelody: number;
+  };
 }
 
 export interface StoryExportJob {
@@ -53,6 +103,7 @@ export interface StoryExportJob {
 
 export interface ClaimedStoryExport extends StoryExportJob {
   readonly segments: readonly Pick<SceneRenderJob, "id" | "sceneId" | "storageKey" | "contentHash" | "input">[];
+  readonly audioSegments: readonly Pick<SceneRenderJob, "id" | "sceneId" | "storageKey" | "contentHash" | "input">[];
 }
 
 export interface StoryExportQueue {
@@ -98,7 +149,8 @@ export class PostgresStoryExportQueue implements StoryExportQueue {
       );
       const exportId = parent.rows[0]!.id;
       if (parent.rows[0]!.status !== "ready") {
-        for (const segment of job.manifest.segments) {
+        for (const [kind, list] of [["video", job.manifest.segments], ["audio", job.manifest.audioSegments]] as const)
+        for (const segment of list) {
           const rendered = await client.query<{ id: string }>(
             `INSERT INTO scene_renders (id, profile_id, story_id, scene_id, input_hash, input, status)
              VALUES ($1, $2, $3, $4, $5, $6, 'queued')
@@ -118,12 +170,28 @@ export class PostgresStoryExportQueue implements StoryExportQueue {
             [randomUUID(), job.profileId, job.storyId, segment.sceneId, segment.inputHash, segment.input],
           );
           await client.query(
-            `INSERT INTO story_export_segments (export_id, position, scene_id, duration_frames, scene_render_id)
-             VALUES ($1, $2, $3, $4, $5) ON CONFLICT (export_id, position) DO NOTHING`,
-            [exportId, segment.position, segment.sceneId, segment.durationFrames, rendered.rows[0]!.id],
+            `INSERT INTO story_export_segments (export_id, kind, position, scene_id, duration_frames, scene_render_id)
+             VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (export_id, kind, position) DO NOTHING`,
+            [exportId, kind, segment.position, segment.sceneId, segment.durationFrames, rendered.rows[0]!.id],
           );
         }
       }
+      // A scene edit that changes the render changes its input hash, so the segment it replaces is unreachable.
+      // Drop it here, where the story's current hashes are at hand, rather than let retention wait a week for it.
+      await client.query(
+        `WITH expired AS (
+           DELETE FROM scene_renders render
+           WHERE render.story_id = $1 AND render.input->>'artifact' = 'story-export-segment'
+             AND render.input_hash <> ALL($2::text[])
+             AND NOT EXISTS (
+               SELECT 1 FROM story_export_segments link JOIN story_exports export ON export.id = link.export_id
+               WHERE link.scene_render_id = render.id AND export.status IN ('queued', 'assembling')
+             )
+           RETURNING render.storage_key
+         )
+         ${scheduleSegmentDeletions}`,
+        [job.storyId, [...job.manifest.segments, ...job.manifest.audioSegments].map(({ inputHash }) => inputHash)],
+      );
       await client.query(
         `INSERT INTO product_activity_events (profile_id, code, dedupe_key) VALUES ($1, 'story.export_requested', $2)
          ON CONFLICT (dedupe_key) DO NOTHING`, [job.profileId, `story.export_requested:${exportId}`],
@@ -175,16 +243,22 @@ export class PostgresStoryExportQueue implements StoryExportQueue {
     const job = await this.findAuthorized(row.profile_id, row.story_id, row.id);
     if (!job) return undefined;
     const segments = await this.pool.query<SegmentRow>(
-      `SELECT render.id, render.scene_id, render.input, render.storage_key, render.content_hash
+      `SELECT link.kind, render.id, render.scene_id, render.input, render.storage_key, render.content_hash
        FROM story_export_segments link JOIN scene_renders render ON render.id = link.scene_render_id
-       WHERE link.export_id = $1 ORDER BY link.position`, [row.id],
+       WHERE link.export_id = $1 ORDER BY link.kind, link.position`, [row.id],
     );
-    return { ...job, segments: segments.rows.map((segment) => ({
+    const claimedSegment = (segment: SegmentRow) => ({
       id: segment.id, sceneId: segment.scene_id, input: segment.input,
       ...(segment.storage_key ? { storageKey: segment.storage_key } : {}),
       ...(segment.content_hash ? { contentHash: segment.content_hash } : {}),
-    })) };
+    });
+    return {
+      ...job,
+      segments: segments.rows.filter(({ kind }) => kind === "video").map(claimedSegment),
+      audioSegments: segments.rows.filter(({ kind }) => kind === "audio").map(claimedSegment),
+    };
   }
+
 
   async reportAssemblyProgress(exportId: string, workerId: string, progressPercent: number, phase: "assembling" | "uploading"): Promise<boolean> {
     const result = await this.pool.query(
@@ -211,24 +285,12 @@ export class PostgresStoryExportQueue implements StoryExportQueue {
         `INSERT INTO product_activity_events (profile_id, code, dedupe_key) VALUES ($1, 'story.export_ready', $2)
          ON CONFLICT (dedupe_key) DO NOTHING`, [profileId, `story.export_ready:${exportId}`],
       );
+      // Segments outlive the master that used them: the next one reuses whatever the story has not changed,
+      // and retention removes what has gone unused. Stamping the use is what that retention measures.
       await client.query(
-         `WITH obsolete AS (
-           SELECT render.id, render.storage_key FROM story_export_segments link
-           JOIN scene_renders render ON render.id = link.scene_render_id WHERE link.export_id = $1
-             AND NOT EXISTS (
-               SELECT 1 FROM story_export_segments other_link JOIN story_exports other_export ON other_export.id = other_link.export_id
-               WHERE other_link.scene_render_id = render.id AND other_link.export_id <> $1
-                 AND other_export.status IN ('queued', 'assembling')
-             )
-         ), cleared AS (
-           UPDATE scene_renders render SET status = 'canceled', storage_key = NULL, size_bytes = NULL, content_hash = NULL,
-             worker_id = NULL, locked_until = NULL, updated_at = now()
-           FROM obsolete WHERE render.id = obsolete.id RETURNING render.id
-         )
-         INSERT INTO object_deletion_jobs (storage_key)
-         SELECT DISTINCT storage_key FROM obsolete WHERE storage_key IS NOT NULL
-         ON CONFLICT (storage_key) DO UPDATE SET status = 'queued', attempts = 0, worker_id = NULL,
-           locked_until = NULL, error = NULL, updated_at = now()`, [exportId],
+        `UPDATE scene_renders render SET last_used_at = now()
+         FROM story_export_segments link WHERE link.scene_render_id = render.id AND link.export_id = $1`,
+        [exportId],
       );
       await client.query("COMMIT");
       return true;
@@ -312,4 +374,5 @@ interface ExportRow {
   error_code: StoryExportErrorCode | null; created_at: Date | string;
   total_segments?: number; ready_segments?: number; segment_progress?: number;
 }
-interface SegmentRow { id: string; scene_id: string; input: SceneRenderInput; storage_key: string | null; content_hash: string | null }
+interface SegmentRow {
+  kind: "video" | "audio"; id: string; scene_id: string; input: SceneRenderInput; storage_key: string | null; content_hash: string | null }

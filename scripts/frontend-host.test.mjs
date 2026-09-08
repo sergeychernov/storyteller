@@ -18,6 +18,7 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
     writeFixture(siteRoot, "index.html", "SITE_PUBLIC"),
     writeFixture(siteRoot, "app.html", "SITE_APP"),
     writeFixture(siteRoot, "ru/index.html", "SITE_RU"),
+    writeFixture(siteRoot, "music-license/index.html", "MUSIC_LICENSE"),
     writeFixture(siteRoot, "assets/site.js", "SITE_ASSET"),
     writeFixture(siteRoot, "favicon.ico", "SITE_ICON"),
     writeFixture(siteRoot, "favicon.svg", "SITE_ICON_SVG"),
@@ -55,6 +56,10 @@ test("one host isolates public, Story and Clip build roots", async (context) => 
   assert.equal(siteAsset.body, "SITE_ASSET");
   assert.equal(siteAsset.headers["Cache-Control"], "public, max-age=31536000, immutable");
   assert.equal((await inject(server, "/app.html")).status, 404);
+  const musicLicense = await inject(server, "/music-license");
+  assert.equal(musicLicense.status, 200);
+  assert.equal(musicLicense.body, "MUSIC_LICENSE");
+  assert.equal((await inject(server, "/music-license/")).headers.Location, "/music-license");
 
   const favicon = await inject(server, "/favicon.ico");
   assert.equal(favicon.status, 200);

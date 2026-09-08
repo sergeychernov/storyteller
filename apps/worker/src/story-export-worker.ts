@@ -4,9 +4,13 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import type { StoryExportErrorCode, StoryExportQueue } from "@storyteller/render-queue";
+import type {
+  ClaimedStoryExport, StoryExportErrorCode, StoryExportManifest, StoryExportQueue,
+} from "@storyteller/render-queue";
+import { framesToSeconds } from "@storyteller/domain";
 import {
-  assembleStoryMaster, assertApprovedStoryMix, assertSegmentProfile, probeVideoProfile, verticalSocialOutputProfile,
+  assembleStoryMaster, assertSegmentProfile, assertStoryMasterAudio, buildStoryMasterAudio, probeVideoProfile,
+  verticalSocialOutputProfile, type StoryMasterSourceAudioClip,
 } from "@storyteller/renderer";
 import { hashFileContent, type ObjectStorage } from "@storyteller/storage";
 import { workerRenderCapacity, type RenderCapacity } from "./render-capacity.js";
@@ -19,6 +23,50 @@ export class StoryExportWorker {
     private readonly leaseMilliseconds = 20 * 60 * 1_000,
     private readonly renderCapacity: RenderCapacity = workerRenderCapacity,
   ) {}
+
+  /**
+   * The scenes' own sound, each already trimmed and padded to its scene by the audio-mode render, placed at the
+   * position the timeline gives it. Scenes without sound contribute nothing and stay silent in the mix.
+   */
+  private async fetchSourceAudio(job: ClaimedStoryExport, directory: string): Promise<StoryMasterSourceAudioClip[]> {
+    const starts = new Map<number, number>();
+    let frame = 0;
+    for (const segment of job.manifest.segments) {
+      starts.set(segment.position, frame);
+      frame += segment.durationFrames;
+    }
+    return Promise.all(job.audioSegments.map(async (segment, index) => {
+      const manifestSegment = job.manifest.audioSegments[index];
+      if (!manifestSegment) throw exportError("segment_failed", "audio segment manifest order is incomplete");
+      if (!segment.storageKey || !segment.contentHash) throw exportError("segment_failed", "ready audio segment is missing");
+      const path = join(directory, `scene-audio-${String(index).padStart(4, "0")}.m4a`);
+      await pipeline(await this.storage.open(segment.storageKey), createWriteStream(path, { flags: "wx" }));
+      if (await hashFileContent(path) !== segment.contentHash) {
+        throw exportError("segment_failed", "audio segment content hash changed");
+      }
+      return {
+        path,
+        startSeconds: framesToSeconds(starts.get(manifestSegment.position) ?? 0, job.manifest.frameRate),
+        durationSeconds: framesToSeconds(manifestSegment.durationFrames, job.manifest.frameRate),
+      };
+    }));
+  }
+
+  /** The stems are lossless, so the master's music is mixed from them rather than from the listening preview. */
+  private async fetchStems(
+    soundtrack: NonNullable<StoryExportManifest["soundtrack"]>,
+    directory: string,
+  ): Promise<{ rhythmPath: string; melodyPath: string }> {
+    const paths = await Promise.all((["rhythm", "melody"] as const).map(async (stem) => {
+      const path = join(directory, `${stem}.flac`);
+      await pipeline(await this.storage.open(soundtrack[stem].storageKey), createWriteStream(path, { flags: "wx" }));
+      if (await hashFileContent(path) !== soundtrack[stem].contentHash) {
+        throw exportError("soundtrack_mismatch", `${stem} stem content hash changed`);
+      }
+      return path;
+    }));
+    return { rhythmPath: paths[0]!, melodyPath: paths[1]! };
+  }
 
   async runOnce(): Promise<boolean> {
     const job = await this.queue.claimAssembly(this.workerId, this.leaseMilliseconds);
@@ -41,19 +89,22 @@ export class StoryExportWorker {
         }
         return path;
       }));
-      const mixPath = join(temporaryDirectory, "approved-mix.m4a");
-      await pipeline(await this.storage.open(job.manifest.approvedMix.storageKey), createWriteStream(mixPath, { flags: "wx" }));
-      if (await hashFileContent(mixPath) !== job.manifest.approvedMix.contentHash) {
-        throw exportError("approved_mix_mismatch", "approved mix content hash changed");
-      }
+      const audioPath = join(temporaryDirectory, "master-audio.m4a");
+      const stems = job.manifest.soundtrack && await this.fetchStems(job.manifest.soundtrack, temporaryDirectory);
+      const source = await this.fetchSourceAudio(job, temporaryDirectory);
       try {
-        await assertApprovedStoryMix(mixPath, job.manifest.totalFrames, job.manifest.frameRate);
+        await buildStoryMasterAudio({
+          outputPath: audioPath, durationSeconds: framesToSeconds(job.manifest.totalFrames, job.manifest.frameRate),
+          levels: job.manifest.levels, source,
+          ...(stems ? { soundtrack: stems } : {}),
+        });
+        await assertStoryMasterAudio(audioPath, job.manifest.totalFrames, job.manifest.frameRate);
       } catch (error) {
-        throw exportError("approved_mix_mismatch", error instanceof Error ? error.message : "approved mix profile mismatch");
+        throw exportError("soundtrack_mismatch", error instanceof Error ? error.message : "story master audio failed");
       }
       await this.queue.reportAssemblyProgress(job.id, this.workerId, 91, "assembling");
       await this.renderCapacity.run(() => assembleStoryMaster({
-        segmentPaths, approvedMixPath: mixPath, outputPath,
+        segmentPaths, audioPath, outputPath,
         frameRate: job.manifest.frameRate, totalFrames: job.manifest.totalFrames,
         onProgress: (value) => { void this.queue.reportAssemblyProgress(job.id, this.workerId, 91 + value * 6, "assembling"); },
       }));
@@ -63,7 +114,7 @@ export class StoryExportWorker {
       if (result.audioCodec !== verticalSocialOutputProfile.audioCodec
         || result.audioSampleRate !== verticalSocialOutputProfile.audioSampleRate
         || result.audioChannels !== verticalSocialOutputProfile.audioChannels) {
-        throw exportError("approved_mix_mismatch", "master audio does not match the approved mix profile");
+        throw exportError("soundtrack_mismatch", "master audio does not match the output profile");
       }
       const output = await stat(outputPath);
       const contentHash = await hashFileContent(outputPath);

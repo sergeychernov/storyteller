@@ -20,7 +20,7 @@ export interface SceneMediaProps {
   readonly localTimeSeconds: number;
   readonly playing: boolean;
   readonly active: boolean;
-  readonly muted: boolean;
+  readonly videoLevel: number;
   readonly preload: "auto" | "metadata";
   readonly retryKey: number;
   readonly controlsCopy?: EditorCopy | undefined;

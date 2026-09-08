@@ -15,6 +15,11 @@ interface DesktopEditorHeaderProps {
   readonly compact: boolean;
 }
 
+/** Drawn rather than typed, so narrowing the header cannot shrink it away with the label. */
+const playGlyph = <svg className={styles.glyph} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <path d="M8 5.2v13.6L19 12z" />
+</svg>;
+
 export function DesktopEditorHeader({ storyTitle, storyId, scenes, selected, copy, saving, compact }: DesktopEditorHeaderProps) {
   const selectedIndex = selected ? scenes.findIndex(({ id }) => id === selected.id) : -1;
 
@@ -26,14 +31,19 @@ export function DesktopEditorHeader({ storyTitle, storyId, scenes, selected, cop
         <small>{selected ? selected.title?.text || `${copy.scene} ${selectedIndex + 1}` : copy.noScenes}{selected ? ` · ${selectedIndex + 1}/${scenes.length}` : ""}</small>
       </div>
       <div className={styles.actions}>
-        <span className={classNames(styles.saveState, saving && styles.saving)} role="status">
+        <span className={classNames(styles.saveState, saving && styles.saving)} role="status"
+          title={saving ? copy.saving : copy.saved}>
           <i aria-hidden="true">{saving ? "●" : "✓"}</i>
-          {saving ? copy.saving : copy.saved}
+          <span className={styles.label}>{saving ? copy.saving : copy.saved}</span>
         </span>
         {saving
-          ? <span className={classNames(styles.preview, styles.previewDisabled)} aria-disabled="true">▶ {copy.storyPreview}</span>
-          : <Link className={styles.preview} to={`/${storyId}/preview`}
-              state={{ returnTo: storyEditorPath(storyId, selected?.id ?? "") }}>▶ {copy.storyPreview}</Link>}
+          ? <span className={classNames(styles.preview, styles.previewDisabled)} aria-disabled="true" title={copy.storyPreview}>
+              {playGlyph}<span className={styles.label}>{copy.storyPreview}</span>
+            </span>
+          : <Link className={styles.preview} to={`/${storyId}/preview`} title={copy.storyPreview}
+              state={{ returnTo: storyEditorPath(storyId, selected?.id ?? "") }}>
+              {playGlyph}<span className={styles.label}>{copy.storyPreview}</span>
+            </Link>}
       </div>
     </header>
   );

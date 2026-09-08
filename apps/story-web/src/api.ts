@@ -16,6 +16,7 @@ import type {
   SceneMaterial,
   SceneMotion,
   SceneTitle,
+  SoundtrackMix,
   Story,
   StoryTimeline,
   VideoAudioTag,
@@ -43,6 +44,7 @@ export type {
   SceneMaterial,
   SceneMotion,
   SceneTitle,
+  SoundtrackMix,
   Story,
   StoryTimeline,
   VideoAudioTag,
@@ -79,6 +81,7 @@ export interface SceneRenderResult extends SceneRender {
 }
 export interface StoryExport {
   id: string;
+  current: boolean;
   status: "queued" | "rendering" | "assembling" | "ready" | "failed" | "canceled";
   currentRevision: number;
   storyRevision: number;
@@ -91,6 +94,34 @@ export interface StoryExport {
   totalSegments: number;
   sizeBytes?: number;
   errorCode?: "story_revision_changed" | "segment_failed" | "segment_profile_mismatch" | "approved_mix_mismatch" | "assembly_failed";
+}
+export type SoundtrackPresetId = "road" | "lounge" | "dnb";
+export type SoundtrackStemId = "rhythm" | "melody";
+export interface SoundtrackPresetSummary {
+  id: SoundtrackPresetId;
+  version: 1;
+  bpm: number;
+  default: boolean;
+}
+export interface SoundtrackRender {
+  id: string;
+  status: "queued" | "running" | "ready" | "failed";
+  progressPercent: number;
+  progressPhase: "queued" | "synthesizing" | "encoding" | "verifying" | "uploading" | "ready";
+  current: boolean;
+  currentRevision: number;
+  storyRevision: number;
+  inputHash: string;
+  preset: SoundtrackPresetSummary;
+  frameRate: { numerator: number; denominator: number };
+  totalFrames: number;
+  totalSampleFrames: number;
+  sizeBytes?: number;
+  contentHash?: string;
+  stems?: SoundtrackStemId[];
+  melodyVariant: number;
+  createdAt: string;
+  error?: string;
 }
 export async function checkHealth(): Promise<boolean> { try { return (await fetch(`${apiUrl}/health`)).ok; } catch { return false; } }
 export function getEffectiveAccess(token: string): Promise<EffectiveAccess> {
@@ -123,6 +154,43 @@ export async function getCurrentStoryExport(token: string, storyId: string, sign
 }
 export function storyExportContentUrl(storyId: string, exportId: string): string {
   return `${apiUrl}/stories/${storyId}/exports/${exportId}/content`;
+}
+export function setStorySoundtrackMix(
+  token: string, storyId: string, expectedRevision: number, mix: SoundtrackMix,
+): Promise<Story> {
+  return request(`/stories/${storyId}/soundtrack-mix`, {
+    method: "PUT", body: JSON.stringify({ expectedRevision, mix }),
+  }, token);
+}
+export function listSoundtrackPresets(token: string, signal?: AbortSignal): Promise<SoundtrackPresetSummary[]> {
+  return request("/soundtrack-presets", { cache: "no-store", ...(signal ? { signal } : {}) }, token);
+}
+export function requestSoundtrack(
+  token: string, storyId: string, expectedRevision: number, presetId: SoundtrackPresetId, melodyVariant = 0,
+): Promise<SoundtrackRender> {
+  return request(`/stories/${storyId}/soundtracks`, {
+    method: "POST", body: JSON.stringify({ expectedRevision, presetId, melodyVariant }),
+  }, token);
+}
+export async function getCurrentSoundtrack(token: string, storyId: string, signal?: AbortSignal): Promise<SoundtrackRender | null> {
+  try {
+    return await request(`/stories/${storyId}/soundtracks/current`, { cache: "no-store", ...(signal ? { signal } : {}) }, token);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+export function soundtrackAudioUrl(
+  storyId: string, soundtrackId: string, options: { download?: boolean; stem?: SoundtrackStemId } = {},
+): string {
+  const query = new URLSearchParams();
+  if (options.download) query.set("download", "true");
+  if (options.stem) query.set("stem", options.stem);
+  const suffix = query.size ? `?${query}` : "";
+  return `${apiUrl}/stories/${storyId}/soundtracks/${soundtrackId}/audio${suffix}`;
+}
+export function soundtrackProvenanceUrl(storyId: string, soundtrackId: string): string {
+  return `${apiUrl}/stories/${storyId}/soundtracks/${soundtrackId}/provenance`;
 }
 export function createScene(token: string, storyId: string): Promise<Story> {
   return request(`/stories/${storyId}/scenes`, { method: "POST" }, token);

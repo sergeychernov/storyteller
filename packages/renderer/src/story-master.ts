@@ -24,7 +24,7 @@ export const verticalSocialOutputProfile = {
 
 export interface StoryMasterAssemblySpec {
   readonly segmentPaths: readonly string[];
-  readonly approvedMixPath: string;
+  readonly audioPath: string;
   readonly outputPath: string;
   readonly frameRate: RationalFrameRate;
   readonly totalFrames: number;
@@ -46,7 +46,7 @@ export async function assembleStoryMaster(
   ], undefined, { durationSeconds, onProgress: (value) => spec.onProgress?.(value * 0.45) });
   if (concat.exitCode !== 0) throw new Error(`story segment concat failed (${concat.exitCode}): ${concat.stderr.trim()}`);
   const mux = await runner.run("ffmpeg", [
-    "-y", "-v", "error", "-i", videoPath, "-i", spec.approvedMixPath,
+    "-y", "-v", "error", "-i", videoPath, "-i", spec.audioPath,
     "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "copy",
     "-t", durationSeconds.toFixed(9), "-movflags", "+faststart", spec.outputPath,
   ], undefined, { durationSeconds, onProgress: (value) => spec.onProgress?.(0.45 + value * 0.55) });
@@ -121,7 +121,110 @@ export function assertSegmentProfile(
   }
 }
 
-export async function assertApprovedStoryMix(
+export interface StoryMasterSourceAudioClip {
+  readonly path: string;
+  readonly startSeconds: number;
+  readonly durationSeconds: number;
+}
+
+export interface StoryMasterAudioSpec {
+  readonly outputPath: string;
+  readonly durationSeconds: number;
+  readonly levels: {
+    readonly video: number;
+    readonly rhythm: number;
+    readonly melody: number;
+    readonly duckedMelody: number;
+  };
+  /** The scenes that carry their own sound, placed on the timeline; the gaps between them stay silent. */
+  readonly source: readonly StoryMasterSourceAudioClip[];
+  /** Absent for a story with no soundtrack: the master still carries a track of the right length. */
+  readonly soundtrack?: { readonly rhythmPath: string; readonly melodyPath: string };
+}
+
+/** Matches the transition the preview uses when the melody steps aside for the scene's own sound. */
+export const duckingRampSeconds = 0.4;
+
+/**
+ * Mixes the master's audio the way the preview plays it: the scenes' own sound at the video level, the rhythm and
+ * melody stems at theirs, and the melody stepping aside to `duckedMelody` wherever a scene is heard, ramped over
+ * {@link duckingRampSeconds}. Summing is deliberate rather than `amix`'s averaging, so a level of one is as loud
+ * as it was in the mixer; the limiter only catches the peaks that summing full stems can produce.
+ */
+export async function buildStoryMasterAudio(
+  spec: StoryMasterAudioSpec,
+  runner: MediaProcessRunner = new SpawnMediaProcessRunner(),
+): Promise<void> {
+  const duration = spec.durationSeconds.toFixed(9);
+  const rate = verticalSocialOutputProfile.audioSampleRate;
+  const inputs = ["-y", "-v", "error", "-f", "lavfi", "-i", `anullsrc=r=${rate}:cl=stereo`];
+  const filters: string[] = [];
+  const mixed: string[] = [];
+  let index = 1;
+
+  for (const clip of spec.source) {
+    inputs.push("-i", clip.path);
+    const label = `s${index}`;
+    filters.push(`[${index}:a]aresample=${rate},adelay=${Math.round(clip.startSeconds * 1_000)}:all=1,`
+      + `apad=whole_dur=${duration},atrim=duration=${duration},volume=${spec.levels.video.toFixed(4)}[${label}]`);
+    mixed.push(label);
+    index += 1;
+  }
+  if (spec.soundtrack) {
+    inputs.push("-i", spec.soundtrack.rhythmPath, "-i", spec.soundtrack.melodyPath);
+    filters.push(`[${index}:a]volume=${spec.levels.rhythm.toFixed(4)}[rhythm]`);
+    filters.push(`[${index + 1}:a]volume=${duckingExpression(spec)}:eval=frame[melody]`);
+    mixed.push("rhythm", "melody");
+    index += 2;
+  }
+  // The silent base guarantees a track of the exact length even when nothing else plays.
+  filters.push(`[0:a]atrim=duration=${duration}[base]`);
+  filters.push(`[base]${mixed.map((label) => `[${label}]`).join("")}`
+    + `amix=inputs=${mixed.length + 1}:normalize=0:duration=first[summed]`);
+  filters.push("[summed]alimiter=limit=0.95[out]");
+  const result = await runner.run("ffmpeg", [
+    ...inputs, "-filter_complex", filters.join(";"), "-map", "[out]",
+    "-c:a", "aac", "-profile:a", "aac_low", "-b:a", "192k",
+    "-ar", String(rate), "-ac", String(verticalSocialOutputProfile.audioChannels),
+    "-t", duration, "-movflags", "+faststart", spec.outputPath,
+  ]);
+  if (result.exitCode !== 0) throw new Error(`story master audio failed (${result.exitCode}): ${result.stderr.trim()}`);
+}
+
+/**
+ * The melody's level over time: it sits at its own level and slides to the ducked one across every clip that is
+ * heard. The clips form a single coverage envelope rather than a chain of tests, so two clips that meet stay ducked
+ * across their junction — testing them in turn answered the first clip's fade-out before the second's fade-in was
+ * ever considered, and a few notes of melody slipped through the seam.
+ */
+function duckingExpression(spec: StoryMasterAudioSpec): string {
+  const open = spec.levels.melody;
+  const ducked = spec.levels.melody * spec.levels.duckedMelody;
+  const windows = mergeAudibleWindows(spec.source);
+  if (!windows.length || open === ducked) return `'${open.toFixed(4)}'`;
+  const ramp = duckingRampSeconds;
+  // Each window contributes a trapezoid: one while the clip plays, sloping to zero across the ramp on either side.
+  // The tallest one wins, so ramps that overlap hold the melody down instead of cancelling each other out.
+  const coverage = windows
+    .map(({ start, end }) => `min(1,max(0,min((t-(${(start - ramp).toFixed(4)}))/${ramp},((${(end + ramp).toFixed(4)})-t)/${ramp})))`)
+    .reduce((left, right) => `max(${left},${right})`);
+  return `'${open.toFixed(4)}+(${(ducked - open).toFixed(4)})*(${coverage})'`;
+}
+
+/** Clips that touch or overlap are one stretch of sound: the melody has no room to come back up between them. */
+function mergeAudibleWindows(source: readonly StoryMasterSourceAudioClip[]): { start: number; end: number }[] {
+  const ordered = [...source]
+    .map(({ startSeconds, durationSeconds }) => ({ start: startSeconds, end: startSeconds + durationSeconds }))
+    .sort((first, second) => first.start - second.start);
+  return ordered.reduce<{ start: number; end: number }[]>((merged, window) => {
+    const previous = merged.at(-1);
+    if (previous && window.start <= previous.end) previous.end = Math.max(previous.end, window.end);
+    else merged.push(window);
+    return merged;
+  }, []);
+}
+
+export async function assertStoryMasterAudio(
   path: string,
   totalFrames: number,
   frameRate: RationalFrameRate,
@@ -133,10 +236,10 @@ export async function assertApprovedStoryMix(
     || audio.profile !== "LC"
     || Number(audio.sample_rate) !== verticalSocialOutputProfile.audioSampleRate
     || Number(audio.channels) !== verticalSocialOutputProfile.audioChannels) {
-    throw new Error("approved mix must be AAC-LC 48 kHz stereo");
+    throw new Error("story master audio must be AAC-LC 48 kHz stereo");
   }
   const duration = Number(audio.duration ?? probe.format?.duration);
   if (!Number.isFinite(duration) || Math.abs(duration * frameRateValue(frameRate) - totalFrames) > 1) {
-    throw new Error("approved mix duration differs from the timeline by more than one frame");
+    throw new Error("story master audio duration differs from the timeline by more than one frame");
   }
 }

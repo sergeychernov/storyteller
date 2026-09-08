@@ -1,0 +1,55 @@
+.picker {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.option { cursor: pointer; }
+.option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tile {
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  padding: 8px;
+  border: 1px solid #ffffff18;
+  border-radius: 8px;
+  color: #d9d8cf;
+  background: #17171480;
+  box-sizing: border-box;
+}
+
+.tile svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.option input:checked + .tile {
+  border-color: #d9fb76;
+  color: #d9fb76;
+  background: #d9fb7610;
+}
+.option input:focus-visible + .tile { box-shadow: 0 0 0 3px #d9fb7645; }
+.picker:disabled .option { cursor: wait; }
+.picker:disabled .tile { opacity: .55; }
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}

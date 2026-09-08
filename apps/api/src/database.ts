@@ -147,6 +147,15 @@ export class PostgresStoryRepository implements StoryRepository {
       throw error;
     } finally { client.release(); }
   }
+  async updateStorySettings(story: Story): Promise<void> {
+    // Writes only the setting, so it cannot roll back a timeline edit that landed since this story was read.
+    const result = await this.pool.query(
+      `UPDATE stories SET payload = jsonb_set(payload, '{soundtrackMix}', $3::jsonb)
+       WHERE id = $1 AND profile_id = $2 AND revision = $4`,
+      [story.id, story.profileId, story.soundtrackMix ?? null, story.revision],
+    );
+    if (result.rowCount !== 1) throw new ApplicationError("story has changed; reload it before saving", 409, "story_revision_conflict");
+  }
   async deleteScene(story: Story, sceneId: string, storageKeys: readonly string[]): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -203,8 +212,12 @@ export class PostgresStoryRepository implements StoryRepository {
 }
 
 async function persistStoryRevision(client: Pick<Pool | PoolClient, "query">, story: Story): Promise<void> {
+  // Playback levels are owned by updateStorySettings, which does not bump the revision; a timeline write that
+  // read the story before those levels were saved must carry the stored ones forward rather than drop them.
   const result = await client.query(
-    `UPDATE stories SET status = $2, scene_count = $3, revision = $4, payload = $5
+    `UPDATE stories SET status = $2, scene_count = $3, revision = $4,
+       payload = CASE WHEN payload -> 'soundtrackMix' IS NULL THEN $5::jsonb
+         ELSE jsonb_set($5::jsonb, '{soundtrackMix}', payload -> 'soundtrackMix') END
      WHERE id = $1 AND profile_id = $6 AND revision = $7`,
     [story.id, story.status, story.scenes.length, story.revision, story, story.profileId, story.revision - 1],
   );

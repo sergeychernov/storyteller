@@ -9,6 +9,7 @@ import { publicPages } from "./components/public/public-site-model.js";
 import { PublicPage } from "./pages/PublicPage.js";
 import { ProfilePage } from "./pages/ProfilePage.js";
 import { SignInPage } from "./pages/SignInPage.js";
+import { MusicLicensePage } from "./pages/MusicLicensePage.js";
 import { useLocalization } from "@storyteller/web-ui";
 import { useSiteAnalytics } from "./use-site-analytics.js";
 
@@ -38,6 +39,7 @@ export function App() {
         <Route key={resolvedPage.page.path} path={resolvedPage.page.path} element={<PublicPage resolvedPage={resolvedPage}
           session={sessionState.session} studioPath={studioPath} onLanguageChange={updateProfileLanguage} />} />
       ))}
+      <Route path="/music-license" element={<MusicLicensePage />} />
       <Route path="/sign-in" element={<SignInPage sessionState={sessionState} />} />
       <Route path="/app" element={sessionState.session
         ? <><SiteAppHeader profile={sessionState.session.profile} onLanguageChange={updateProfileLanguage} /><ProductChooser session={sessionState.session} onSignOut={signOut} /></>

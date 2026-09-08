@@ -45,6 +45,14 @@
 - Add a new dependency only after checking its maintenance status, security posture, bundle or runtime cost, TypeScript support, and compatibility with the repository's supported environments. Implement locally when the requirement is small and project-specific, or when available packages introduce disproportionate risk, weight, or complexity; record the reason when that choice is not obvious.
 - Reuse existing design-system components, shared UI primitives, API clients, schemas, types, test helpers, and conventions. When reuse is awkward, improve the shared solution if doing so remains coherent for its existing consumers instead of bypassing it with a one-off variant.
 
+## Story master audio
+
+- The master is a finished upload, not a video with a placeholder soundtrack. Everything the preview lets a creator hear — the scenes' own sound and the music mix, at the levels, duckings and fades the preview applies — must reach the exported file. If the preview and the master disagree, the master is wrong.
+- Assemble the master in four independent steps: build the silent video from the scene segments; build the source-audio track from the scenes' own audio, padding scenes without sound with silence; mix that track with the music using the preview's rules; mux the silent video with the finished mix. Never fold audio decisions into the video pass.
+- Keep the audio track rebuildable on its own. Changing a level, a ducking rule, or a scene's sound must rebuild only the audio and the mux, never the scene renders or the video pass, which are far more expensive. Scene renders are addressed by their input hash, so audio settings must stay out of that hash.
+- Render a scene's sound through the existing audio-mode scene render rather than re-deriving trims, padding or loudness at export time. Its artifact is already the scene's exact length in the output audio profile.
+- Verify a changed master pipeline with real FFmpeg on both paths — with music and without — and assert the output profile and the exact duration, not only that a file appeared.
+
 ## Product analytics instrumentation
 
 - Every new user-facing product feature must include analytics instrumentation for its meaningful confirmed outcome on each implemented interface. Extend the typed taxonomy in `@storyteller/analytics`, emit the event only after the operation succeeds, and update `docs/product-analytics.md` in the same change. Do not substitute button-click or form-submit events for a confirmed product outcome.

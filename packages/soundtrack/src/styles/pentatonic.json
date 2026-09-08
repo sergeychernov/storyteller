@@ -1,0 +1,154 @@
+{
+  "id": "pentatonic",
+  "version": 1,
+  "bpm": 96,
+  "beatsPerBar": 4,
+  "swing": 0,
+  "swingUnitBeats": 0.5,
+  "tonalCenter": "D",
+  "scale": ["D", "E", "F#", "A", "B"],
+  "chords": {
+    "D": {"tones": ["D4", "A4", "E5"], "bass": ["D2", "A2", "D3", "A2"]},
+    "E": {"tones": ["E4", "B4", "F#5"], "bass": ["E2", "B2", "E3", "B2"]},
+    "F#": {"tones": ["F#4", "B4", "E5"], "bass": ["F#2", "B2", "F#3", "B2"]},
+    "A": {"tones": ["A3", "E4", "B4"], "bass": ["A2", "E3", "A3", "E3"]},
+    "B": {"tones": ["B3", "F#4", "D5"], "bass": ["B2", "F#3", "B3", "F#3"]}
+  },
+  "progression": ["D", "B", "E", "A", "D", "F#", "B", "A", "D", "E", "F#", "A", "B", "A", "D", "D"],
+  "groove": [
+    [
+      {
+        "layer": "guzhengPad",
+        "at": {},
+        "duration": {"beats": 4, "seconds": 0.4},
+        "repeat": {"times": 2},
+        "pitch": {"from": "tones", "index": [0, 1]},
+        "pan": [-0.32, 0.32],
+        "flat": true
+      },
+      {
+        "layer": "bass",
+        "at": {"beats": 0},
+        "duration": {"beats": 0.82},
+        "repeat": {"times": 4, "every": {"beats": 1}},
+        "pitch": {"from": "bass", "index": [0, 1, 2, 3]},
+        "pan": -0.08
+      },
+      {
+        "layer": "guzhengPluck",
+        "at": {"beats": 0.05},
+        "duration": {"beats": 1.65},
+        "pitch": {"from": "tones", "index": 0},
+        "pan": -0.38,
+        "variant": 0.92
+      },
+      {
+        "layer": "guzhengComping",
+        "at": {"seconds": 0.05},
+        "duration": {"beats": 1.65},
+        "pitch": {"from": "tones", "index": 0},
+        "pan": -0.38,
+        "variant": 0.88
+      },
+      {
+        "layer": "guzhengComping",
+        "at": {"beats": 1.68},
+        "duration": {"beats": 1.65},
+        "pitch": {"from": "tones", "index": 1},
+        "pan": 0.08,
+        "variant": 0.88
+      },
+      {
+        "layer": "guzhengComping",
+        "at": {"beats": 1.86},
+        "duration": {"beats": 1.65},
+        "pitch": {"from": "tones", "index": 2},
+        "pan": 0.42,
+        "variant": 0.88
+      },
+      {
+        "layer": "lowDrum",
+        "at": {"beats": 0},
+        "duration": {"seconds": 0.36},
+        "repeat": {"times": 2, "every": {"beats": 2}},
+        "pan": -0.05
+      },
+      {
+        "layer": "woodblock",
+        "at": {"beats": 1},
+        "duration": {"seconds": 0.13},
+        "repeat": {"times": 2, "every": {"beats": 2}},
+        "pan": [0.28, -0.28]
+      },
+      {
+        "layer": "shaker",
+        "at": {"beats": 0.5},
+        "duration": {"seconds": 0.1},
+        "repeat": {"times": 4, "every": {"beats": 1}},
+        "pan": [-0.42, 0.42],
+        "when": {"fromBar": 1, "fromClimaxFraction": 0.25}
+      }
+    ]
+  ],
+  "layers": [
+    {"id": "guzhengPad", "timbre": "pad", "stem": "rhythm"},
+    {"id": "bass", "timbre": "pluckedBass", "stem": "rhythm"},
+    {"id": "guzhengPluck", "timbre": "guzheng", "stem": "rhythm"},
+    {"id": "guzhengComping", "timbre": "guzheng", "stem": "rhythm"},
+    {"id": "lowDrum", "timbre": "lowDrum", "stem": "rhythm"},
+    {"id": "woodblock", "timbre": "woodblock", "stem": "rhythm"},
+    {"id": "shaker", "timbre": "shaker", "stem": "rhythm"},
+    {"id": "diziMelody", "timbre": "dizi", "stem": "melody"}
+  ],
+  "melody": {
+    "layer": "diziMelody",
+    "phraseBars": 2,
+    "motifs": [
+      [
+        ["D5", 0, 0.9],
+        ["E5", 1, 0.42],
+        ["F#5", 1.5, 0.42],
+        ["A5", 2, 0.88],
+        ["F#5", 3, 0.8],
+        ["E5", 4, 0.42],
+        ["D5", 4.5, 1.25],
+        ["B4", 6, 1.6]
+      ],
+      [
+        ["A4", 0, 0.72],
+        ["B4", 0.8, 0.72],
+        ["D5", 1.6, 1.2],
+        ["F#5", 3, 0.72],
+        ["E5", 3.8, 0.72],
+        ["D5", 4.6, 0.72],
+        ["B4", 5.4, 0.72],
+        ["D5", 6.2, 1.35]
+      ],
+      [
+        ["D5", 0, 0.62],
+        ["F#5", 0.7, 0.62],
+        ["A5", 1.4, 1.05],
+        ["B5", 2.7, 0.55],
+        ["A5", 3.3, 0.55],
+        ["F#5", 3.9, 0.9],
+        ["E5", 5, 0.62],
+        ["D5", 5.7, 1.5]
+      ],
+      [
+        ["B4", 0, 0.7],
+        ["D5", 0.8, 0.7],
+        ["E5", 1.6, 0.7],
+        ["F#5", 2.4, 1.05],
+        ["A5", 3.7, 0.55],
+        ["F#5", 4.4, 0.55],
+        ["E5", 5.1, 0.7],
+        ["D5", 5.9, 1.55]
+      ]
+    ],
+    "registerShift": {"from": "D5", "to": "F#5"},
+    "ornamentAt": [0, 3],
+    "panCenter": -0.14,
+    "panSpread": 0.28
+  },
+  "reverb": {"rhythm": 0.42, "melody": 0.58}
+}

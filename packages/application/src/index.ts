@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from "node:crypto";
 import {
-  addMaterial, addScene, buildStoryTimeline, configureScene, createStory, DomainError, materialStorageKeys, moveSceneMaterials, removeMaterial, removeScene, reorderMaterials, reorderScenes, replaceMaterial, setCollageBackground, setSceneTitle as changeSceneTitle,
-  type EditableCollageSettings, type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type ProfileLanguage, type ProfileUpdate, type Scene, type SceneMaterial, type SceneMotion, type SceneTitle, type Story,
+  addMaterial, addScene, buildStoryTimeline, configureScene, createStory, DomainError, materialStorageKeys, moveSceneMaterials, removeMaterial, removeScene, reorderMaterials, reorderScenes, replaceMaterial, setCollageBackground, setSceneTitle as changeSceneTitle, setSoundtrackMix,
+  type EditableCollageSettings, type FocusPoint, type MoveSceneMaterialsInput, type NewSceneMaterial, type PlatformCredential, type PlatformProvider, type Profile, type ProfileLanguage, type ProfileUpdate, type Scene, type SceneMaterial, type SceneMotion, type SceneTitle, type SoundtrackMix, type Story,
 } from "@storyteller/domain";
 import { timelineDurationLimits } from "./timeline-formats.js";
 
@@ -25,6 +25,7 @@ export interface StorySummary {
 export const productActivityCodes = [
   "auth.registered", "auth.logged_in", "story.created", "material.uploaded",
   "scene.render_requested", "scene.render_ready", "story.export_requested", "story.export_ready",
+  "story.soundtrack_requested", "story.soundtrack_ready",
   "publication.requested", "publication.succeeded", "publication.failed",
 ] as const;
 export type ProductActivityCode = typeof productActivityCodes[number];
@@ -45,6 +46,8 @@ export interface StoryRepository {
   findStory(profileId: string, storyId: string): Promise<Story | undefined>;
   /** Persist only if the stored revision is story.revision - 1; otherwise reject with a conflict. */
   updateStory(story: Story, activity?: ProductActivityRecord): Promise<void>;
+  /** Persist a setting that leaves the timeline untouched, keeping the story on its current revision. */
+  updateStorySettings(story: Story): Promise<void>;
   /** Apply the same revision check and schedule cleanup atomically with the story update. */
   deleteScene(story: Story, sceneId: string, storageKeys: readonly string[]): Promise<void>;
   upsertPlatformCredential(credential: PlatformCredential): Promise<PlatformCredentialSummary>;
@@ -176,6 +179,19 @@ export class StoryApplication {
       throw new ApplicationError("material not found in source scene", 404, "material_not_found");
     }
     return this.saveTimelineChange(() => moveSceneMaterials(story, sourceSceneId, input));
+  }
+  async setStorySoundtrackMix(
+    profileId: string, storyId: string, expectedRevision: number, mix: SoundtrackMix,
+  ): Promise<Story> {
+    const story = await this.getEditableTimelineStory(profileId, storyId, expectedRevision);
+    let changed: Story;
+    try { changed = setSoundtrackMix(story, mix); }
+    catch (error) {
+      if (error instanceof DomainError) throw new ApplicationError(error.message, 422, "invalid_soundtrack_mix");
+      throw error;
+    }
+    await this.repository.updateStorySettings(changed);
+    return changed;
   }
   async deleteScene(profileId: string, storyId: string, sceneId: string, expectedRevision?: number): Promise<Story> {
     const story = await this.getStory(profileId, storyId);

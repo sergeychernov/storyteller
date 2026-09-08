@@ -7,5 +7,6 @@ export * from "./video.js";
 export * from "./last-frame.js";
 export * from "./h264.js";
 export * from "./story-master.js";
+export * from "./soundtrack.js";
 export * from "./scene-title.js";
 export * from "./title-overlay.js";

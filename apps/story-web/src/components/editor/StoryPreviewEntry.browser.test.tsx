@@ -17,11 +17,25 @@ describe("story preview editor entry", () => {
     expect(screen.getByRole<HTMLAnchorElement>("link", { name: /Preview/ }).getAttribute("href")).toBe("/story-1/preview");
   });
 
+  it("keeps a glyph and an accessible name in the narrow header", () => {
+    const { rerender } = render(<MemoryRouter><DesktopEditorHeader storyId="story-1" storyTitle="Story" scenes={[scene]}
+      selected={scene} copy={getEditorCopy("en")} saving={false} compact /></MemoryRouter>);
+    const preview = screen.getByRole<HTMLAnchorElement>("link", { name: /Preview/ });
+    expect(preview.querySelector("svg")).not.toBeNull();
+    expect(preview.getAttribute("title")).toBe("Preview");
+
+    rerender(<MemoryRouter><DesktopEditorHeader storyId="story-1" storyTitle="Story" scenes={[scene]} selected={scene}
+      copy={getEditorCopy("en")} saving compact /></MemoryRouter>);
+    const state = screen.getByRole("status");
+    expect(state.textContent).toContain("Saving");
+    expect(state.querySelector("i")?.textContent).toBe("●");
+  });
+
   it("removes desktop and mobile navigation while a save is unconfirmed", () => {
     const { rerender } = render(<MemoryRouter><DesktopEditorHeader storyId="story-1" storyTitle="Story" scenes={[scene]} selected={scene}
       copy={getEditorCopy("en")} saving compact={false} /></MemoryRouter>);
     expect(screen.queryByRole("link", { name: /Preview/ })).toBeNull();
-    expect(screen.getByText(/Preview/).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByTitle("Preview").getAttribute("aria-disabled")).toBe("true");
 
     rerender(<MemoryRouter><SceneEditorHeader storyId="story-1" storyTitle="Story" scenes={[scene]} selectedId={scene.id}
       copy={getEditorCopy("en")} saving mode="scene" onModeChange={() => undefined} /></MemoryRouter>);

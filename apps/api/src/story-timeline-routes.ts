@@ -1,6 +1,7 @@
 import type { StoryApplication } from "@storyteller/application";
 import {
   bearerSecurity, errorSchema, moveSceneMaterialsSchema, reorderStoryScenesSchema, storySchema, storyTimelineSchema,
+  updateSoundtrackMixSchema,
 } from "@storyteller/schemas";
 import type { FastifyInstance } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
@@ -37,6 +38,17 @@ export function registerStoryTimelineRoutes(instance: FastifyInstance, applicati
     },
   }, async (request) => storySchema.parse(await application.reorderStoryScenes(
     (await authenticate(application, request)).id, request.params.storyId, request.body.sceneIds, request.body.expectedRevision,
+  )));
+
+  app.put("/stories/:storyId/soundtrack-mix", {
+    schema: {
+      operationId: "setStorySoundtrackMix", summary: "Set the story playback levels for video, rhythm and melody",
+      description: "Levels are 0 to 1. duckedMelody multiplies the melody channel while narration or audible source video plays. "
+        + "Requires expectedRevision, leaves the timeline and any approved mix untouched, and returns the updated story.",
+      security: bearerSecurity, params: storyParams, body: updateSoundtrackMixSchema, response: editResponse,
+    },
+  }, async (request) => storySchema.parse(await application.setStorySoundtrackMix(
+    (await authenticate(application, request)).id, request.params.storyId, request.body.expectedRevision, request.body.mix,
   )));
 
   app.post("/stories/:storyId/scenes/:sceneId/materials/move", {

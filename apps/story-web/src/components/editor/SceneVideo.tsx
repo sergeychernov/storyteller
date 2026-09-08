@@ -15,7 +15,7 @@ export const SceneVideo = forwardRef<SceneMediaHandle, SceneMediaProps & {
   const [editorMuted, setEditorMuted] = useState(true);
   const loop = props.slot.endBehavior === "loop";
   const hasEditorControls = Boolean(props.controlsCopy);
-  const muted = hasEditorControls ? editorMuted : props.muted;
+  const muted = hasEditorControls ? editorMuted : props.videoLevel <= 0;
   const hasProcessedAudio = props.slot.audioEnabled && Boolean(props.material.audioTrack);
   const playbackEnded = !loop && props.localTimeSeconds >= sceneMediaPlaybackDuration(props.material);
   const shouldPlayVisual = props.active && props.playing && !playbackEnded;
@@ -64,6 +64,12 @@ export const SceneVideo = forwardRef<SceneMediaHandle, SceneMediaProps & {
   useEffect(() => {
     if (hasProcessedAudio && audioContent.failed) report(audioResourceId, "failed");
   }, [audioContent.failed, audioResourceId, hasProcessedAudio, props.onResourceState]);
+  useEffect(() => {
+    const level = hasEditorControls ? 1 : Math.max(0, Math.min(1, props.videoLevel));
+    for (const element of [visual.mediaRef.current, audio.mediaRef.current]) {
+      if (element) element.volume = level;
+    }
+  }, [audio.mediaRef, hasEditorControls, props.videoLevel, visual.mediaRef]);
 
   const playFromGesture = (localTimeSeconds: number) => {
     if (!props.active || !props.slot.audioEnabled || playbackEnded) return;

@@ -13,6 +13,7 @@
   "dependencies": {
     "@storyteller/render-queue": "workspace:*",
     "@storyteller/renderer": "workspace:*",
+    "@storyteller/soundtrack": "workspace:*",
     "@storyteller/storage": "workspace:*",
     "pg": "8.23.0"
   },

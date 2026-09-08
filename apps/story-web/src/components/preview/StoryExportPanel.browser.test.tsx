@@ -18,6 +18,16 @@ vi.mock("@storyteller/analytics", async (original) => ({
 describe("StoryExportPanel", () => {
   beforeEach(() => { api.getCurrentStoryExport.mockReset(); api.requestStoryExport.mockReset(); track.mockReset(); });
 
+  it("offers a rebuild instead of the previous master once the story music changed", async () => {
+    api.getCurrentStoryExport.mockResolvedValue({ ...readyExport, current: false });
+    api.requestStoryExport.mockResolvedValue({ ...readyExport, status: "queued", progressPhase: "queued" });
+    renderPanel();
+    expect(await screen.findByText(/story changed/i)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Download MP4" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Build again" }));
+    await waitFor(() => expect(api.requestStoryExport).toHaveBeenCalledTimes(1));
+  });
+
   it("restores ready progress and exposes a direct download without fetching a Blob", async () => {
     api.getCurrentStoryExport.mockResolvedValue(readyExport);
     renderPanel();
@@ -56,6 +66,7 @@ const story: Story = {
   scenes: [], narrations: [], music: { generationStatus: "idle", applied: false },
 };
 const readyExport: StoryExport = {
+  current: true,
   id: "00000000-0000-4000-8000-000000000002", status: "ready", currentRevision: 7, storyRevision: 7,
   outputProfileId: "vertical-social-v1", frameRate: { numerator: 30_000, denominator: 1_001 }, totalFrames: 300,
   progressPercent: 100, progressPhase: "ready", readySegments: 2, totalSegments: 2, sizeBytes: 1_024,

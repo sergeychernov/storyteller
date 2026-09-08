@@ -4,7 +4,7 @@ import { createPostgresRepository } from "./database.js";
 import { loadLocalEnvironment } from "./environment.js";
 import { migrateDatabase } from "./migrations.js";
 import { MediaStorage } from "./media-storage.js";
-import { PostgresSceneRenderQueue, PostgresStoryExportQueue } from "@storyteller/render-queue";
+import { PostgresSceneRenderQueue, PostgresSoundtrackRenderQueue, PostgresStoryExportQueue } from "@storyteller/render-queue";
 import { createConfiguredObjectStorage } from "@storyteller/storage";
 import { AccessControlService } from "@storyteller/application";
 import { PostgresAccessRepository } from "./access-control-database.js";
@@ -20,6 +20,7 @@ const api = await buildApi(new StoryApplication(repository), {
   objectStorage,
   renderQueue: new PostgresSceneRenderQueue(pool),
   exportQueue: new PostgresStoryExportQueue(pool),
+  soundtrackQueue: new PostgresSoundtrackRenderQueue(pool),
   accessControl: new AccessControlService(new PostgresAccessRepository(pool)),
   adminReadModel: new AdminReadModel(pool),
   adminAccessService: new AdminAccessService(pool),

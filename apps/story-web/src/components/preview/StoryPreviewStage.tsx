@@ -12,7 +12,7 @@ interface StoryPreviewStageProps {
   readonly timeline: StoryTimeline;
   readonly session: AuthSession;
   readonly snapshot: StoryPreviewSnapshot;
-  readonly muted: boolean;
+  readonly videoLevel: number;
   readonly reducedMotion: boolean;
   readonly copy: EditorCopy;
   readonly onReady: (timelineIndex: number) => void;
@@ -60,7 +60,7 @@ export const StoryPreviewStage = forwardRef<StoryPreviewStageHandle, StoryPrevie
           status={props.snapshot.status}
           active={active}
           pending={props.snapshot.pendingTimelineIndex === timelineIndex}
-          muted={props.muted}
+          videoLevel={props.videoLevel}
           reducedMotion={props.reducedMotion}
           retryKey={props.snapshot.retryKey}
           copy={props.copy}

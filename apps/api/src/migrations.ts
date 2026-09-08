@@ -714,6 +714,111 @@ export const migrations = [{
     );
     CREATE INDEX story_export_segments_render_idx ON story_export_segments(scene_render_id);
   `,
+}, {
+  version: 13,
+  sql: `
+    INSERT INTO access_capabilities (code) VALUES ('story.soundtrack.generate');
+    INSERT INTO access_role_capabilities (role_code, capability_code)
+      VALUES ('creator', 'story.soundtrack.generate');
+    INSERT INTO product_activity_event_types (code) VALUES
+      ('story.soundtrack_requested'), ('story.soundtrack_ready');
+
+    CREATE TABLE soundtrack_renders (
+      id uuid PRIMARY KEY,
+      profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      story_id uuid NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      input_hash char(64) NOT NULL CHECK (input_hash ~ '^[a-f0-9]{64}$'),
+      input jsonb NOT NULL,
+      story_revision integer NOT NULL CHECK (story_revision > 0),
+      status varchar(20) NOT NULL CHECK (status IN ('queued', 'running', 'ready', 'failed')),
+      progress_percent smallint NOT NULL DEFAULT 0 CHECK (progress_percent BETWEEN 0 AND 100),
+      progress_phase varchar(24) NOT NULL DEFAULT 'queued'
+        CHECK (progress_phase IN ('queued', 'synthesizing', 'encoding', 'verifying', 'uploading', 'ready')),
+      preview_storage_key text,
+      preview_size_bytes bigint,
+      preview_content_hash char(64) CHECK (preview_content_hash ~ '^[a-f0-9]{64}$'),
+      rhythm_storage_key text,
+      rhythm_size_bytes bigint,
+      rhythm_content_hash char(64) CHECK (rhythm_content_hash ~ '^[a-f0-9]{64}$'),
+      melody_storage_key text,
+      melody_size_bytes bigint,
+      melody_content_hash char(64) CHECK (melody_content_hash ~ '^[a-f0-9]{64}$'),
+      provenance jsonb,
+      error text,
+      attempts integer NOT NULL DEFAULT 0,
+      worker_id text,
+      locked_until timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (story_id, input_hash),
+      CHECK (status <> 'ready' OR (
+        preview_storage_key IS NOT NULL AND preview_size_bytes IS NOT NULL AND preview_content_hash IS NOT NULL
+        AND rhythm_storage_key IS NOT NULL AND rhythm_size_bytes IS NOT NULL AND rhythm_content_hash IS NOT NULL
+        AND melody_storage_key IS NOT NULL AND melody_size_bytes IS NOT NULL AND melody_content_hash IS NOT NULL
+        AND provenance IS NOT NULL
+      ))
+    );
+    CREATE INDEX soundtrack_renders_queue_idx ON soundtrack_renders(status, locked_until, created_at);
+    CREATE INDEX soundtrack_renders_current_idx ON soundtrack_renders(profile_id, story_id, created_at DESC);
+  `,
+}, {
+  version: 14,
+  sql: `
+    DELETE FROM soundtrack_renders WHERE input->>'engineVersion' IS DISTINCT FROM '2';
+
+    ALTER TABLE soundtrack_renders
+      ADD COLUMN rhythm_preview_storage_key text,
+      ADD COLUMN rhythm_preview_size_bytes bigint,
+      ADD COLUMN rhythm_preview_content_hash char(64) CHECK (rhythm_preview_content_hash ~ '^[a-f0-9]{64}$'),
+      ADD COLUMN melody_preview_storage_key text,
+      ADD COLUMN melody_preview_size_bytes bigint,
+      ADD COLUMN melody_preview_content_hash char(64) CHECK (melody_preview_content_hash ~ '^[a-f0-9]{64}$'),
+      ADD CONSTRAINT soundtrack_renders_stem_previews_ready CHECK (status <> 'ready' OR (
+        rhythm_preview_storage_key IS NOT NULL AND rhythm_preview_size_bytes IS NOT NULL
+        AND rhythm_preview_content_hash IS NOT NULL
+        AND melody_preview_storage_key IS NOT NULL AND melody_preview_size_bytes IS NOT NULL
+        AND melody_preview_content_hash IS NOT NULL
+      ));
+  `,
+}, {
+  version: 15,
+  sql: `
+    DELETE FROM soundtrack_renders WHERE input->>'presetId' NOT IN ('road', 'lounge', 'dnb');
+  `,
+}, {
+  version: 16,
+  sql: `
+    DELETE FROM soundtrack_renders WHERE input->>'engineVersion' IS DISTINCT FROM '4';
+  `,
+}, {
+  version: 17,
+  sql: `
+    DELETE FROM soundtrack_renders WHERE input->>'engineVersion' IS DISTINCT FROM '5';
+  `,
+}, {
+  version: 18,
+  sql: `
+    ALTER TABLE story_export_segments
+      ADD COLUMN kind varchar(8) NOT NULL DEFAULT 'video' CHECK (kind IN ('video', 'audio')),
+      DROP CONSTRAINT story_export_segments_pkey,
+      DROP CONSTRAINT story_export_segments_export_id_scene_render_id_key,
+      ADD PRIMARY KEY (export_id, kind, position),
+      ADD UNIQUE (export_id, kind, scene_render_id);
+
+    -- The master now carries the scenes' own sound, which no earlier export was built with.
+    DELETE FROM story_exports;
+  `,
+}, {
+  version: 19,
+  sql: `
+    ALTER TABLE scene_renders ADD COLUMN last_used_at timestamptz;
+    CREATE INDEX scene_renders_reuse_idx ON scene_renders(last_used_at)
+      WHERE input->>'artifact' = 'story-export-segment';
+
+    -- Segments used to be destroyed the moment a master was assembled, so nothing is left to keep.
+    UPDATE scene_renders SET last_used_at = now()
+      WHERE input->>'artifact' = 'story-export-segment' AND status = 'ready';
+  `,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {

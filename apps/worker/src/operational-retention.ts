@@ -1,3 +1,4 @@
+import { exportSegmentRetentionDays, pruneExpiredExportSegments } from "@storyteller/render-queue";
 import type { Pool } from "pg";
 
 export const operationalRetentionDays = 90;
@@ -13,6 +14,7 @@ export async function pruneOperationalHistory(pool: Pool, now = new Date()): Pro
       WHERE (revoked_at IS NOT NULL AND revoked_at < $1)
          OR (revoked_at IS NULL AND expires_at < $1)`, [cutoff]);
     await queryable.query("DELETE FROM admin_access_previews WHERE expires_at < $1", [new Date(now.getTime() - 24 * 60 * 60 * 1_000)]);
+    await pruneExpiredExportSegments(queryable, new Date(now.getTime() - exportSegmentRetentionDays * 24 * 60 * 60 * 1_000));
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

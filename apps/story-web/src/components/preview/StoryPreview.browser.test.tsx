@@ -52,9 +52,7 @@ describe("StoryPreview", () => {
     expect(play.textContent).toBe("");
     expect(play.querySelector("svg")).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
-    const sound = screen.getByRole<HTMLButtonElement>("button", { name: "Sound on" });
-    expect(sound.textContent).toBe("");
-    expect(sound.querySelector("svg")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: /Sound/ })).toBeNull();
     expect(screen.getByText("Empty scenes: 2")).toBeTruthy();
   });
 

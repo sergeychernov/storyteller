@@ -18,6 +18,8 @@ export type {
   ProductAnalytics,
   RendererKind,
   SceneTitleChangeKind,
+  SoundtrackDurationBucket,
+  SoundtrackPreset,
   TimelineEditKind,
   WebLayout,
 } from "./core.js";

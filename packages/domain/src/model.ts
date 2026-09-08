@@ -253,6 +253,15 @@ export interface Music {
   readonly applied: boolean;
 }
 
+/** Playback levels a creator sets once for the whole story; the export mix applies exactly these. */
+export interface SoundtrackMix {
+  readonly video: number;
+  readonly rhythm: number;
+  readonly melody: number;
+  /** Multiplier applied to the melody channel while narration or audible source video is playing. */
+  readonly duckedMelody: number;
+}
+
 export interface Story {
   readonly id: string;
   readonly profileId: string;
@@ -261,19 +270,9 @@ export interface Story {
   readonly scenes: readonly Scene[];
   readonly narrations: readonly Narration[];
   readonly music: Music;
+  readonly soundtrackMix?: SoundtrackMix;
   /** Locked when the first supported video is added; deleting or reordering media never changes it. */
   readonly outputFrameRate?: RationalFrameRate;
-  /** Produced by the approved-mix milestone and bound to this exact visual timeline. */
-  readonly approvedMix?: {
-    readonly storageKey: string;
-    readonly contentHash: string;
-    readonly mimeType: "audio/mp4";
-    readonly sizeBytes: number;
-    readonly sampleRate: 48000;
-    readonly channels: 2;
-    readonly timelineHash: string;
-    readonly durationFrames: number;
-  };
   readonly revision: number;
 }
 

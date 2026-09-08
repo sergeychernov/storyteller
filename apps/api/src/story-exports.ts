@@ -1,17 +1,21 @@
 import { ApplicationError, type StoryApplication } from "@storyteller/application";
-import { buildStoryTimeline, type Story } from "@storyteller/domain";
+import { buildStoryTimeline, resolveSoundtrackMix, type Story } from "@storyteller/domain";
 import {
-  hashSceneRenderInput, type StoryExportJob, type StoryExportManifest, type StoryExportQueue,
+  hashSceneRenderInput, type SoundtrackRenderQueue, type StoryExportJob, type StoryExportManifest, type StoryExportQueue,
 } from "@storyteller/render-queue";
 import { createHash, randomUUID } from "node:crypto";
 import type { MediaStorage } from "./media-storage.js";
-import { buildStoryExportSegmentInput } from "./scene-render-input.js";
+import {
+  buildStoryExportAudioSegmentInput, buildStoryExportSegmentInput, sceneHasExportableAudio,
+} from "./scene-render-input.js";
 
 export class StoryExportService {
   constructor(
     private readonly application: StoryApplication,
     private readonly queue: StoryExportQueue,
     private readonly media: Pick<MediaStorage, "contentHash">,
+    /** Explicitly required even when absent, so wiring the service cannot silently leave every master silent. */
+    private readonly soundtracks: SoundtrackRenderQueue | undefined,
   ) {}
 
   async request(profileId: string, storyId: string, expectedRevision: number, outputProfileId: string): Promise<StoryExportJob> {
@@ -30,13 +34,8 @@ export class StoryExportService {
     }
     if (!timeline.scenes.length) throw new ApplicationError("story has no scenes", 422, "story_export_empty_story");
     const timelineHash = hashTimeline(story, timeline);
-    const mix = story.approvedMix;
-    if (!mix) {
-      throw new ApplicationError("approve the final audio mix before exporting", 409, "story_export_approved_mix_required");
-    }
-    if (mix.timelineHash !== timelineHash || mix.durationFrames !== timeline.totalFrames) {
-      throw new ApplicationError("approved mix belongs to another story timeline", 409, "story_export_approved_mix_stale");
-    }
+    // Asking for the master is the approval: whatever music the story has right now is what it carries.
+    const soundtrack = await this.expectedSoundtrack(profileId, storyId, story);
     const inputs = await Promise.all(timeline.scenes.map(async (timelineScene) => {
       const scene = story.scenes[timelineScene.index];
       if (!scene) throw new ApplicationError("story timeline is inconsistent", 409, "story_export_timeline_mismatch");
@@ -46,11 +45,23 @@ export class StoryExportService {
         input, inputHash: hashSceneRenderInput(input),
       };
     }));
+    const audioSegments = await Promise.all(timeline.scenes
+      .map((timelineScene) => ({ timelineScene, scene: story.scenes[timelineScene.index] }))
+      .filter(({ scene }) => scene && sceneHasExportableAudio(scene))
+      .map(async ({ timelineScene, scene }) => {
+        const input = await buildStoryExportAudioSegmentInput(scene!, timelineScene, timeline.frameRate, this.media);
+        return {
+          position: timelineScene.index, sceneId: timelineScene.sceneId, durationFrames: timelineScene.durationFrames,
+          input, inputHash: hashSceneRenderInput(input),
+        };
+      }));
+    const levels = resolveSoundtrackMix(story);
     const manifest: StoryExportManifest = {
-      version: 1, storyRevision: story.revision, timelineHash, outputProfileId,
+      version: 2, storyRevision: story.revision, timelineHash, outputProfileId,
       frameRate: timeline.frameRate, totalFrames: timeline.totalFrames,
-      approvedMix: { storageKey: mix.storageKey, contentHash: mix.contentHash, durationFrames: mix.durationFrames },
-      segments: inputs,
+      ...(soundtrack ? { soundtrack } : {}),
+      levels: { video: levels.video, rhythm: levels.rhythm, melody: levels.melody, duckedMelody: levels.duckedMelody },
+      segments: inputs, audioSegments,
     };
     const queued = await this.queue.enqueue({
       id: randomUUID(), profileId, storyId, manifest, manifestHash: hashValue(manifest),
@@ -59,25 +70,60 @@ export class StoryExportService {
     return queued;
   }
 
-  async current(profileId: string, storyId: string): Promise<{ readonly job: StoryExportJob; readonly currentRevision: number }> {
-    const story = await this.application.getStory(profileId, storyId);
-    const job = await this.queue.findCurrentAuthorized(profileId, storyId);
-    if (!job) throw new ApplicationError("story export not found", 404, "story_export_not_found");
-    return { job, currentRevision: story.revision };
+  /** Only a ready render of this exact timeline qualifies; anything else leaves the master silent rather than wrong. */
+  private async expectedSoundtrack(
+    profileId: string, storyId: string, story: Story,
+  ): Promise<StoryExportManifest["soundtrack"]> {
+    const job = await this.soundtracks?.findCurrentAuthorized(profileId, storyId);
+    if (!job || job.status !== "ready" || !job.rhythmStem || !job.melodyStem) return undefined;
+    const timeline = buildStoryTimeline(story);
+    if (job.input.totalFrames !== timeline.totalFrames
+      || job.input.frameRate.numerator !== timeline.frameRate.numerator
+      || job.input.frameRate.denominator !== timeline.frameRate.denominator) return undefined;
+    return {
+      renderId: job.id,
+      rhythm: { storageKey: job.rhythmStem.storageKey, contentHash: job.rhythmStem.contentHash },
+      melody: { storageKey: job.melodyStem.storageKey, contentHash: job.melodyStem.contentHash },
+    };
   }
 
-  async get(profileId: string, storyId: string, exportId: string): Promise<{ readonly job: StoryExportJob; readonly currentRevision: number }> {
+  /**
+   * A master is current only while it still matches the story it was built from — including its music. Changing a
+   * level or asking for another melody moves neither the story revision nor the timeline, so comparing revisions
+   * alone would keep offering a master with the previous soundtrack.
+   */
+  private async describe(profileId: string, storyId: string, job: StoryExportJob): Promise<StoryExportView> {
     const story = await this.application.getStory(profileId, storyId);
+    const expected = await this.expectedSoundtrack(profileId, storyId, story);
+    const current = job.manifest.storyRevision === story.revision
+      && hashValue(job.manifest.soundtrack ?? null) === hashValue(expected ?? null)
+      && hashValue(job.manifest.levels) === hashValue(resolveSoundtrackMix(story));
+    return { job, currentRevision: story.revision, current };
+  }
+
+  async current(profileId: string, storyId: string): Promise<StoryExportView> {
+    const job = await this.queue.findCurrentAuthorized(profileId, storyId);
+    if (!job) throw new ApplicationError("story export not found", 404, "story_export_not_found");
+    return this.describe(profileId, storyId, job);
+  }
+
+  async get(profileId: string, storyId: string, exportId: string): Promise<StoryExportView> {
     const job = await this.queue.findAuthorized(profileId, storyId, exportId);
     if (!job) throw new ApplicationError("story export not found", 404, "story_export_not_found");
-    return { job, currentRevision: story.revision };
+    return this.describe(profileId, storyId, job);
   }
 }
 
-export function serializeStoryExport(value: { readonly job: StoryExportJob; readonly currentRevision: number }) {
-  const { job, currentRevision } = value;
+export interface StoryExportView {
+  readonly job: StoryExportJob;
+  readonly currentRevision: number;
+  readonly current: boolean;
+}
+
+export function serializeStoryExport(value: StoryExportView) {
+  const { job, currentRevision, current } = value;
   return {
-    id: job.id, status: job.status, currentRevision, storyRevision: job.manifest.storyRevision,
+    id: job.id, status: job.status, current, currentRevision, storyRevision: job.manifest.storyRevision,
     outputProfileId: job.manifest.outputProfileId, frameRate: job.manifest.frameRate, totalFrames: job.manifest.totalFrames,
     progressPercent: job.progressPercent, progressPhase: job.progressPhase,
     readySegments: job.readySegments, totalSegments: job.totalSegments,

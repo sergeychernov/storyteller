@@ -1,6 +1,7 @@
 import {
   analyticsEventPropertyNames, resolveAnalyticsServerZone, type AnalyticsEventName, type AnalyticsServerZone,
 } from "@storyteller/analytics";
+import { soundtrackPresetIds } from "@storyteller/soundtrack";
 import type { FastifyInstance } from "fastify";
 
 const ingestionEndpoints: Readonly<Record<AnalyticsServerZone, string>> = {
@@ -20,6 +21,8 @@ const allowedTimelineEditKinds = new Set(["scene_reordered", "material_moved_bet
 const allowedSceneTitleChangeKinds = new Set(["added", "text", "position", "appearance", "timing", "removed"]);
 const allowedWebLayouts = new Set(["desktop", "mobile_web"]);
 const allowedStoryOutputProfiles = new Set(["vertical_social"]);
+const allowedSoundtrackPresets = new Set<string>(soundtrackPresetIds);
+const allowedSoundtrackDurationBuckets = new Set(["under_1_minute", "one_to_two_minutes", "two_to_three_minutes"]);
 const allowedTrafficChannels = new Set([
   "direct", "organic_search", "paid_search", "campaign", "referral", "internal", "unknown",
 ]);
@@ -214,6 +217,12 @@ function sanitizeEventProperties(eventType: AnalyticsEventName, value: unknown):
   }
   if (eventType === "story exported" && !allowedStoryOutputProfiles.has(value.output_profile as string)) {
     return { ok: false, message: "analytics story output profile is invalid" };
+  }
+  if (eventType === "story soundtrack generated") {
+    if (!allowedSoundtrackPresets.has(value.preset as string)) return { ok: false, message: "analytics soundtrack preset is invalid" };
+    if (!allowedSoundtrackDurationBuckets.has(value.duration_bucket as string)) {
+      return { ok: false, message: "analytics soundtrack duration bucket is invalid" };
+    }
   }
   if (eventType === "scene export failed") {
     if (!allowedFailureStages.has(value.failure_stage as string)) return { ok: false, message: "analytics failure stage is invalid" };

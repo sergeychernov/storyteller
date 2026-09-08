@@ -16,6 +16,8 @@ export type ExportFailureReason = "version_changed" | "queue_timeout" | "render_
 export type AnalyticsLanguage = "en" | "ru" | "sr-Latn" | "es";
 export type WebLayout = "desktop" | "mobile_web";
 export type StoryOutputProfile = "vertical_social";
+export type SoundtrackPreset = "road" | "lounge" | "dnb";
+export type SoundtrackDurationBucket = "under_1_minute" | "one_to_two_minutes" | "two_to_three_minutes";
 
 export interface AnalyticsEventMap {
   readonly "page viewed": { readonly page: string } & TrafficAttribution;
@@ -31,6 +33,10 @@ export interface AnalyticsEventMap {
   readonly "scene title changed": { readonly title_change_kind: SceneTitleChangeKind };
   readonly "story preview completed": { readonly web_layout: WebLayout };
   readonly "story exported": { readonly output_profile: StoryOutputProfile };
+  readonly "story soundtrack generated": {
+    readonly preset: SoundtrackPreset;
+    readonly duration_bucket: SoundtrackDurationBucket;
+  };
   readonly "scene render requested": {
     readonly export_mode: ExportMode; readonly renderer_kind: RendererKind;
     readonly collage_card_orientation: CollageCardOrientation;
@@ -74,6 +80,7 @@ export const analyticsEventPropertyNames = {
   "scene title changed": ["surface", "title_change_kind"],
   "story preview completed": ["surface", "web_layout"],
   "story exported": ["surface", "output_profile"],
+  "story soundtrack generated": ["surface", "preset", "duration_bucket"],
   "scene render requested": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],
   "scene render succeeded": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],
   "scene exported": ["surface", "export_mode", "renderer_kind", "collage_card_orientation", "collage_media_mix"],

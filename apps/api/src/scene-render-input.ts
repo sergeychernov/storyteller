@@ -189,6 +189,40 @@ export async function buildSceneFrameInput(
   };
 }
 
+/**
+ * The scene's own sound as its own artifact, already trimmed and padded to the scene's exact length. The master
+ * mixes these rather than re-deriving trims, and an audio-only change never touches the video segments.
+ */
+export async function buildStoryExportAudioSegmentInput(
+  scene: Scene,
+  timelineScene: TimelineScene,
+  frameRate: RationalFrameRate,
+  media: Pick<MediaStorage, "contentHash">,
+): Promise<SceneRenderInput> {
+  const input = await buildSceneRenderInput(scene, media, "audio");
+  return {
+    ...input,
+    // The same artifact class as the visual segment: only the render mode differs, and that already
+    // separates them by input hash, so the export worker pool needs no new kind.
+    artifact: "story-export-segment",
+    durationSeconds: framesToSeconds(timelineScene.durationFrames, frameRate),
+    output: {
+      width: verticalSocialOutputProfile.width,
+      height: verticalSocialOutputProfile.height,
+      fps: frameRateValue(frameRate),
+      codec: verticalSocialOutputProfile.videoCodec,
+      profileId: verticalSocialOutputProfile.id,
+      frameRate,
+      durationFrames: timelineScene.durationFrames,
+    },
+  };
+}
+
+export function sceneHasExportableAudio(scene: Scene): boolean {
+  const material = scene.materials[0];
+  return material?.kind === "video" && material.hasAudio;
+}
+
 export async function buildStoryExportSegmentInput(
   scene: Scene,
   timelineScene: TimelineScene,

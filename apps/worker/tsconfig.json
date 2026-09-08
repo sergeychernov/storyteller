@@ -4,6 +4,7 @@
   "references": [
     { "path": "../../packages/render-queue" },
     { "path": "../../packages/renderer" },
+    { "path": "../../packages/soundtrack" },
     { "path": "../../packages/storage" }
   ],
   "include": ["src/**/*.ts"]

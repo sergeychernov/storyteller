@@ -129,6 +129,36 @@ test("timeline endpoints validate access, complete orders and batch transfer inp
   assert.deepEqual(repository.deletedSceneStorageKeys, []);
 });
 
+test("soundtrack levels persist on the same revision and survive a concurrent timeline write", async (context) => {
+  const { api, application, repository, story: initial, headers } = await sceneDeletionFixture(context, 1);
+  const url = `/stories/${initial.id}/soundtrack-mix`;
+  const mix = { video: 0.4, rhythm: 1, melody: 0.6, duckedMelody: 0.2 };
+  const beforeLevels = await application.getStory(initial.profileId, initial.id);
+  assert.equal(beforeLevels.soundtrackMix, undefined);
+
+  const stale = await api.inject({ method: "PUT", url, headers, payload: { expectedRevision: initial.revision + 1, mix } });
+  assert.equal(stale.statusCode, 409);
+  assert.equal(stale.json<{ code: string }>().code, "story_revision_conflict");
+  for (const invalid of [{ ...mix, melody: 1.2 }, { ...mix, video: -1 }, { video: 1, rhythm: 1, melody: 1 }]) {
+    assert.equal((await api.inject({ method: "PUT", url, headers, payload: { expectedRevision: initial.revision, mix: invalid } })).statusCode, 400);
+  }
+
+  const saved = await api.inject({ method: "PUT", url, headers, payload: { expectedRevision: initial.revision, mix } });
+  assert.equal(saved.statusCode, 200, saved.body);
+  const story = saved.json<Story>();
+  assert.deepEqual(story.soundtrackMix, mix);
+  assert.equal(story.revision, initial.revision, "levels must not invalidate the timeline the preview is playing");
+  assert.deepEqual((await application.getStory(initial.profileId, initial.id)).soundtrackMix, mix);
+
+  // A timeline edit that read the story before the levels were saved keeps the revision it read, so its optimistic
+  // check cannot see the settings write; the repository must carry the stored levels forward instead of dropping them.
+  await repository.updateStory({ ...beforeLevels, title: "Renamed", revision: beforeLevels.revision + 1 });
+  const survived = await application.getStory(initial.profileId, initial.id);
+  assert.deepEqual(survived.soundtrackMix, mix, "a concurrent timeline write must not discard saved levels");
+  assert.equal(survived.title, "Renamed");
+  assert.equal(survived.revision, initial.revision + 1);
+});
+
 test("timeline compare-and-swap rejects concurrent saves without overwriting or moving files", async (context) => {
   const { api, repository, application, story: initial, headers } = await sceneDeletionFixture(context, 2);
   const story = await application.addSceneMaterial(initial.profileId, initial.id, initial.scenes[0]!.id, {
@@ -166,6 +196,7 @@ test("OpenAPI exposes timeline contracts with required revision guards and docum
     assert.doesNotMatch(timelineContract, new RegExp(removedField));
   }
   for (const operation of [document.paths["/stories/{storyId}/scene-order"]?.put,
+    document.paths["/stories/{storyId}/soundtrack-mix"]?.put,
     document.paths["/stories/{storyId}/scenes/{sceneId}/materials/move"]?.post]) {
     assert.ok(operation?.requestBody && "content" in operation.requestBody);
     assert.equal(operation.requestBody.required, true);

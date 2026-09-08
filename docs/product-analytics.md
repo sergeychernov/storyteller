@@ -80,6 +80,7 @@ Event names follow the `object verb` form and are compile-time checked by
 | `scene title changed` | `surface`, `title_change_kind` | The dedicated title API confirms adding, text, position, appearance, timing, or removal |
 | `story preview completed` | `surface`, `web_layout` | Continuous Web preview reaches the authoritative timeline end during playback; once per completed pass, never after seek, Stop, error or navigation |
 | `story exported` | `surface`, `output_profile` | The browser starts downloading a ready full-story master for the current story revision |
+| `story soundtrack generated` | `surface`, `preset`, `duration_bucket` | A soundtrack requested in Story Web reaches `ready`, including when it finished while the tab was closed; the request is remembered per browser, so a restored soundtrack is reported once and never again |
 | `scene render requested` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The API accepts the render request |
 | `scene render succeeded` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | Polling reads the ready render |
 | `scene exported` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The browser receives the artifact and starts saving it |
@@ -115,6 +116,11 @@ contains profile text, email or another user-supplied value.
 download has begun. `scene render succeeded` and `scene exported` continue to
 describe reusable individual-scene artifacts. Publication events should be added
 only with the corresponding real adapters and verified results.
+
+`story soundtrack generated` records only the stable built-in preset id — one of
+`road`, `lounge`, `dnb` — and one of
+`under_1_minute`, `one_to_two_minutes`, or `two_to_three_minutes`. It never sends
+story IDs, titles, filenames, seed values, audio, or provenance fields.
 
 `renderer_kind` is a privacy-safe category (`still_image`, `video`, or `collage`)
 that makes the confirmed F03.1 collage outcome measurable without sending scene,

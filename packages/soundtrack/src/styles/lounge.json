@@ -1,0 +1,133 @@
+{
+  "id": "lounge",
+  "version": 1,
+  "bpm": 84,
+  "beatsPerBar": 4,
+  "swing": 0.28,
+  "swingUnitBeats": 0.5,
+  "tonalCenter": "F",
+  "scale": ["F", "G", "A", "Bb", "C", "D", "E"],
+  "chords": {
+    "Fmaj7": {"tones": ["A3", "C4", "E4"], "bass": ["F2", "A2", "C3", "A2"]},
+    "Dm7": {"tones": ["F3", "A3", "C4"], "bass": ["D2", "F2", "A2", "F2"]},
+    "Gm7": {"tones": ["Bb3", "D4", "F4"], "bass": ["G2", "Bb2", "D3", "Bb2"]},
+    "C7": {"tones": ["E3", "G3", "Bb3"], "bass": ["C2", "E2", "G2", "Bb2"]},
+    "Am7": {"tones": ["C4", "E4", "G4"], "bass": ["A2", "C3", "E3", "C3"]},
+    "Bbmaj7": {"tones": ["D4", "F4", "A4"], "bass": ["Bb2", "D3", "F3", "D3"]}
+  },
+  "progression": ["Fmaj7", "Dm7", "Gm7", "C7", "Fmaj7", "Am7", "Bbmaj7", "C7"],
+  "groove": [
+    [
+      {
+        "layer": "pad",
+        "at": {},
+        "duration": {"beats": 4, "seconds": 0.3},
+        "repeat": {"times": 2},
+        "pitch": {"from": "tones", "index": [0, 2]},
+        "pan": [-0.34, 0.34],
+        "flat": true
+      },
+      {
+        "layer": "bass",
+        "at": {"beats": 0},
+        "duration": {"beats": 0.9},
+        "repeat": {"times": 4, "every": {"beats": 1}},
+        "pitch": {"from": "bass", "index": [0, 1, 2, 3]},
+        "pan": -0.06
+      },
+      {
+        "layer": "comping",
+        "at": {"beats": 1.5},
+        "duration": {"beats": 1.4},
+        "repeat": {"times": 3, "every": {"seconds": 0.014}},
+        "pitch": {"from": "tones", "index": [0, 1, 2]},
+        "pan": [-0.22, 0, 0.22],
+        "gain": 0.9,
+        "variant": 0.85
+      },
+      {
+        "layer": "comping",
+        "at": {"beats": 3.5},
+        "duration": {"beats": 1.4},
+        "repeat": {"times": 3, "every": {"seconds": 0.014}},
+        "pitch": {"from": "tones", "index": [0, 1, 2]},
+        "pan": [-0.22, 0, 0.22],
+        "gain": 0.9,
+        "variant": 0.85
+      },
+      {
+        "layer": "brush",
+        "at": {"beats": 1},
+        "duration": {"seconds": 0.2},
+        "repeat": {"times": 2, "every": {"beats": 2}},
+        "pan": [0.16, -0.16]
+      },
+      {"layer": "rim", "at": {"beats": 2.5}, "duration": {"seconds": 0.05}, "pan": 0.4, "gain": 0.8}
+    ],
+    [
+      {
+        "layer": "pad",
+        "at": {},
+        "duration": {"beats": 4, "seconds": 0.3},
+        "repeat": {"times": 2},
+        "pitch": {"from": "tones", "index": [0, 2]},
+        "pan": [-0.34, 0.34],
+        "flat": true
+      },
+      {
+        "layer": "bass",
+        "at": {"beats": 0},
+        "duration": {"beats": 0.86},
+        "repeat": {"times": 4, "every": {"beats": 1}},
+        "pitch": {"from": "bass", "index": [0, 1, 2, 3]},
+        "pan": -0.06
+      },
+      {
+        "layer": "comping",
+        "at": {"beats": 1.5},
+        "duration": {"beats": 1.4},
+        "repeat": {"times": 3, "every": {"seconds": 0.014}},
+        "pitch": {"from": "tones", "index": [0, 1, 2]},
+        "pan": [-0.22, 0, 0.22],
+        "gain": 0.9,
+        "variant": 0.85
+      },
+      {
+        "layer": "comping",
+        "at": {"beats": 2.75},
+        "duration": {"beats": 1.4},
+        "repeat": {"times": 3, "every": {"seconds": 0.014}},
+        "pitch": {"from": "tones", "index": [0, 1, 2]},
+        "pan": [-0.22, 0, 0.22],
+        "gain": 0.9,
+        "variant": 0.85
+      },
+      {"layer": "brush", "at": {"beats": 1}, "duration": {"seconds": 0.2}, "pan": 0.16},
+      {"layer": "brush", "at": {"beats": 3}, "duration": {"seconds": 0.24}, "pan": -0.16},
+      {"layer": "rim", "at": {"beats": 3.5}, "duration": {"seconds": 0.05}, "pan": -0.4, "gain": 0.8}
+    ]
+  ],
+  "layers": [
+    {"id": "pad", "timbre": "pad", "stem": "rhythm"},
+    {"id": "bass", "timbre": "uprightBass", "stem": "rhythm"},
+    {"id": "comping", "timbre": "nylonGuitar", "stem": "rhythm"},
+    {"id": "brush", "timbre": "brushSnare", "stem": "rhythm"},
+    {"id": "rim", "timbre": "rimClick", "stem": "rhythm"},
+    {"id": "vibes", "timbre": "vibraphone", "stem": "melody"}
+  ],
+  "melody": {
+    "layer": "vibes",
+    "phraseBars": 2,
+    "motifs": [
+      [["A4", 0, 1.2], ["C5", 1.5, 0.8], ["F5", 2.5, 1.4], ["E5", 4, 0.8], ["C5", 5, 0.8], ["D5", 6, 1.6]],
+      [["C5", 0, 0.9], ["D5", 1, 0.9], ["F5", 2, 1.6], ["E5", 4, 1.2], ["C5", 5.5, 0.7], ["A4", 6.5, 1.4]],
+      [["F5", 0, 1.4], ["E5", 1.8, 0.7], ["D5", 2.6, 0.7], ["C5", 3.4, 1.4], ["A4", 5.2, 0.8], ["C5", 6.2, 1.6]],
+      [["D5", 0, 1], ["F5", 1.2, 1], ["A5", 2.4, 1.6], ["G5", 4.2, 0.8], ["E5", 5.2, 0.8], ["C5", 6.2, 1.5]]
+    ],
+    "registerShift": {"from": "C5", "to": "D5"},
+    "ornamentAt": [0, 2],
+    "panCenter": -0.12,
+    "panSpread": 0.24
+  },
+  "reverb": {"rhythm": 0.5, "melody": 0.66}
+}

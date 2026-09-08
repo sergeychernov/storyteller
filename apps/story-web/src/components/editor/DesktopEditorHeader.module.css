@@ -72,6 +72,7 @@
 .preview {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   min-height: 34px;
   padding: 0 13px;
   border-radius: 9px;
@@ -93,6 +94,12 @@
   cursor: not-allowed;
 }
 
+.glyph {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+}
+
 .saveState i {
   display: grid;
   place-items: center;
@@ -101,6 +108,7 @@
   border-radius: 50%;
   color: #25261f;
   background: #d9fb76;
+  font-size: 10px;
   font-style: normal;
 }
 
@@ -115,17 +123,20 @@
   padding-inline: 12px;
 }
 
-.compact .saveState {
-  font-size: 0;
+/*
+ * The narrow header keeps only the glyphs. The label is hidden from sight rather than shrunk away, so it still
+ * names the control for a screen reader; `font-size: 0` used to take the glyph with it.
+ */
+.compact .label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }
 
 .compact .preview {
   padding-inline: 10px;
-  font-size: 0;
-}
-
-.compact .preview::first-letter {
-  font-size: 12px;
 }
 
 @keyframes pulse {

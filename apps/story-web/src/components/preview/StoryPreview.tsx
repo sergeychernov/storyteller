@@ -1,5 +1,5 @@
 import { analytics } from "@storyteller/analytics";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { AuthSession, Story, StoryTimeline } from "../../api.js";
 import { getEditorCopy } from "../editor/editor-copy.js";
@@ -7,10 +7,12 @@ import { storyEditorPath } from "../editor/scene-deletion-model.js";
 import { useMediaQuery } from "../editor/use-media-query.js";
 import { getPreviewCopy, interpolatePreviewCopy } from "./preview-copy.js";
 import { PreviewScrubber } from "./PreviewScrubber.js";
-import { formatPreviewClock, positionAtPlayhead } from "./story-preview-model.js";
+import { formatPreviewClock, positionAtPlayhead, sceneAudioIsAudible } from "./story-preview-model.js";
 import { StoryPreviewStage, type StoryPreviewStageHandle } from "./StoryPreviewStage.js";
 import { useStoryPreviewController } from "./use-story-preview-controller.js";
 import { StoryExportPanel } from "./StoryExportPanel.js";
+import { SoundtrackPanel, type SoundtrackPanelHandle } from "./SoundtrackPanel.js";
+import { useSoundtrackMix } from "./use-soundtrack-mix.js";
 import { useLocalization } from "@storyteller/web-ui";
 import styles from "./StoryPreview.module.css";
 
@@ -27,8 +29,9 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
   const editorCopy = getEditorCopy(locale);
   const desktop = useMediaQuery("(min-width: 768px)");
   const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const [muted, setMuted] = useState(true);
+  const { mix, change: changeMix } = useSoundtrackMix(session, story);
   const stage = useRef<StoryPreviewStageHandle>(null);
+  const soundtrack = useRef<SoundtrackPanelHandle>(null);
   const trackCompleted = useCallback(() => {
     analytics.track("story preview completed", { web_layout: desktop ? "desktop" : "mobile_web" });
   }, [desktop]);
@@ -37,18 +40,18 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
   const pendingScene = controller.snapshot.pendingTimelineIndex === undefined
     ? undefined : timeline.scenes[controller.snapshot.pendingTimelineIndex];
   const returnTo = resolveReturnPath(location.state, story);
-  const containsAudio = story.scenes.some((scene) => scene.materials.some((material) => material.kind === "video" && material.hasAudio));
   const playing = controller.snapshot.status === "playing" || controller.snapshot.status === "buffering";
+  const sourceAudible = mix.video > 0 && sceneAudioIsAudible(story, timeline, controller.snapshot.playheadSeconds);
 
   const play = () => {
-    if (!muted) stage.current?.playAudibleFromGesture();
+    soundtrack.current?.prepareFromGesture();
+    if (mix.video > 0) stage.current?.playAudibleFromGesture();
     controller.play();
   };
-  const toggleSound = () => {
-    const enabling = muted;
-    setMuted(!muted);
-    if (!enabling || controller.snapshot.status !== "playing") return;
-    stage.current?.playAudibleFromGesture();
+  const changeVideoLevel = (value: number) => {
+    const enabling = mix.video === 0 && value > 0;
+    changeMix("video", value);
+    if (enabling && controller.snapshot.status === "playing") stage.current?.playAudibleFromGesture();
   };
 
   return <section className={styles.page}>
@@ -69,7 +72,7 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
           timeline={timeline}
           session={session}
           snapshot={controller.snapshot}
-          muted={muted}
+          videoLevel={mix.video}
           reducedMotion={reducedMotion}
           copy={editorCopy}
           onReady={controller.onSceneReady}
@@ -97,14 +100,6 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
             onChange={controller.seek}
           />
           <span className={styles.clock}>{formatPreviewClock(timeline.totalDurationSeconds)}</span>
-          <button type="button" className={styles.iconButton} aria-pressed={!muted} disabled={!containsAudio}
-            aria-label={muted ? previewCopy.soundOn : previewCopy.soundOff}
-            onClick={toggleSound}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3 9h4l6-5v16l-6-5H3z" />
-              <path d={muted ? "m17 9 5 6m0-6-5 6" : "M17 7q7 5 0 10"} className={styles.soundMark} />
-            </svg>
-          </button>
         </div>
         <div className={styles.status} role={controller.snapshot.status === "failed" ? "alert" : "status"} aria-live="polite">
           {position ? statusText(controller.snapshot.status, previewCopy, pendingScene?.index) : previewCopy.noPlayableScenes}
@@ -114,6 +109,9 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
       </section>
 
       <TimelineFacts timeline={timeline} previewCopy={previewCopy} editorCopy={editorCopy} />
+      <SoundtrackPanel ref={soundtrack} story={story} timeline={timeline} session={session}
+        snapshot={controller.snapshot} mix={mix} sourceAudible={sourceAudible}
+        onMixChange={(channel, value) => channel === "video" ? changeVideoLevel(value) : changeMix(channel, value)} />
       <StoryExportPanel story={story} session={session} />
     </main>
   </section>;

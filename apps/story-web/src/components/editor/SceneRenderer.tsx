@@ -62,7 +62,7 @@ export const SceneRendererPreview = forwardRef<ScenePreviewLifecycle, SceneRende
     localTimeSeconds={localTimeSeconds}
     playing={props.active && playing}
     active={props.active}
-    muted
+    videoLevel={1}
     reducedMotion={reducedMotion}
     preload={props.active ? "auto" : "metadata"}
     retryKey={generation}
