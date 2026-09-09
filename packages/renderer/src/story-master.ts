@@ -23,7 +23,8 @@ export const verticalSocialOutputProfile = {
 } as const;
 
 export interface StoryMasterAssemblySpec {
-  readonly segmentPaths: readonly string[];
+  readonly segmentPaths?: readonly string[];
+  readonly videoPath?: string;
   readonly audioPath: string;
   readonly outputPath: string;
   readonly frameRate: RationalFrameRate;
@@ -35,23 +36,35 @@ export async function assembleStoryMaster(
   spec: StoryMasterAssemblySpec,
   runner: MediaProcessRunner = new SpawnMediaProcessRunner(),
 ): Promise<void> {
-  if (!spec.segmentPaths.length) throw new Error("story master requires at least one segment");
-  const listPath = join(dirname(spec.outputPath), "segments.txt");
-  await writeFile(listPath, spec.segmentPaths.map((path) => `file '${path.replaceAll("'", "'\\''")}'`).join("\n") + "\n", "utf8");
-  const videoPath = join(dirname(spec.outputPath), "visual-master.mp4");
+  const videoPath = spec.videoPath ?? join(dirname(spec.outputPath), "visual-master.mp4");
   const durationSeconds = framesToSeconds(spec.totalFrames, spec.frameRate);
-  const concat = await runner.run("ffmpeg", [
-    "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", listPath,
-    "-map", "0:v:0", "-c:v", "copy", "-an", "-movflags", "+faststart", videoPath,
-  ], undefined, { durationSeconds, onProgress: (value) => spec.onProgress?.(value * 0.45) });
-  if (concat.exitCode !== 0) throw new Error(`story segment concat failed (${concat.exitCode}): ${concat.stderr.trim()}`);
+  if (!spec.videoPath) await buildStorySilentVideo({
+    segmentPaths: spec.segmentPaths ?? [], outputPath: videoPath,
+    frameRate: spec.frameRate, totalFrames: spec.totalFrames,
+  }, runner);
   const mux = await runner.run("ffmpeg", [
     "-y", "-v", "error", "-i", videoPath, "-i", spec.audioPath,
     "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "copy",
     "-t", durationSeconds.toFixed(9), "-movflags", "+faststart", spec.outputPath,
-  ], undefined, { durationSeconds, onProgress: (value) => spec.onProgress?.(0.45 + value * 0.55) });
+  ], undefined, { durationSeconds, onProgress: (value) => spec.onProgress?.(value) });
   if (mux.exitCode !== 0) throw new Error(`story audio mux failed (${mux.exitCode}): ${mux.stderr.trim()}`);
   spec.onProgress?.(1);
+}
+
+/** The reusable video pass has no dependency on audio inputs or levels. */
+export async function buildStorySilentVideo(
+  spec: { readonly segmentPaths: readonly string[]; readonly outputPath: string;
+    readonly frameRate: RationalFrameRate; readonly totalFrames: number },
+  runner: MediaProcessRunner = new SpawnMediaProcessRunner(),
+): Promise<void> {
+  if (!spec.segmentPaths.length) throw new Error("story master requires at least one segment");
+  const listPath = join(dirname(spec.outputPath), "segments.txt");
+  await writeFile(listPath, spec.segmentPaths.map((path) => `file '${path.replaceAll("'", "'\\''")}'`).join("\n") + "\n", "utf8");
+  const result = await runner.run("ffmpeg", [
+    "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", listPath,
+    "-map", "0:v:0", "-c:v", "copy", "-an", "-movflags", "+faststart", spec.outputPath,
+  ]);
+  if (result.exitCode !== 0) throw new Error(`story segment concat failed (${result.exitCode}): ${result.stderr.trim()}`);
 }
 
 export interface ProbedVideoProfile {
@@ -191,24 +204,28 @@ export async function buildStoryMasterAudio(
   if (result.exitCode !== 0) throw new Error(`story master audio failed (${result.exitCode}): ${result.stderr.trim()}`);
 }
 
-/**
- * The melody's level over time: it sits at its own level and slides to the ducked one across every clip that is
- * heard. The clips form a single coverage envelope rather than a chain of tests, so two clips that meet stay ducked
- * across their junction — testing them in turn answered the first clip's fade-out before the second's fade-in was
- * ever considered, and a few notes of melody slipped through the seam.
- */
+/** Each boundary cancels the preceding ramp at its current level, just like the preview mixer. */
 function duckingExpression(spec: StoryMasterAudioSpec): string {
   const open = spec.levels.melody;
-  const ducked = spec.levels.melody * spec.levels.duckedMelody;
-  const windows = mergeAudibleWindows(spec.source);
-  if (!windows.length || open === ducked) return `'${open.toFixed(4)}'`;
-  const ramp = duckingRampSeconds;
-  // Each window contributes a trapezoid: one while the clip plays, sloping to zero across the ramp on either side.
-  // The tallest one wins, so ramps that overlap hold the melody down instead of cancelling each other out.
-  const coverage = windows
-    .map(({ start, end }) => `min(1,max(0,min((t-(${(start - ramp).toFixed(4)}))/${ramp},((${(end + ramp).toFixed(4)})-t)/${ramp})))`)
-    .reduce((left, right) => `max(${left},${right})`);
-  return `'${open.toFixed(4)}+(${(ducked - open).toFixed(4)})*(${coverage})'`;
+  const ducked = open * spec.levels.duckedMelody;
+  const windows = spec.levels.video > 0 ? mergeAudibleWindows(spec.source) : [];
+  const initial = windows[0]?.start === 0 ? ducked : open;
+  const ramps: { start: number; from: number; to: number }[] = [];
+  for (const window of windows) {
+    for (const [start, to] of [[window.start, ducked], [window.end, open]] as const) {
+      if (start === 0) continue; // Playback initializes the first scene's level without a ramp.
+      const previous = ramps.at(-1);
+      const from = previous ? previous.from + (previous.to - previous.from)
+        * Math.min(1, (start - previous.start) / duckingRampSeconds) : initial;
+      ramps.push({ start, from, to });
+    }
+  }
+  let expression = initial.toFixed(9);
+  for (const { start, from, to } of ramps) {
+    const value = `${from.toFixed(9)}+(${(to - from).toFixed(9)})*min(1,(t-${start.toFixed(9)})/${duckingRampSeconds})`;
+    expression = `if(lt(t,${start.toFixed(9)}),${expression},${value})`;
+  }
+  return `'${expression}'`;
 }
 
 /** Clips that touch or overlap are one stretch of sound: the melody has no room to come back up between them. */

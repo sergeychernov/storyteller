@@ -31,7 +31,7 @@ import { buildApi } from "./server.js";
 import { detectMediaMetadata, MediaStorage } from "./media-storage.js";
 import { LocalObjectStorage, S3ObjectStorage } from "./object-storage.js";
 import { accessPolicyForRoute } from "./access-control.js";
-import { buildSceneFrameInput, buildSceneRenderInput } from "./scene-render-input.js";
+import { buildSceneFrameInput, buildSceneRenderInput, sceneHasExportableAudio } from "./scene-render-input.js";
 
 test("visual render inputs version and hash titles without exposing raw text, while scene frames omit them", async () => {
   const scene = {
@@ -68,6 +68,7 @@ test("visual render inputs version and hash titles without exposing raw text, wh
       audioTags: [], sourceDurationSeconds: 5,
     }],
   };
+  assert.equal(sceneHasExportableAudio(videoScene), true);
   const combined = await buildSceneRenderInput(videoScene, media, "combined");
   const audio = await buildSceneRenderInput(videoScene, media, "audio");
   const { title: _ignoredTitle, ...videoWithoutTitle } = videoScene;
@@ -111,6 +112,7 @@ test("builds a crop-aware mixed PPL render job with a silent video card", async 
   const input = await buildSceneRenderInput(scene, {
     async contentHash({ storageKey }) { return createHash("sha256").update(storageKey).digest("hex"); },
   }, "video");
+  assert.equal(sceneHasExportableAudio(scene), false, "muted collage cards must not create audio-mode exports");
   assert.equal(input.rendererId, "collage");
   if (input.rendererId !== "collage") throw new Error("expected collage input");
   assert.equal(input.rendererVersion, collageRendererVersion);

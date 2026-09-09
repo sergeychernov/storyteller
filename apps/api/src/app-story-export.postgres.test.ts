@@ -44,6 +44,14 @@ test("PostgreSQL: story export enqueues every segment atomically, barriers assem
   const assembly = await queue.claimAssembly("assembly", 10_000);
   assert.equal(assembly?.segments.length, 2);
   assert.deepEqual(assembly?.segments.map(({ sceneId }) => sceneId), sceneIds);
+  const video = { storageKey: "silent-video.mp4", contentHash: "a".repeat(64) };
+  assert.equal(await queue.saveSilentVideo(exportId, "wrong-worker", video), false);
+  assert.equal(await queue.saveSilentVideo(exportId, "assembly", video), true);
+  assert.equal(await queue.saveSilentVideo(exportId, "assembly", { ...video, storageKey: "loser.mp4" }), false);
+  assert.deepEqual(await queue.findSilentVideo(exportId, "assembly"), video);
+  await pool.query("UPDATE story_silent_videos SET last_used_at = now() - interval '8 days'");
+  await pruneExpiredExportSegments(pool, new Date(Date.now() - 7 * 86400_000));
+  assert.equal((await pool.query("SELECT count(*)::int AS count FROM story_silent_videos")).rows[0].count, 1);
   assert.equal(await queue.complete(exportId, "assembly", "master.mp4", 1_000, "e".repeat(64)), true);
   const ready = await queue.findAuthorized(profileId, storyId, exportId);
   assert.equal(ready?.status, "ready");
@@ -62,6 +70,8 @@ test("PostgreSQL: story export enqueues every segment atomically, barriers assem
   await queue.enqueue({ id: staleId, profileId, storyId, manifestHash: "d".repeat(64), manifest: {
     ...manifest, levels: { ...manifest.levels, melody: 0.5 },
   } });
+  assert.equal((await queue.claimAssembly("rebuild", 10_000))?.id, staleId);
+  assert.deepEqual(await queue.findSilentVideo(staleId, "rebuild"), video, "fader-only manifest reuses the saved video");
   await pool.query("UPDATE stories SET revision = 8 WHERE id = $1", [storyId]);
   const stale = await queue.findAuthorized(profileId, storyId, staleId);
   assert.equal(stale?.status, "canceled");
@@ -70,6 +80,11 @@ test("PostgreSQL: story export enqueues every segment atomically, barriers assem
     `SELECT count(*)::integer AS count FROM story_export_segments link JOIN scene_renders render ON render.id = link.scene_render_id
      WHERE link.export_id = $1 AND render.status IN ('queued', 'running')`, [staleId],
   )).rows[0].count, 0);
+  await pool.query("UPDATE story_silent_videos SET last_used_at = now() - interval '8 days'");
+  await pruneExpiredExportSegments(pool, new Date(Date.now() - 7 * 86400_000));
+  assert.equal((await pool.query("SELECT count(*)::int AS count FROM story_silent_videos")).rows[0].count, 0);
+  assert.equal((await pool.query("SELECT storage_key FROM object_deletion_jobs WHERE storage_key = 'silent-video.mp4'")).rowCount, 1);
+
 });
 
 test("PostgreSQL: segments outlive the master, drop when a scene changes and expire a week after their last use", options, async (context) => {
@@ -210,11 +225,6 @@ function exportManifest(sceneIds: readonly string[]): StoryExportManifest {
   return {
     version: 2, storyRevision: 7, timelineHash: "a".repeat(64), outputProfileId: "vertical-social-v1",
     frameRate: { numerator: 30, denominator: 1 }, totalFrames: 300,
-    soundtrack: {
-      renderId: "00000000-0000-4000-8000-0000000000aa",
-      rhythm: { storageKey: "rhythm.flac", contentHash: "b".repeat(64) },
-      melody: { storageKey: "melody.flac", contentHash: "c".repeat(64) },
-    },
     levels: { video: 1, rhythm: 1, melody: 1, duckedMelody: 0.3 },
     audioSegments: [],
     segments: sceneIds.map((sceneId, position) => ({

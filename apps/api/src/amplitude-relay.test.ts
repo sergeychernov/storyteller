@@ -4,6 +4,8 @@ import { StoryApplication, type StoryRepository } from "@storyteller/application
 import { buildApi } from "./server.js";
 import { inheritBrowserSafeAnalyticsConfiguration } from "./environment.js";
 
+import { createProductAnalytics, resolveTrafficAttribution } from "@storyteller/analytics";
+
 const projectKey = "test-project-key";
 
 test("relays a sanitized analytics batch to the configured Amplitude region", async (context) => {
@@ -348,4 +350,38 @@ test("keeps the relay unavailable until the server project key is configured", a
     payload: { api_key: projectKey, events: [] },
   });
   assert.equal(response.statusCode, 503);
+});
+
+
+test("delivers classified page views through the analytics client and relay", async (context) => {
+  const forwarded: unknown[] = [];
+  const api = await buildApi(new StoryApplication({} as StoryRepository), {
+    amplitudeRelay: { apiKey: projectKey, fetch: (async (_input, init) => {
+      forwarded.push(JSON.parse(String(init?.body)).events[0].event_properties);
+      return new Response(JSON.stringify({ code: 200 }), { status: 200 });
+    }) as typeof fetch },
+  });
+  context.after(() => api.close());
+  for (const [query, referrer, channel, engine] of [
+    ["", "https://google.com/search?q=private", "organic_search", "google"],
+    ["?utm_source=bing&utm_medium=cpc", "", "paid_search", "bing"],
+    ["", "", "direct", "not_applicable"],
+    ["", "https://example.com/private", "referral", "not_applicable"],
+    ["?utm_source=facebook&utm_medium=cpc", "", "social", "not_applicable"],
+  ] as const) {
+    let event: unknown;
+    const client = createProductAnalytics({
+      initialize() {}, setUserId() {}, reset() {}, async flush() {},
+      track(event_type, event_properties) { event = { event_type, event_properties, device_id: "test-device" }; },
+    });
+    client.initialize({ apiKey: projectKey, serverZone: "EU", surface: "site",
+      trafficAttribution: resolveTrafficAttribution(`https://makeitastory.app/${query}`, referrer) });
+    client.trackPage("public:/");
+    const response = await api.inject({ method: "POST", url: "/analytics/amplitude",
+      payload: { api_key: projectKey, events: [event] } });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(forwarded.at(-1), {
+      surface: "site", page: "public:/", traffic_channel: channel, search_engine: engine,
+    });
+  }
 });

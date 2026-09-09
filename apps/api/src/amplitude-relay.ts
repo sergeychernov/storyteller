@@ -24,7 +24,7 @@ const allowedStoryOutputProfiles = new Set(["vertical_social"]);
 const allowedSoundtrackPresets = new Set<string>(soundtrackPresetIds);
 const allowedSoundtrackDurationBuckets = new Set(["under_1_minute", "one_to_two_minutes", "two_to_three_minutes"]);
 const allowedTrafficChannels = new Set([
-  "direct", "organic_search", "paid_search", "campaign", "referral", "internal", "unknown",
+  "direct", "organic_search", "paid_search", "campaign", "social", "referral", "internal", "unknown",
 ]);
 const allowedSearchEngines = new Set([
   "google", "yandex", "bing", "duckduckgo", "yahoo", "baidu", "other", "not_applicable",

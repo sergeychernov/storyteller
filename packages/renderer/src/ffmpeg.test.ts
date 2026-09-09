@@ -939,3 +939,44 @@ test("lossless scene frame contains the actual last frame rather than the first"
   const [red = 0, _green = 0, blue = 0] = await readFile(pixel);
   assert.ok(blue > red * 3, `expected the final blue frame, received rgb(${red},${_green},${blue})`);
 });
+
+test("real FFmpeg: ducking begins at the audible boundary and reverses short ramps from their reached level", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "storyteller-duck-onset-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const runner = new SpawnMediaProcessRunner();
+  const melody = join(root, "melody.wav"), silence = join(root, "silence.wav");
+  for (const [path, source] of [[melody, "sine=frequency=440:sample_rate=48000"], [silence, "anullsrc=r=48000:cl=stereo"]]) {
+    const made = await runner.run("ffmpeg", ["-y", "-v", "error", "-f", "lavfi", "-i", source!, "-t", "5", "-ac", "2", path!]);
+    assert.equal(made.exitCode, 0, made.stderr);
+  }
+  const outputPath = join(root, "mix.m4a");
+  await buildStoryMasterAudio({ outputPath, durationSeconds: 5,
+    levels: { video: 1, rhythm: 0, melody: 1, duckedMelody: 0 },
+    soundtrack: { melodyPath: melody, rhythmPath: silence },
+    source: [{ path: silence, startSeconds: 1, durationSeconds: 0.2 },
+      { path: silence, startSeconds: 2, durationSeconds: 1 },
+      { path: silence, startSeconds: 3.1, durationSeconds: 0.7 }],
+  }, runner);
+  const peak = async (start: number, end: number) => {
+    const result = await runner.run("ffmpeg", ["-v", "info", "-i", outputPath, "-af",
+      `atrim=start=${start}:end=${end},volumedetect`, "-f", "null", "-"]);
+    assert.equal(result.exitCode, 0, result.stderr);
+    return Number(/max_volume: (-?\d+(?:\.\d+)?) dB/.exec(result.stderr)?.[1]);
+  };
+  const baseline = await peak(0.1, 0.3);
+  assert.ok(Math.abs(await peak(0.8, 0.95) - baseline) < 1, "no ducking before the boundary");
+  const attack = await peak(1.12, 1.18);
+  assert.ok(attack < baseline - 1 && attack > baseline - 7, "onset ramps rather than jumping to ducked");
+  assert.ok(await peak(1.23, 1.28) > baseline - 8, "short scene releases from a partially ducked level");
+  assert.ok(await peak(2.5, 2.8) < -60, "a long audible window reaches the ducked level");
+  assert.ok(await peak(3.03, 3.08) > -55, "release starts even when the next scene is less than a ramp away");
+  assert.ok(await peak(3.12, 3.17) > baseline - 18, "next attack starts from the partially released level");
+  assert.ok(Math.abs(await peak(4.4, 4.7) - baseline) < 1, "release returns to open");
+  await assertStoryMasterAudio(outputPath, 150, { numerator: 30, denominator: 1 }, runner);
+  await buildStoryMasterAudio({ outputPath, durationSeconds: 5,
+    levels: { video: 0, rhythm: 0, melody: 1, duckedMelody: 0 },
+    soundtrack: { melodyPath: melody, rhythmPath: silence },
+    source: [{ path: silence, startSeconds: 1, durationSeconds: 3 }],
+  }, runner);
+  assert.ok(Math.abs(await peak(2.5, 2.8) - baseline) < 1, "muted source audio must not duck the music");
+});

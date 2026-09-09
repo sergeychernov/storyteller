@@ -197,6 +197,8 @@ class MemorySoundtrackLookup implements SoundtrackRenderQueue {
 }
 
 class MemoryStoryExportQueue implements StoryExportQueue {
+  async findSilentVideo() { return undefined; }
+  async saveSilentVideo() { return false; }
   job: StoryExportJob | undefined;
   reset() { this.job = undefined; }
   async enqueue(job: Pick<StoryExportJob, "id" | "profileId" | "storyId" | "manifestHash" | "manifest">) {
@@ -217,3 +219,33 @@ class MemoryStoryExportQueue implements StoryExportQueue {
   complete(): Promise<boolean> { return Promise.resolve(false); }
   fail(): Promise<void> { return Promise.resolve(); }
 }
+
+test("exporting an animated collage whose first card has sound creates only a visual segment", async (context) => {
+  process.env.NODE_ENV = "test";
+  const repository = new MemoryRepository();
+  const application = new StoryApplication(repository);
+  const queue = new MemoryStoryExportQueue();
+  const api = await buildApi(application, { exportQueue: queue });
+  context.after(() => api.close());
+  const auth = await application.register({ name: "Collage", email: "collage-master@example.com", password: "long-test-password" });
+  const storyId = (await application.createStory(auth.profile.id, { title: "Collage" })).id;
+  const sceneId = (await application.createScene(auth.profile.id, storyId)).scenes[0]!.id;
+  await application.addSceneMaterial(auth.profile.id, storyId, sceneId, {
+    kind: "video", name: "video.mp4", storageKey: "video.mp4", mimeType: "video/mp4", sizeBytes: 1,
+    width: 900, height: 1600, orientation: "portrait", hasAudio: true, audioTags: [], sourceDurationSeconds: 5, contentHash: "a".repeat(64),
+  });
+  for (const orientation of ["portrait", "landscape"] as const) {
+    await application.addSceneMaterial(auth.profile.id, storyId, sceneId, {
+      kind: "image", name: `${orientation}.png`, storageKey: `${orientation}.png`, mimeType: "image/png", sizeBytes: 1,
+      width: orientation === "portrait" ? 900 : 1600, height: orientation === "portrait" ? 1600 : 900, orientation, contentHash: "b".repeat(64),
+    });
+  }
+  const story = await application.getStory(auth.profile.id, storyId);
+  assert.equal(story.scenes[0]!.rendererId, "collage");
+  const result = await api.inject({ method: "POST", url: `/stories/${storyId}/exports`,
+    headers: { authorization: `Bearer ${auth.accessToken}` },
+    payload: { expectedRevision: story.revision, outputProfileId: "vertical-social-v1" } });
+  assert.equal(result.statusCode, 202, result.body);
+  assert.equal(queue.job?.manifest.segments[0]?.input.rendererId, "collage");
+  assert.deepEqual(queue.job?.manifest.audioSegments, []);
+});

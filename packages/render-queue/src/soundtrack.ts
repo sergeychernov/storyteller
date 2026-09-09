@@ -200,10 +200,21 @@ export class PostgresSoundtrackRenderQueue implements SoundtrackRenderQueue {
       );
       const profileId = completed.rows[0]?.profile_id;
       if (!profileId) { await client.query("ROLLBACK"); return { accepted: false, supersededStorageKeys: [] }; }
+      // Lock candidates before the DELETE statement takes its snapshot. An enqueue that
+      // holds FOR SHARE must commit its manifest before we decide whether its stems are free.
+      await client.query(
+        `SELECT superseded.id FROM soundtrack_renders superseded, soundtrack_renders kept
+         WHERE kept.id = $1 AND superseded.story_id = kept.story_id AND superseded.id <> kept.id
+           AND superseded.created_at <= kept.created_at ORDER BY superseded.id FOR UPDATE OF superseded`, [renderId]);
       const superseded = await client.query<SupersededRow>(
         `DELETE FROM soundtrack_renders superseded USING soundtrack_renders kept
          WHERE kept.id = $1 AND superseded.story_id = kept.story_id AND superseded.id <> kept.id
            AND superseded.created_at <= kept.created_at
+           AND NOT EXISTS (
+             SELECT 1 FROM story_exports export WHERE export.story_id = superseded.story_id
+               AND export.status IN ('queued', 'assembling')
+               AND export.manifest->'soundtrack'->>'renderId' = superseded.id::text
+           )
          RETURNING superseded.preview_storage_key, superseded.rhythm_storage_key, superseded.melody_storage_key,
            superseded.rhythm_preview_storage_key, superseded.melody_preview_storage_key`, [renderId],
       );

@@ -57,7 +57,7 @@ export class StoryExportService {
       }));
     const levels = resolveSoundtrackMix(story);
     const manifest: StoryExportManifest = {
-      version: 2, storyRevision: story.revision, timelineHash, outputProfileId,
+      version: 3, storyRevision: story.revision, timelineHash, outputProfileId,
       frameRate: timeline.frameRate, totalFrames: timeline.totalFrames,
       ...(soundtrack ? { soundtrack } : {}),
       levels: { video: levels.video, rhythm: levels.rhythm, melody: levels.melody, duckedMelody: levels.duckedMelody },
@@ -95,7 +95,7 @@ export class StoryExportService {
   private async describe(profileId: string, storyId: string, job: StoryExportJob): Promise<StoryExportView> {
     const story = await this.application.getStory(profileId, storyId);
     const expected = await this.expectedSoundtrack(profileId, storyId, story);
-    const current = job.manifest.storyRevision === story.revision
+    const current = job.manifest.version === 3 && job.manifest.storyRevision === story.revision
       && hashValue(job.manifest.soundtrack ?? null) === hashValue(expected ?? null)
       && hashValue(job.manifest.levels) === hashValue(resolveSoundtrackMix(story));
     return { job, currentRevision: story.revision, current };

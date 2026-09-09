@@ -220,7 +220,7 @@ export async function buildStoryExportAudioSegmentInput(
 
 export function sceneHasExportableAudio(scene: Scene): boolean {
   const material = scene.materials[0];
-  return material?.kind === "video" && material.hasAudio;
+  return scene.rendererId !== collageRendererId && material?.kind === "video" && material.hasAudio;
 }
 
 export async function buildStoryExportSegmentInput(

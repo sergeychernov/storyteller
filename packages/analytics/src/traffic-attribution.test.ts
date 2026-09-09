@@ -55,6 +55,31 @@ test("classifies paid-search and campaigns from signals without returning their 
     traffic_channel: "campaign", search_engine: "not_applicable",
   });
   assert.deepEqual(resolveTrafficAttribution("https://makeitastory.app/?utm_medium=ppc&utm_source=private-partner", ""), {
-    traffic_channel: "paid_search", search_engine: "other",
+    traffic_channel: "campaign", search_engine: "not_applicable",
   });
+});
+
+test("classifies social links and respects explicit campaign media", () => {
+  const cases = [
+    ["", "https://l.facebook.com/path?secret=value", "social", "not_applicable"],
+    ["", "https://t.co/private", "social", "not_applicable"],
+    ["", "https://facebook.com.evil.example/", "referral", "not_applicable"],
+    ["?utm_source=Facebook&utm_medium=CPC", "https://google.com/", "social", "not_applicable"],
+    ["?utm_source=instagram.com&utm_medium=ppc", "", "social", "not_applicable"],
+    ["?utm_medium=paid_social&gclid=private", "", "social", "not_applicable"],
+    ["?utm_source=facebook&utm_medium=email", "https://facebook.com/", "campaign", "not_applicable"],
+    ["?utm_medium=referral", "https://google.com/", "referral", "not_applicable"],
+    ["?utm_medium=cpc&utm_source=www.google.com", "", "paid_search", "google"],
+    ["?utm_medium=cpc&utm_source=unknown", "https://google.com/", "campaign", "not_applicable"],
+    ["?utm_medium=organic", "https://yandex.ru/", "organic_search", "yandex"],
+    ["?utm_medium=paid_search&utm_source=unknown", "", "paid_search", "other"],
+    ["?dclid=private", "https://google.com/", "campaign", "not_applicable"],
+    ["?msclkid=private", "", "paid_search", "bing"],
+    ["?yclid=private", "", "paid_search", "yandex"],
+  ] as const;
+  for (const [query, referrer, traffic_channel, search_engine] of cases) {
+    assert.deepEqual(resolveTrafficAttribution(`https://makeitastory.app/${query}`, referrer), {
+      traffic_channel, search_engine,
+    }, query || referrer);
+  }
 });

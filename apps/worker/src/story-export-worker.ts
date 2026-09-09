@@ -10,10 +10,11 @@ import type {
 import { framesToSeconds } from "@storyteller/domain";
 import {
   assembleStoryMaster, assertSegmentProfile, assertStoryMasterAudio, buildStoryMasterAudio, probeVideoProfile,
-  verticalSocialOutputProfile, type StoryMasterSourceAudioClip,
+  verticalSocialOutputProfile, SpawnMediaProcessRunner, type MediaProcessRunner, type StoryMasterSourceAudioClip,
 } from "@storyteller/renderer";
 import { hashFileContent, type ObjectStorage } from "@storyteller/storage";
 import { workerRenderCapacity, type RenderCapacity } from "./render-capacity.js";
+import { prepareStoryExportVideo, StoryExportVideoError } from "./story-export-video.js";
 
 export class StoryExportWorker {
   constructor(
@@ -22,6 +23,7 @@ export class StoryExportWorker {
     private readonly storage: ObjectStorage,
     private readonly leaseMilliseconds = 20 * 60 * 1_000,
     private readonly renderCapacity: RenderCapacity = workerRenderCapacity,
+    private readonly runner: MediaProcessRunner = new SpawnMediaProcessRunner(),
   ) {}
 
   /**
@@ -75,20 +77,9 @@ export class StoryExportWorker {
     const outputPath = join(temporaryDirectory, "story.mp4");
     const storageKey = `projects/${job.profileId}/${job.storyId}/exports/${job.manifestHash}-${randomUUID()}.mp4`;
     try {
-      const segmentPaths = await Promise.all(job.segments.map(async (segment, index) => {
-        if (!segment.storageKey || !segment.contentHash) throw exportError("segment_failed", "ready segment artifact is missing");
-        const path = join(temporaryDirectory, `segment-${String(index).padStart(4, "0")}.mp4`);
-        await pipeline(await this.storage.open(segment.storageKey), createWriteStream(path, { flags: "wx" }));
-        if (await hashFileContent(path) !== segment.contentHash) throw exportError("segment_failed", "segment content hash changed");
-        const manifestSegment = job.manifest.segments[index];
-        if (!manifestSegment) throw exportError("segment_failed", "segment manifest order is incomplete");
-        try {
-          assertSegmentProfile(await probeVideoProfile(path), job.manifest.frameRate, manifestSegment.durationFrames);
-        } catch (error) {
-          throw exportError("segment_profile_mismatch", error instanceof Error ? error.message : "segment profile mismatch");
-        }
-        return path;
-      }));
+      const videoPath = await prepareStoryExportVideo(
+        job, this.workerId, temporaryDirectory, this.queue, this.storage, this.renderCapacity, this.runner,
+      );
       const audioPath = join(temporaryDirectory, "master-audio.m4a");
       const stems = job.manifest.soundtrack && await this.fetchStems(job.manifest.soundtrack, temporaryDirectory);
       const source = await this.fetchSourceAudio(job, temporaryDirectory);
@@ -97,18 +88,19 @@ export class StoryExportWorker {
           outputPath: audioPath, durationSeconds: framesToSeconds(job.manifest.totalFrames, job.manifest.frameRate),
           levels: job.manifest.levels, source,
           ...(stems ? { soundtrack: stems } : {}),
-        });
-        await assertStoryMasterAudio(audioPath, job.manifest.totalFrames, job.manifest.frameRate);
+        }, this.runner);
+        await assertStoryMasterAudio(audioPath, job.manifest.totalFrames, job.manifest.frameRate, this.runner);
       } catch (error) {
         throw exportError("soundtrack_mismatch", error instanceof Error ? error.message : "story master audio failed");
       }
       await this.queue.reportAssemblyProgress(job.id, this.workerId, 91, "assembling");
       await this.renderCapacity.run(() => assembleStoryMaster({
-        segmentPaths, audioPath, outputPath,
+        videoPath, audioPath, outputPath,
         frameRate: job.manifest.frameRate, totalFrames: job.manifest.totalFrames,
         onProgress: (value) => { void this.queue.reportAssemblyProgress(job.id, this.workerId, 91 + value * 6, "assembling"); },
-      }));
-      const result = await probeVideoProfile(outputPath);
+      }, this.runner));
+      await assertStoryMasterAudio(outputPath, job.manifest.totalFrames, job.manifest.frameRate, this.runner);
+      const result = await probeVideoProfile(outputPath, this.runner);
       const { audioCodec: _audioCodec, audioSampleRate: _audioSampleRate, audioChannels: _audioChannels, ...video } = result;
       assertSegmentProfile(video, job.manifest.frameRate, job.manifest.totalFrames);
       if (result.audioCodec !== verticalSocialOutputProfile.audioCodec
@@ -126,7 +118,7 @@ export class StoryExportWorker {
         await this.storage.delete(storageKey).catch(() => undefined);
       }
     } catch (error) {
-      const classified = error instanceof StoryExportWorkerError
+      const classified = error instanceof StoryExportWorkerError || error instanceof StoryExportVideoError
         ? error : exportError("assembly_failed", error instanceof Error ? error.message : "story assembly failed");
       await this.queue.fail(job.id, this.workerId, classified.code, classified.message);
     } finally {

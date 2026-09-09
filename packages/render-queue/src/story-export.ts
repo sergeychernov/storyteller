@@ -1,5 +1,5 @@
 import type { RationalFrameRate } from "@storyteller/domain";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { SceneRenderInput, SceneRenderJob } from "./index.js";
 
@@ -27,6 +27,11 @@ export async function pruneExpiredExportSegments(
      ${scheduleSegmentDeletions}`,
     [cutoff],
   );
+  await queryable.query(
+    `DELETE FROM story_silent_videos video WHERE last_used_at < $1 AND NOT EXISTS (
+       SELECT 1 FROM story_exports export WHERE export.story_id = video.story_id
+         AND export.silent_video_hash = video.input_hash AND export.status IN ('queued', 'assembling')
+     )`, [cutoff]);
 }
 
 /** Both cleanups hand the freed objects to the deletion worker the same way; the storage key is all it needs. */
@@ -52,7 +57,7 @@ export interface StoryExportManifestSegment {
 
 export interface StoryExportManifest {
   /** How the master is built. Raise it when the assembly changes, so every stored master is rebuilt rather than served stale. */
-  readonly version: 2;
+  readonly version: 2 | 3;
   readonly storyRevision: number;
   readonly timelineHash: string;
   readonly outputProfileId: "vertical-social-v1";
@@ -106,7 +111,22 @@ export interface ClaimedStoryExport extends StoryExportJob {
   readonly audioSegments: readonly Pick<SceneRenderJob, "id" | "sceneId" | "storageKey" | "contentHash" | "input">[];
 }
 
+export interface StorySilentVideo {
+  readonly storageKey: string;
+  readonly contentHash: string;
+}
+
+export function storySilentVideoHash(manifest: StoryExportManifest): string {
+  return createHash("sha256").update(JSON.stringify({
+    version: 1, profile: manifest.outputProfileId,
+    frameRate: [manifest.frameRate.numerator, manifest.frameRate.denominator], totalFrames: manifest.totalFrames,
+    segments: manifest.segments.map(({ inputHash, durationFrames }) => [inputHash, durationFrames]),
+  })).digest("hex");
+}
+
 export interface StoryExportQueue {
+  findSilentVideo(exportId: string, workerId: string): Promise<StorySilentVideo | undefined>;
+  saveSilentVideo(exportId: string, workerId: string, video: StorySilentVideo): Promise<boolean>;
   enqueue(job: Pick<StoryExportJob, "id" | "profileId" | "storyId" | "manifestHash" | "manifest">): Promise<StoryExportJob | undefined>;
   findCurrentAuthorized(profileId: string, storyId: string): Promise<StoryExportJob | undefined>;
   findAuthorized(profileId: string, storyId: string, exportId: string): Promise<StoryExportJob | undefined>;
@@ -119,6 +139,25 @@ export interface StoryExportQueue {
 export class PostgresStoryExportQueue implements StoryExportQueue {
   constructor(private readonly pool: Pool) {}
 
+  async findSilentVideo(exportId: string, workerId: string): Promise<StorySilentVideo | undefined> {
+    const result = await this.pool.query<{ storage_key: string; content_hash: string }>(
+      `UPDATE story_silent_videos video SET last_used_at = now()
+       FROM story_exports export WHERE export.id = $1 AND export.worker_id = $2 AND export.status = 'assembling'
+         AND video.story_id = export.story_id AND video.input_hash = export.silent_video_hash
+       RETURNING video.storage_key, video.content_hash`, [exportId, workerId]);
+    const row = result.rows[0];
+    return row && { storageKey: row.storage_key, contentHash: row.content_hash };
+  }
+
+  async saveSilentVideo(exportId: string, workerId: string, video: StorySilentVideo): Promise<boolean> {
+    const result = await this.pool.query(
+      `INSERT INTO story_silent_videos (story_id, input_hash, storage_key, content_hash)
+       SELECT story_id, silent_video_hash, $3, $4 FROM story_exports
+       WHERE id = $1 AND worker_id = $2 AND status = 'assembling' AND silent_video_hash IS NOT NULL
+       ON CONFLICT (story_id, input_hash) DO NOTHING`, [exportId, workerId, video.storageKey, video.contentHash]);
+    return result.rowCount === 1;
+  }
+
   async enqueue(job: Pick<StoryExportJob, "id" | "profileId" | "storyId" | "manifestHash" | "manifest">): Promise<StoryExportJob | undefined> {
     const client = await this.pool.connect();
     try {
@@ -130,9 +169,19 @@ export class PostgresStoryExportQueue implements StoryExportQueue {
         await client.query("ROLLBACK");
         return undefined;
       }
+      if (job.manifest.soundtrack) {
+        const music = job.manifest.soundtrack;
+        const pinned = await client.query(
+          `SELECT id FROM soundtrack_renders WHERE id = $1 AND story_id = $2 AND status = 'ready'
+           AND rhythm_storage_key = $3 AND rhythm_content_hash = $4
+           AND melody_storage_key = $5 AND melody_content_hash = $6 FOR SHARE`,
+          [music.renderId, job.storyId, music.rhythm.storageKey, music.rhythm.contentHash,
+            music.melody.storageKey, music.melody.contentHash]);
+        if (!pinned.rowCount) { await client.query("ROLLBACK"); return undefined; }
+      }
       const parent = await client.query<{ id: string; status: StoryExportStatus }>(
-        `INSERT INTO story_exports (id, profile_id, story_id, manifest_hash, manifest, story_revision, timeline_hash, output_profile_id, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'queued')
+        `INSERT INTO story_exports (id, profile_id, story_id, manifest_hash, manifest, story_revision, timeline_hash, output_profile_id, silent_video_hash, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'queued')
          ON CONFLICT (story_id, manifest_hash) DO UPDATE SET
            status = CASE WHEN story_exports.status = 'failed' THEN 'queued' ELSE story_exports.status END,
            error_code = CASE WHEN story_exports.status = 'failed' THEN NULL ELSE story_exports.error_code END,
@@ -145,7 +194,7 @@ export class PostgresStoryExportQueue implements StoryExportQueue {
            updated_at = now()
          RETURNING id, status`,
         [job.id, job.profileId, job.storyId, job.manifestHash, job.manifest, job.manifest.storyRevision,
-          job.manifest.timelineHash, job.manifest.outputProfileId],
+          job.manifest.timelineHash, job.manifest.outputProfileId, storySilentVideoHash(job.manifest)],
       );
       const exportId = parent.rows[0]!.id;
       if (parent.rows[0]!.status !== "ready") {

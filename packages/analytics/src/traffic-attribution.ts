@@ -3,6 +3,7 @@ export type TrafficChannel =
   | "organic_search"
   | "paid_search"
   | "campaign"
+  | "social"
   | "referral"
   | "internal"
   | "unknown";
@@ -17,7 +18,11 @@ export interface TrafficAttribution {
 type AttributedSearchEngine = Exclude<SearchEngine, "not_applicable">;
 
 const noSearchEngine = "not_applicable" satisfies SearchEngine;
-const paidSearchMedia = new Set(["cpc", "ppc", "paid_search", "paidsearch", "sem"]);
+const paidSearchMedia = new Set(["paid_search", "paidsearch", "sem"]);
+const paidMedia = new Set(["cpc", "ppc", "paid"]);
+const socialMedia = new Set(["social", "social-network", "social-media", "social_network", "social_media", "paid_social", "paidsocial", "organic_social"]);
+const socialSources = new Set(["facebook", "fb", "instagram", "ig", "meta", "twitter", "x", "linkedin", "tiktok", "youtube", "pinterest", "reddit", "vk", "vkontakte", "telegram"]);
+const socialDomains = ["facebook.com", "instagram.com", "twitter.com", "x.com", "t.co", "linkedin.com", "lnkd.in", "tiktok.com", "youtube.com", "youtu.be", "pinterest.com", "reddit.com", "vk.com", "vk.ru", "ok.ru", "t.me", "telegram.me"];
 const organicSearchMedia = new Set(["organic", "organic_search", "organicsearch"]);
 const campaignParameters = ["utm_source", "utm_medium", "utm_campaign", "utm_id"] as const;
 const searchSourceAliases: Readonly<Record<Exclude<AttributedSearchEngine, "other">, ReadonlySet<string>>> = {
@@ -50,24 +55,42 @@ export function resolveTrafficAttribution(pageUrl: string | undefined, referrer:
   const page = parseUrl(pageUrl);
   if (!page) return unknownAttribution();
 
-  const paidClickEngine = searchEngineFromClickId(page);
   const medium = normalizedParameter(page, "utm_medium");
-  const campaignEngine = searchEngineFromName(normalizedParameter(page, "utm_source"));
-  if (paidClickEngine || (medium && paidSearchMedia.has(medium))) {
-    return searchAttribution("paid_search", paidClickEngine ?? campaignEngine ?? "other");
+  const source = normalizedParameter(page, "utm_source");
+  const campaignEngine = searchEngineFromName(source);
+  const referringPage = parseUrl(referrer);
+  const referrerEngine = referringPage && referringPage.origin !== page.origin
+    ? searchEngineFromHostname(referringPage.hostname) : undefined;
+  // An explicit medium wins over incidental referrers and advertising click IDs.
+  if (medium && socialMedia.has(medium)) {
+    return { traffic_channel: "social", search_engine: noSearchEngine };
   }
   if (medium && organicSearchMedia.has(medium)) {
-    return searchAttribution("organic_search", campaignEngine ?? "other");
+    return searchAttribution("organic_search", campaignEngine ?? (!source ? referrerEngine : undefined) ?? "other");
   }
-  if (campaignParameters.some((name) => normalizedParameter(page, name))) {
+  if (medium && paidSearchMedia.has(medium)) {
+    return searchAttribution("paid_search", campaignEngine ?? (!source ? referrerEngine : undefined) ?? "other");
+  }
+  if (medium === "referral") return { traffic_channel: "referral", search_engine: noSearchEngine };
+  if (medium && !paidMedia.has(medium)) return { traffic_channel: "campaign", search_engine: noSearchEngine };
+  if (source && (socialSources.has(source) || socialDomains.some((domain) => matchesDomain(source, domain)))) {
+    return { traffic_channel: "social", search_engine: noSearchEngine };
+  }
+  const paidClickEngine = searchEngineFromClickId(page);
+  if (paidClickEngine || (medium && paidMedia.has(medium) && campaignEngine)) {
+    return searchAttribution("paid_search", paidClickEngine ?? campaignEngine ?? "other");
+  }
+  if (normalizedParameter(page, "dclid") || campaignParameters.some((name) => normalizedParameter(page, name))) {
     return { traffic_channel: "campaign", search_engine: noSearchEngine };
   }
 
   if (!referrer?.trim()) return { traffic_channel: "direct", search_engine: noSearchEngine };
-  const referringPage = parseUrl(referrer);
   if (!referringPage) return unknownAttribution();
   if (referringPage.origin === page.origin) return { traffic_channel: "internal", search_engine: noSearchEngine };
 
+  if (socialDomains.some((domain) => matchesDomain(referringPage.hostname, domain))) {
+    return { traffic_channel: "social", search_engine: noSearchEngine };
+  }
   const searchEngine = searchEngineFromHostname(referringPage.hostname);
   return searchEngine
     ? searchAttribution("organic_search", searchEngine)
@@ -89,7 +112,7 @@ function normalizedParameter(url: URL, name: string): string | undefined {
 }
 
 function searchEngineFromClickId(url: URL): Exclude<AttributedSearchEngine, "other"> | undefined {
-  if (normalizedParameter(url, "gclid") || normalizedParameter(url, "dclid")) return "google";
+  if (normalizedParameter(url, "gclid")) return "google";
   if (normalizedParameter(url, "yclid")) return "yandex";
   if (normalizedParameter(url, "msclkid")) return "bing";
   return undefined;
@@ -100,7 +123,7 @@ function searchEngineFromName(value: string | undefined): AttributedSearchEngine
   for (const [engine, aliases] of Object.entries(searchSourceAliases) as [Exclude<AttributedSearchEngine, "other">, ReadonlySet<string>][]) {
     if (aliases.has(value)) return engine;
   }
-  return undefined;
+  return searchEngineFromHostname(value);
 }
 
 function searchEngineFromHostname(hostname: string): AttributedSearchEngine | undefined {
@@ -112,7 +135,8 @@ function searchEngineFromHostname(hostname: string): AttributedSearchEngine | un
 }
 
 function matchesDomain(hostname: string, domain: string): boolean {
-  return hostname === domain || hostname.endsWith(`.${domain}`);
+  const normalized = hostname.toLowerCase().replace(/\.$/, "");
+  return normalized === domain || normalized.endsWith(`.${domain}`);
 }
 
 function searchAttribution(channel: "organic_search" | "paid_search", searchEngine: AttributedSearchEngine): TrafficAttribution {

@@ -93,13 +93,39 @@ result; the client never infers registration from whether the name field was
 shown or submitted.
 
 `traffic_channel` is restricted to `direct`, `organic_search`, `paid_search`,
-`campaign`, `referral`, `internal`, or `unknown`. `search_engine` is restricted
+`campaign`, `social`, `referral`, `internal`, or `unknown`. `search_engine` is restricted
 to `google`, `yandex`, `bing`, `duckduckgo`, `yahoo`, `baidu`, `other`, or
 `not_applicable`; it must be `not_applicable` for every non-search channel.
 Classification happens in the browser from the current document URL and
 referrer, but only those categorical values reach the typed event and relay.
 Malformed inputs become `unknown`, and existing historical events are not
 backfilled.
+
+Explicit UTM media take precedence over referrer and click IDs: social media
+(including `paid_social`) maps to `social`, organic/search media to their search
+channel, `referral` to `referral`, and other explicit media such as email to
+`campaign`. For generic paid media (`cpc`, `ppc`, `paid`) a recognized social
+source maps to `social`; a recognized search source or search click ID maps to
+`paid_search`. An unknown paid source stays `campaign`. Source names and known
+provider hostnames are accepted. A search referrer can supply the engine for an
+explicit search medium only when `utm_source` is absent.
+
+Without explicit media, recognized social sources take precedence over click
+IDs. Google `gclid`, Yandex `yclid`, and Bing `msclkid` are treated as paid-search
+signals; this is a heuristic, since click IDs alone cannot prove ad placement.
+`dclid` alone stays `campaign` (display advertising). Remaining UTM campaigns
+stay `campaign`; otherwise the external referrer identifies search, social, or
+referral traffic. Same-origin referrers are `internal`. An empty referrer without
+campaign signals is `direct`, which also includes visits whose source the
+browser or referring app withheld. No classifier can recover that missing data.
+
+Attribution is captured once per document and reused for SPA page views; it is
+not session-wide acquisition attribution across document reloads or frontends.
+Deploy the updated API allowlist before the frontend that emits `social`.
+Validate new arrivals after deployment with controlled search, social, referral,
+and direct entries and inspect the received `page viewed` properties. A zero
+count alone does not establish a tracking failure or absence of search visits.
+
 
 To answer whether search traffic is arriving in Amplitude, create an Event
 Segmentation chart for `page viewed`, filter `surface = site`, and group by the

@@ -819,6 +819,29 @@ export const migrations = [{
     UPDATE scene_renders SET last_used_at = now()
       WHERE input->>'artifact' = 'story-export-segment' AND status = 'ready';
   `,
+}, {
+  version: 20,
+  sql: `
+    ALTER TABLE story_exports ADD COLUMN silent_video_hash char(64);
+    CREATE TABLE story_silent_videos (
+      story_id uuid NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      input_hash char(64) NOT NULL,
+      storage_key text NOT NULL,
+      content_hash char(64) NOT NULL,
+      last_used_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (story_id, input_hash)
+    );
+    CREATE INDEX story_silent_videos_retention_idx ON story_silent_videos(last_used_at);
+    CREATE FUNCTION delete_story_silent_video_object() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      INSERT INTO object_deletion_jobs (storage_key) VALUES (OLD.storage_key)
+      ON CONFLICT (storage_key) DO NOTHING;
+      RETURN OLD;
+    END;
+    $$;
+    CREATE TRIGGER story_silent_videos_delete AFTER DELETE ON story_silent_videos
+      FOR EACH ROW EXECUTE FUNCTION delete_story_silent_video_object();
+  `,
 }];
 
 export async function migrateDatabase(pool: Pool): Promise<void> {
