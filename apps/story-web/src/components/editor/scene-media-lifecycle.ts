@@ -23,17 +23,22 @@ export function createSceneMediaLifecycle(
   return {
     async prepare(localTimeSeconds) {
       seek(localTimeSeconds);
-      if (media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
+      if (!media.seeking && media.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
       await new Promise<void>((resolve, reject) => {
-        const ready = () => { cleanup(); resolve(); };
+        const ready = () => {
+          if (media.seeking || media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+          cleanup(); resolve();
+        };
         const failed = () => { cleanup(); reject(new Error("preview media failed to prepare")); };
         const cleanup = () => {
           media.removeEventListener("canplay", ready);
+          media.removeEventListener("seeked", ready);
           media.removeEventListener("error", failed);
           pendingCleanups.delete(cleanup);
         };
         pendingCleanups.add(cleanup);
-        media.addEventListener("canplay", ready, { once: true });
+        media.addEventListener("canplay", ready);
+        media.addEventListener("seeked", ready);
         media.addEventListener("error", failed, { once: true });
       });
     },

@@ -34,6 +34,8 @@ export interface SceneMediaTrack<T extends HTMLMediaElement> {
   readonly events: {
     readonly onLoadedMetadata: () => void;
     readonly onCanPlay: () => void;
+    readonly onSeeking: () => void;
+    readonly onSeeked: () => void;
     readonly onPlaying: () => void;
     readonly onWaiting: (event: SyntheticEvent<T>) => void;
     readonly onStalled: (event: SyntheticEvent<T>) => void;
@@ -104,7 +106,12 @@ export function useSceneMediaTrack<T extends HTMLMediaElement>(options: SceneMed
     if (!followsNativeClock(previous, clockSample.current)) lifecycle.current?.seek(options.localTimeSeconds);
   }, [options.localTimeSeconds, options.shouldPlay, options.sourceKey]);
 
-  const ready = () => report.current({ resourceId: options.resourceId, state: "ready" });
+  const ready = () => {
+    const element = mediaRef.current;
+    if (element && !element.seeking && element.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      report.current({ resourceId: options.resourceId, state: "ready" });
+    }
+  };
   const fail = () => report.current({ resourceId: options.resourceId, state: "failed" });
   const wait = (event: SyntheticEvent<T>) => {
     if (options.reportWaiting && shouldSceneMediaReportWaiting(
@@ -122,6 +129,8 @@ export function useSceneMediaTrack<T extends HTMLMediaElement>(options: SceneMed
         void lifecycle.current?.prepare(localTime.current).then(ready).catch(fail);
       },
       onCanPlay: ready,
+      onSeeking: () => report.current({ resourceId: options.resourceId, state: "waiting" }),
+      onSeeked: ready,
       onPlaying() {
         observedPlaying.current = true;
         ready();

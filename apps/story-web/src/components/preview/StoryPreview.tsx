@@ -1,5 +1,5 @@
 import { analytics } from "@storyteller/analytics";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { AuthSession, Story, StoryTimeline } from "../../api.js";
 import { getEditorCopy } from "../editor/editor-copy.js";
@@ -12,6 +12,9 @@ import { StoryPreviewStage, type StoryPreviewStageHandle } from "./StoryPreviewS
 import { useStoryPreviewController } from "./use-story-preview-controller.js";
 import { StoryExportPanel } from "./StoryExportPanel.js";
 import { SoundtrackPanel, type SoundtrackPanelHandle } from "./SoundtrackPanel.js";
+import type { SoundtrackPlaybackStatus } from "./story-preview-machine.js";
+import { PreviewMediaPreloader } from "./PreviewMediaPreloader.js";
+import { MaterialContentScope } from "../editor/use-material-content-url.js";
 import { useSoundtrackMix } from "./use-soundtrack-mix.js";
 import { useLocalization } from "@storyteller/web-ui";
 import styles from "./StoryPreview.module.css";
@@ -35,7 +38,8 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
   const trackCompleted = useCallback(() => {
     analytics.track("story preview completed", { web_layout: desktop ? "desktop" : "mobile_web" });
   }, [desktop]);
-  const controller = useStoryPreviewController({ timeline, onCompleted: trackCompleted });
+  const [soundtrackStatus, setSoundtrackStatus] = useState<SoundtrackPlaybackStatus>("loading");
+  const controller = useStoryPreviewController({ timeline, onCompleted: trackCompleted, soundtrackStatus });
   const position = positionAtPlayhead(timeline, controller.snapshot.playheadSeconds);
   const pendingScene = controller.snapshot.pendingTimelineIndex === undefined
     ? undefined : timeline.scenes[controller.snapshot.pendingTimelineIndex];
@@ -45,7 +49,6 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
 
   const play = () => {
     soundtrack.current?.prepareFromGesture();
-    if (mix.video > 0) stage.current?.playAudibleFromGesture();
     controller.play();
   };
   const changeVideoLevel = (value: number) => {
@@ -66,20 +69,23 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
     <main className={styles.main}>
       <div className={styles.canvasArea}>
         <span className={styles.canvasBadge}>{previewCopy.canvas} · 9:16</span>
-        <StoryPreviewStage
-          ref={stage}
-          story={story}
-          timeline={timeline}
-          session={session}
-          snapshot={controller.snapshot}
-          videoLevel={mix.video}
-          reducedMotion={reducedMotion}
-          copy={editorCopy}
-          onReady={controller.onSceneReady}
-          onWaiting={controller.onSceneWaiting}
-          onFailed={controller.onSceneFailed}
-          onUnexpectedPause={controller.onUnexpectedPause}
-        />
+        <MaterialContentScope value={`preview:${story.id}:${story.revision}:${controller.snapshot.retryKey}`}>
+          <PreviewMediaPreloader key={`${story.revision}:${controller.snapshot.retryKey}`} story={story} timeline={timeline} session={session} snapshot={controller.snapshot} />
+          <StoryPreviewStage
+            ref={stage}
+            story={story}
+            timeline={timeline}
+            session={session}
+            snapshot={controller.snapshot}
+            videoLevel={mix.video}
+            reducedMotion={reducedMotion}
+            copy={editorCopy}
+            onReady={controller.onSceneReady}
+            onWaiting={controller.onSceneWaiting}
+            onFailed={controller.onSceneFailed}
+            onUnexpectedPause={controller.onUnexpectedPause}
+          />
+        </MaterialContentScope>
       </div>
 
       <section className={styles.transport} aria-label={previewCopy.totalDuration}>
@@ -103,14 +109,14 @@ export function StoryPreview({ story, timeline, session }: StoryPreviewProps) {
         </div>
         <div className={styles.status} role={controller.snapshot.status === "failed" ? "alert" : "status"} aria-live="polite">
           {position ? statusText(controller.snapshot.status, previewCopy, pendingScene?.index) : previewCopy.noPlayableScenes}
-          {controller.snapshot.status === "failed" && <button type="button" onClick={controller.retry}>{previewCopy.retry}</button>}
+          {controller.snapshot.status === "failed" && <button type="button" onClick={() => { soundtrack.current?.prepareFromGesture(); controller.retry(); }}>{previewCopy.retry}</button>}
         </div>
         {controller.snapshot.revisionReset && <p className={styles.revisionNotice}>{previewCopy.changed}</p>}
       </section>
 
       <TimelineFacts timeline={timeline} previewCopy={previewCopy} editorCopy={editorCopy} />
       <SoundtrackPanel ref={soundtrack} story={story} timeline={timeline} session={session}
-        snapshot={controller.snapshot} mix={mix} sourceAudible={sourceAudible}
+        snapshot={controller.snapshot} mix={mix} sourceAudible={sourceAudible} onPlaybackStatus={setSoundtrackStatus}
         onMixChange={(channel, value) => channel === "video" ? changeVideoLevel(value) : changeMix(channel, value)} />
       <StoryExportPanel story={story} session={session} />
     </main>

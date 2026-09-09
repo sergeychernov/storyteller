@@ -47,6 +47,7 @@ export class SoundtrackMixer {
   private startedAt = 0;
   private offset = 0;
   private generation = 0;
+  private disposed = false;
   private duckMultiplier = 1;
   private ducked = false;
   duration = 0;
@@ -61,6 +62,7 @@ export class SoundtrackMixer {
   async load(tracks: readonly SoundtrackMixerTrack[]): Promise<void> {
     const decoded = await Promise.all(tracks.map(async ({ id, url }) =>
       [id, await this.context.decodeAudioData(await this.fetchStem(url))] as const));
+    if (this.disposed) return;
     for (const [id, buffer] of decoded) {
       const gain = this.context.createGain();
       gain.connect(this.context.destination);
@@ -110,8 +112,10 @@ export class SoundtrackMixer {
   }
 
   async play(offsetSeconds?: number): Promise<void> {
-    if (this.playing || !this.buffers.size) return;
+    if (this.disposed || this.playing || !this.buffers.size) return;
+    const requestGeneration = this.generation;
     if (this.context.state === "suspended") await this.context.resume();
+    if (this.disposed || requestGeneration !== this.generation) return;
     if (offsetSeconds !== undefined) this.offset = Math.max(0, Math.min(this.duration, offsetSeconds));
     if (this.offset >= this.duration) this.offset = 0;
     const generation = this.generation;
@@ -157,11 +161,12 @@ export class SoundtrackMixer {
     return Math.min(this.duration, this.offset + (this.context.currentTime - this.startedAt));
   }
 
-  dispose(): void {
+  dispose(closeContext = true): void {
+    this.disposed = true;
     this.stopSources();
     this.buffers.clear();
     this.gains.clear();
-    void this.context.close();
+    if (closeContext) void this.context.close();
   }
 
   private stopSources(): void {

@@ -14,7 +14,10 @@ export interface StoryPreviewSnapshot {
   readonly revisionReset: boolean;
 }
 
+export type SoundtrackPlaybackStatus = "loading" | "ready" | "failed";
+
 export interface StoryPreviewMachine extends StoryPreviewSnapshot {
+  readonly soundtrackStatus: SoundtrackPlaybackStatus;
   readonly timelineRevision: number;
   readonly readyScenes: readonly number[];
   readonly failedScenes: readonly number[];
@@ -23,6 +26,7 @@ export interface StoryPreviewMachine extends StoryPreviewSnapshot {
 }
 
 export type StoryPreviewAction =
+  | { readonly type: "soundtrack-status"; readonly status: SoundtrackPlaybackStatus }
   | { readonly type: "timeline-revised"; readonly timeline: StoryTimeline }
   | { readonly type: "play" }
   | { readonly type: "pause" }
@@ -37,6 +41,7 @@ export type StoryPreviewAction =
 export function createStoryPreviewMachine(timeline: StoryTimeline): StoryPreviewMachine {
   return {
     status: "ready",
+    soundtrackStatus: "ready",
     playheadSeconds: 0,
     currentTimelineIndex: firstPlayableTimelineIndex(timeline),
     pendingTimelineIndex: undefined,
@@ -59,10 +64,22 @@ export function reduceStoryPreview(
     if (state.timelineRevision === action.timeline.revision) return state;
     return {
       ...createStoryPreviewMachine(action.timeline),
+      soundtrackStatus: state.soundtrackStatus,
       retryKey: state.retryKey + 1,
       completedPasses: state.completedPasses,
       revisionReset: true,
     };
+  }
+  if (action.type === "soundtrack-status") {
+    const next = { ...state, soundtrackStatus: action.status };
+    if (action.status === "ready") {
+      const target = state.pendingTimelineIndex ?? state.currentTimelineIndex;
+      return state.status === "buffering" && target !== undefined && state.readyScenes.includes(target)
+        ? sceneReady(next, target) : next;
+    }
+    if (state.status !== "playing" && state.status !== "buffering") return next;
+    return { ...next, status: action.status === "failed" ? "failed" : "buffering",
+      pendingTimelineIndex: state.pendingTimelineIndex ?? state.currentTimelineIndex, resumeWhenReady: state.resumeWhenReady };
   }
   if (action.type === "play") return play(state, timeline);
   if (action.type === "pause") return pause(state);
@@ -129,9 +146,9 @@ function moveTo(
   const hasLiveResources = state.currentTimelineIndex === timelineIndex
     || state.currentTimelineIndex !== undefined
       && nextPlayableTimelineIndex(timeline, state.currentTimelineIndex) === timelineIndex;
-  const failed = hasLiveResources && state.failedScenes.includes(timelineIndex);
+  const failed = state.soundtrackStatus === "failed" || hasLiveResources && state.failedScenes.includes(timelineIndex);
   const ready = hasLiveResources && state.readyScenes.includes(timelineIndex);
-  const waiting = !failed && !ready;
+  const waiting = !failed && (!ready || state.soundtrackStatus !== "ready");
   return {
     ...state,
     status: failed ? "failed" : waiting ? "buffering" : resumeWhenReady ? "playing" : "paused",
@@ -183,7 +200,7 @@ function sceneReady(state: StoryPreviewMachine, timelineIndex: number): StoryPre
     readyScenes: withValue(state.readyScenes, timelineIndex),
     failedScenes: without(state.failedScenes, timelineIndex),
   };
-  if (state.status !== "buffering" || state.pendingTimelineIndex !== timelineIndex) return next;
+  if (state.status !== "buffering" || state.pendingTimelineIndex !== timelineIndex || state.soundtrackStatus !== "ready") return next;
   return {
     ...next,
     status: state.resumeWhenReady ? "playing" : "paused",

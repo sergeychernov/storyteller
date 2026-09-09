@@ -72,3 +72,42 @@ describe("story preview state machine", () => {
     expect(state).toMatchObject({ status: "playing", currentTimelineIndex: 0, pendingTimelineIndex: undefined });
   });
 });
+
+it("waits for both music and scene, freezes on stalls, and never resumes after a loading pause", () => {
+  let state = createStoryPreviewMachine(timeline);
+  const send = (action: StoryPreviewAction) => { state = reduceStoryPreview(state, action, timeline); };
+  send({ type: "soundtrack-status", status: "loading" });
+  send({ type: "play" });
+  send({ type: "scene-ready", timelineIndex: 0 });
+  send({ type: "tick", elapsedSeconds: 2 });
+  expect(state).toMatchObject({ status: "buffering", playheadSeconds: 0 });
+  send({ type: "soundtrack-status", status: "ready" });
+  expect(state.status).toBe("playing");
+  send({ type: "tick", elapsedSeconds: 0.5 });
+  send({ type: "scene-waiting", timelineIndex: 0 });
+  send({ type: "tick", elapsedSeconds: 10 });
+  expect(state).toMatchObject({ status: "buffering", playheadSeconds: 0.5 });
+  send({ type: "seek", playheadSeconds: 2 });
+  send({ type: "pause" });
+  send({ type: "soundtrack-status", status: "loading" });
+  send({ type: "scene-ready", timelineIndex: 1 });
+  send({ type: "soundtrack-status", status: "ready" });
+  expect(state).toMatchObject({ status: "paused", playheadSeconds: 2 });
+  send({ type: "play" });
+  expect(state).toMatchObject({ status: "playing", playheadSeconds: 2 });
+});
+
+it("does not resume from a scene event while soundtrack recovery is still pending", () => {
+  let state = createStoryPreviewMachine(timeline);
+  const send = (action: StoryPreviewAction) => { state = reduceStoryPreview(state, action, timeline); };
+  send({ type: "scene-ready", timelineIndex: 0 });
+  send({ type: "play" });
+  send({ type: "soundtrack-status", status: "failed" });
+  expect(state.status).toBe("failed");
+  send({ type: "retry" });
+  send({ type: "soundtrack-status", status: "loading" });
+  send({ type: "scene-ready", timelineIndex: 0 });
+  expect(state.status).toBe("buffering");
+  send({ type: "soundtrack-status", status: "ready" });
+  expect(state.status).toBe("playing");
+});

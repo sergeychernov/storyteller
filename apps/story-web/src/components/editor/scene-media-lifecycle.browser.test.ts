@@ -46,9 +46,9 @@ describe("preview renderer lifecycle", () => {
     const lifecycle = createSceneMediaLifecycle(video, (localTime) => localTime);
 
     void lifecycle.prepare(0);
-    expect(add).toHaveBeenCalledTimes(2);
+    expect(add).toHaveBeenCalledTimes(3);
     lifecycle.dispose();
-    expect(remove).toHaveBeenCalledTimes(2);
+    expect(remove).toHaveBeenCalledTimes(3);
   });
 
   it("deduplicates overlapping play requests and honors pause while play is pending", async () => {
@@ -105,4 +105,22 @@ describe("preview renderer lifecycle", () => {
 
     await expect(lifecycle.play(1)).rejects.toMatchObject({ name: "NotSupportedError" });
   });
+});
+
+it("does not report ready until a pending seek has produced usable data", async () => {
+  const video = document.createElement("video");
+  Object.defineProperties(video, {
+    duration: { value: 10 }, readyState: { value: HTMLMediaElement.HAVE_FUTURE_DATA },
+    seeking: { configurable: true, value: true },
+  });
+  const lifecycle = createSceneMediaLifecycle(video, (value) => value);
+  const ready = vi.fn();
+  const pending = lifecycle.prepare(2).then(ready);
+  video.dispatchEvent(new Event("canplay"));
+  await Promise.resolve();
+  expect(ready).not.toHaveBeenCalled();
+  Object.defineProperty(video, "seeking", { value: false });
+  video.dispatchEvent(new Event("seeked"));
+  await pending;
+  expect(ready).toHaveBeenCalledOnce();
 });

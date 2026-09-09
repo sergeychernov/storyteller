@@ -1,25 +1,29 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef } from "react";
 import type { StoryTimeline } from "../../api.js";
 import { usePlaybackClock } from "../editor/use-looping-scene-time.js";
 import {
   createStoryPreviewMachine, reduceStoryPreview,
-  type StoryPreviewSnapshot, type StoryPreviewStatus,
+  type StoryPreviewSnapshot, type StoryPreviewStatus, type SoundtrackPlaybackStatus,
 } from "./story-preview-machine.js";
 
 export type { StoryPreviewSnapshot, StoryPreviewStatus } from "./story-preview-machine.js";
 
 interface UseStoryPreviewControllerOptions {
   readonly timeline: StoryTimeline;
+  readonly soundtrackStatus?: SoundtrackPlaybackStatus;
   readonly onCompleted: () => void;
 }
 
-export function useStoryPreviewController({ timeline, onCompleted }: UseStoryPreviewControllerOptions) {
+export function useStoryPreviewController({ timeline, onCompleted, soundtrackStatus = "ready" }: UseStoryPreviewControllerOptions) {
   const [machine, dispatch] = useReducer(
     (state: ReturnType<typeof createStoryPreviewMachine>, action: Parameters<typeof reduceStoryPreview>[1]) =>
       reduceStoryPreview(state, action, timeline),
     timeline,
-    createStoryPreviewMachine,
+    (value) => ({ ...createStoryPreviewMachine(value), soundtrackStatus }),
   );
+  useLayoutEffect(() => {
+    dispatch({ type: "soundtrack-status", status: soundtrackStatus });
+  }, [soundtrackStatus]);
   const completedPasses = useRef(machine.completedPasses);
   const completionCallback = useRef(onCompleted);
   completionCallback.current = onCompleted;

@@ -1,7 +1,7 @@
 import { analytics, type SoundtrackDurationBucket } from "@storyteller/analytics";
 import type { SoundtrackMix } from "@storyteller/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useState } from "react";
 import { useLocalization } from "@storyteller/web-ui";
 import { useCapability } from "../../access-control.js";
 import {
@@ -10,15 +10,14 @@ import {
   type Story, type StoryTimeline,
 } from "../../api.js";
 import { rememberRequestedSoundtrack, takeRequestedSoundtrack } from "./soundtrack-analytics.js";
-import { createSoundtrackAudioContext, SoundtrackMixer } from "./soundtrack-mixer.js";
+import { useSoundtrackPlayback } from "./use-soundtrack-playback.js";
+import type { SoundtrackPlaybackStatus } from "./story-preview-machine.js";
 import { SoundtrackStylePicker } from "./SoundtrackStylePicker.js";
 import type { StoryPreviewSnapshot } from "./use-story-preview-controller.js";
 import styles from "./SoundtrackPanel.module.css";
 
 const maximumSoundtrackSeconds = 180;
 const siteUrl = (import.meta.env.VITE_SITE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
-/** Re-aligns the stems after a scrub or a scene stall without restarting them on ordinary clock jitter. */
-const syncToleranceSeconds = 0.25;
 
 export interface SoundtrackPanelHandle {
   /** Opens the audio context inside the same gesture that starts the video, as autoplay policies require. */
@@ -32,11 +31,12 @@ export interface SoundtrackPanelProps {
   readonly snapshot: StoryPreviewSnapshot;
   readonly mix: SoundtrackMix;
   readonly sourceAudible: boolean;
+  readonly onPlaybackStatus?: ((status: SoundtrackPlaybackStatus) => void) | undefined;
   readonly onMixChange: (channel: keyof SoundtrackMix, value: number) => void;
 }
 
 export const SoundtrackPanel = forwardRef<SoundtrackPanelHandle, SoundtrackPanelProps>(function SoundtrackPanel({
-  story, timeline, session, snapshot, mix, sourceAudible, onMixChange,
+  story, timeline, session, snapshot, mix, sourceAudible, onMixChange, onPlaybackStatus,
 }, ref) {
   const { locale } = useLocalization();
   const copy = copies[locale];
@@ -61,9 +61,16 @@ export const SoundtrackPanel = forwardRef<SoundtrackPanelHandle, SoundtrackPanel
   });
   const value = soundtrack.data;
   const ready = value?.status === "ready" && value.current;
-  const playback = useStemPlayback(story.id, ready ? value : undefined, snapshot, mix, sourceAudible);
-  useImperativeHandle(ref, () => ({ prepareFromGesture: playback.prepareFromGesture }), [playback.prepareFromGesture]);
-
+  const playback = useSoundtrackPlayback(story.id, ready ? value : undefined, snapshot, mix, sourceAudible);
+  useImperativeHandle(ref, () => ({ prepareFromGesture: () => {
+    playback.prepareFromGesture();
+    if (soundtrack.isError) void soundtrack.refetch();
+  } }), [playback.prepareFromGesture, soundtrack.isError, soundtrack.refetch]);
+  const playbackStatus: SoundtrackPlaybackStatus = !canGenerate ? "ready"
+    : soundtrack.isError ? "failed"
+    : soundtrack.isPending ? "loading"
+    : !ready ? "ready" : playback.status === "error" ? "failed" : playback.status === "ready" ? "ready" : "loading";
+  useLayoutEffect(() => { onPlaybackStatus?.(playbackStatus); }, [onPlaybackStatus, playbackStatus]);
   useEffect(() => {
     // Reported once per render the creator asked for, whether or not the tab watched it finish.
     if (value?.status !== "ready" || !takeRequestedSoundtrack(value.id)) return;
@@ -136,68 +143,6 @@ export const SoundtrackPanel = forwardRef<SoundtrackPanelHandle, SoundtrackPanel
     <small className={styles.license}>{copy.licensePrefix} <a href={`${siteUrl}/music-license`} target="_blank" rel="noreferrer">{copy.licenseLink}</a></small>
   </section>;
 });
-
-const stemOrder = ["rhythm", "melody"] as const;
-
-/** Follows the preview transport instead of owning one, so the stems start with the same button as the video. */
-function useStemPlayback(
-  storyId: string,
-  render: SoundtrackRender | undefined,
-  snapshot: StoryPreviewSnapshot,
-  mix: SoundtrackMix,
-  sourceAudible: boolean,
-) {
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const mixer = useRef<SoundtrackMixer | undefined>(undefined);
-  const stems = stemOrder.filter((stem) => render?.stems?.includes(stem));
-  const identity = render && stems.length ? `${render.id}:${stems.join(",")}` : "";
-  const playing = snapshot.status === "playing" || snapshot.status === "buffering";
-  const settings = useRef({ mix, sourceAudible, stems, identity, storyId, renderId: render?.id });
-  settings.current = { mix, sourceAudible, stems, identity, storyId, renderId: render?.id };
-
-  useEffect(() => () => {
-    mixer.current?.dispose();
-    mixer.current = undefined;
-  }, [identity]);
-  useEffect(() => setStatus("idle"), [identity]);
-
-  const prepareFromGesture = useCallback(() => {
-    const current = settings.current;
-    if (mixer.current || !current.identity || !current.renderId) return;
-    const context = createSoundtrackAudioContext();
-    if (!context) return setStatus("error");
-    const instance = new SoundtrackMixer(context, () => undefined);
-    mixer.current = instance;
-    for (const stem of current.stems) instance.setLevel(stem, current.mix[stem]);
-    instance.setDucking(current.sourceAudible, current.mix.duckedMelody, 0);
-    setStatus("loading");
-    instance.load(current.stems.map((stem) => ({ id: stem, url: soundtrackAudioUrl(current.storyId, current.renderId!, { stem }) })))
-      .then(() => setStatus("ready"))
-      .catch(() => {
-        instance.dispose();
-        mixer.current = undefined;
-        setStatus("error");
-      });
-  }, []);
-
-  useEffect(() => {
-    const instance = mixer.current;
-    if (!instance || status !== "ready") return;
-    if (playing && !instance.playing) void instance.play(snapshot.playheadSeconds);
-    else if (!playing && instance.playing) instance.pause();
-    else if (Math.abs(instance.position() - snapshot.playheadSeconds) > syncToleranceSeconds) {
-      instance.seek(snapshot.playheadSeconds);
-    }
-  }, [playing, snapshot.playheadSeconds, status]);
-  useEffect(() => {
-    for (const stem of stemOrder) mixer.current?.setLevel(stem, mix[stem]);
-  }, [mix.melody, mix.rhythm, status]);
-  useEffect(() => {
-    mixer.current?.setDucking(sourceAudible, mix.duckedMelody);
-  }, [mix.duckedMelody, sourceAudible, status]);
-
-  return { status, stems, prepareFromGesture };
-}
 
 /** One button: the first press creates the soundtrack, later presses replace it with another melody. */
 function nextMelodyVariant(render: SoundtrackRender | null | undefined, presetId: SoundtrackPresetId): number {

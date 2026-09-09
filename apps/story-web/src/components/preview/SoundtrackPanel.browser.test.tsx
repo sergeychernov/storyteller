@@ -102,6 +102,75 @@ describe("SoundtrackPanel", () => {
     await waitFor(() => expect(context.stopped).toBe(2));
   });
 
+  it("prepares silently, pauses music during buffering and resumes at the shared position", async () => {
+    const context = installAudioContext();
+    api.getCurrentSoundtrack.mockResolvedValue(ready);
+    const handle = createRef<SoundtrackPanelHandle>();
+    const onPlaybackStatus = vi.fn();
+    const waiting = { ...pausedSnapshot, status: "buffering" as const };
+    const view = renderPanel({ handle, snapshot: waiting, onPlaybackStatus });
+    await screen.findByText(/Ready\./);
+    handle.current!.prepareFromGesture();
+    await waitFor(() => expect(onPlaybackStatus).toHaveBeenLastCalledWith("ready"));
+    expect(context.started).toEqual([]);
+    view.rerender(panel({ handle, snapshot: { ...waiting, status: "playing", playheadSeconds: 2 } }));
+    await waitFor(() => expect(context.started).toEqual([2, 2]));
+    view.rerender(panel({ handle, snapshot: { ...waiting, playheadSeconds: 3 } }));
+    await waitFor(() => expect(context.stopped).toBe(2));
+    view.rerender(panel({ handle, snapshot: { ...waiting, status: "paused", playheadSeconds: 5 } }));
+    expect(context.started).toEqual([2, 2]);
+    view.rerender(panel({ handle, snapshot: { ...waiting, status: "playing", playheadSeconds: 5 } }));
+    await waitFor(() => expect(context.started).toEqual([2, 2, 5, 5]));
+    view.rerender(panel({ handle, snapshot: { ...waiting, status: "completed", retryKey: 1 } }));
+    expect(fetched).toHaveLength(2); // Replay reuses decoded stems.
+  });
+
+  it("does not restart an ended track before the final video frame, but permits replay", async () => {
+    const context = installAudioContext();
+    api.getCurrentSoundtrack.mockResolvedValue(ready);
+    const handle = createRef<SoundtrackPanelHandle>();
+    const view = renderPanel({ handle });
+    await screen.findByText(/Ready\./);
+    handle.current!.prepareFromGesture();
+    await waitFor(() => expect(context.gains).toHaveLength(2));
+    view.rerender(panel({ handle, snapshot: { ...pausedSnapshot, status: "playing", playheadSeconds: 9.98 } }));
+    await waitFor(() => expect(context.started).toEqual([9.98, 9.98]));
+    context.sources[0]!.onended!();
+    view.rerender(panel({ handle, snapshot: { ...pausedSnapshot, status: "playing", playheadSeconds: 9.99 } }));
+    expect(context.started).toEqual([9.98, 9.98]);
+    view.rerender(panel({ handle, snapshot: { ...pausedSnapshot, status: "completed", retryKey: 1 } }));
+    view.rerender(panel({ handle, snapshot: { ...pausedSnapshot, status: "playing", retryKey: 1 } }));
+    await waitFor(() => expect(context.started).toEqual([9.98, 9.98, 0, 0]));
+    expect(fetched).toHaveLength(2);
+  });
+
+  it("remembers Play while soundtrack metadata is loading, without requiring a second gesture", async () => {
+    const context = installAudioContext();
+    let resolve!: (value: SoundtrackRender) => void;
+    api.getCurrentSoundtrack.mockReturnValue(new Promise<SoundtrackRender>((done) => { resolve = done; }));
+    const handle = createRef<SoundtrackPanelHandle>();
+    const onPlaybackStatus = vi.fn();
+    renderPanel({ handle, onPlaybackStatus, snapshot: { ...pausedSnapshot, status: "buffering" } });
+    handle.current!.prepareFromGesture();
+    resolve(ready);
+    await waitFor(() => expect(onPlaybackStatus).toHaveBeenLastCalledWith("ready"));
+    expect(context.started).toEqual([]);
+    expect(fetched).toHaveLength(2);
+  });
+
+  it("retries failed soundtrack metadata from the transport gesture", async () => {
+    const context = installAudioContext();
+    api.getCurrentSoundtrack.mockRejectedValueOnce(new Error("offline")).mockResolvedValue(ready);
+    const handle = createRef<SoundtrackPanelHandle>();
+    const onPlaybackStatus = vi.fn();
+    renderPanel({ handle, onPlaybackStatus, snapshot: { ...pausedSnapshot, status: "buffering" } });
+    await waitFor(() => expect(onPlaybackStatus).toHaveBeenLastCalledWith("failed"));
+    handle.current!.prepareFromGesture();
+    await waitFor(() => expect(onPlaybackStatus).toHaveBeenLastCalledWith("ready"));
+    expect(api.getCurrentSoundtrack).toHaveBeenCalledTimes(2);
+    expect(context.started).toEqual([]);
+  });
+
   it("restores and polls an in-progress soundtrack after reload without duplicating analytics", async () => {
     api.getCurrentSoundtrack.mockResolvedValueOnce({
       ...ready, status: "running", progressPercent: 35, progressPhase: "synthesizing",
@@ -157,7 +226,7 @@ const fetched: string[] = [];
 /** jsdom has no Web Audio, so the mixer runs against a stub graph that records what the panel asked it to play. */
 function installAudioContext() {
   const gains: { gain: { value: number } }[] = [];
-  const context = { gains, started: [] as number[], stopped: 0 };
+  const context = { gains, started: [] as number[], stopped: 0, sources: [] as { onended: (() => void) | null }[] };
   vi.stubGlobal("fetch", (url: string) => {
     fetched.push(String(url));
     return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) });
@@ -173,8 +242,10 @@ function installAudioContext() {
       return gain;
     }
     createBufferSource() {
-      return { buffer: null, onended: null, connect() {}, start(_when: number, offset: number) { context.started.push(offset); },
+      const source = { buffer: null, onended: null, connect() {}, start(_when: number, offset: number) { context.started.push(offset); },
         stop() { context.stopped += 1; } };
+      context.sources.push(source);
+      return source;
     }
     resume() { return Promise.resolve(); }
     close() { return Promise.resolve(); }
@@ -183,6 +254,7 @@ function installAudioContext() {
 }
 
 interface PanelOverrides {
+  readonly onPlaybackStatus?: (status: "ready" | "loading" | "failed") => void;
   readonly timeline?: StoryTimeline;
   readonly snapshot?: StoryPreviewSnapshot;
   readonly sourceAudible?: boolean;
@@ -197,6 +269,7 @@ function panel(overrides: PanelOverrides = {}) {
     timeline={overrides.timeline ?? timeline}
     session={session}
     snapshot={overrides.snapshot ?? pausedSnapshot}
+    onPlaybackStatus={overrides.onPlaybackStatus}
     mix={mix}
     sourceAudible={overrides.sourceAudible ?? false}
     onMixChange={overrides.onMixChange ?? (() => undefined)}

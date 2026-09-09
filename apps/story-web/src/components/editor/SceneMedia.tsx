@@ -45,6 +45,12 @@ export const SceneMedia = forwardRef<SceneMediaHandle, SceneMediaProps>(function
   return props.slot.material.kind === "video"
     ? <SceneVideo {...props} ref={ref} material={props.slot.material} url={content.url} />
     : <img className={mediaStyles.media} src={content.url} alt="" draggable={false}
-      onLoad={() => props.onResourceState({ resourceId: visualResourceId, state: "ready" })}
+      onLoad={(event) => {
+        const image = event.currentTarget;
+        const decoded = image.decode ? image.decode() : Promise.resolve();
+        void decoded.then(() => {
+          if (image.isConnected) props.onResourceState({ resourceId: visualResourceId, state: "ready" });
+        }).catch(() => props.onResourceState({ resourceId: visualResourceId, state: "failed" }));
+      }}
       onError={() => props.onResourceState({ resourceId: visualResourceId, state: "failed" })} />;
 });

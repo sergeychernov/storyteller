@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import {
   getMaterialAudioContent, getMaterialAudioContentAccess, getMaterialContent, getMaterialContentAccess,
   getMaterialPresentation, getMaterialSource, getMaterialSourceContent, getMaterialSourceContentAccess,
   type AuthSession, type SceneMaterial,
 } from "../../api.js";
+
+export const MaterialContentScope = createContext<string | undefined>(undefined);
 
 interface UseMaterialContentUrlOptions {
   readonly storyId: string;
@@ -28,13 +30,14 @@ export function useMaterialContentUrl({
   retryKey = 0,
   enabled = true,
 }: UseMaterialContentUrlOptions) {
+  const scope = useContext(MaterialContentScope);
   const [objectUrl, setObjectUrl] = useState<{ readonly blob: Blob; readonly url: string }>();
   const storageKey = !enabled ? undefined : audio ? material.kind === "video" ? material.audioTrack?.storageKey : undefined
     : (source ? getMaterialSource(material) : getMaterialPresentation(material)).storageKey;
   const contentKind = audio ? "audio" : source ? "source" : "presentation";
-  const owned = lifecycle === "owned";
+  const owned = !scope && lifecycle === "owned";
   const content = useQuery({
-    queryKey: ["material-content", lifecycle, contentKind, session.profile.id, storyId, material.id, storageKey,
+    queryKey: ["material-content", scope ?? lifecycle, contentKind, session.profile.id, storyId, material.id, storageKey,
       owned ? retryKey : 0],
     enabled: Boolean(storageKey),
     queryFn: async ({ signal }) => {
@@ -46,7 +49,7 @@ export function useMaterialContentUrl({
         : getMaterialContent(session.csrfToken, storyId, material.id, signal));
     },
     staleTime: owned ? 0 : 45 * 60 * 1_000,
-    gcTime: owned ? 0 : 5 * 60 * 1_000,
+    gcTime: scope || owned ? 0 : 5 * 60 * 1_000,
     refetchInterval: owned ? false : 45 * 60 * 1_000,
     retry: owned ? false : 3,
   });

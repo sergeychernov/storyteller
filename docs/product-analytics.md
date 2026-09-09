@@ -78,7 +78,7 @@ Event names follow the `object verb` form and are compile-time checked by
 | `collage row direction configured` | `surface`, `collage_row_direction` | The scene configuration API confirms the ascending, level, descending, or irregular card alignment |
 | `timeline edited` | `surface`, `timeline_edit_kind` | The scene-order or cross-scene material-move API confirms the edit |
 | `scene title changed` | `surface`, `title_change_kind` | The dedicated title API confirms adding, text, position, appearance, timing, or removal |
-| `story preview completed` | `surface`, `web_layout` | Continuous Web preview reaches the authoritative timeline end during playback; once per completed pass, never after seek, Stop, error or navigation |
+| `story preview completed` | `surface`, `web_layout` | Continuous Web preview reaches the authoritative timeline end during playback; once per completed pass, never after seek, Stop, error or navigation. Initial loading and buffering freeze the shared transport (including music); resuming the same pass does not emit an extra event |
 | `story exported` | `surface`, `output_profile` | The browser starts downloading a ready full-story master for the current story revision |
 | `story soundtrack generated` | `surface`, `preset`, `duration_bucket` | A soundtrack requested in Story Web reaches `ready`, including when it finished while the tab was closed; the request is remembered per browser, so a restored soundtrack is reported once and never again |
 | `scene render requested` | `surface`, `export_mode`, `renderer_kind`, `collage_card_orientation`, `collage_media_mix` | The API accepts the render request |
